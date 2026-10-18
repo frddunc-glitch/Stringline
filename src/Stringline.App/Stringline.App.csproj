@@ -4,6 +4,8 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- Lets Linux tooling (e.g. GitHub's NuGet dependency submission) restore the full solution. No effect on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RootNamespace>Stringline.App</RootNamespace>
     <AssemblyName>Stringline</AssemblyName>
   </PropertyGroup>
