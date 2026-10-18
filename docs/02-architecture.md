@@ -1,0 +1,106 @@
+# 02 — Architecture
+
+## 1. Solution layout
+
+```
+Stringline.sln
+├─ src/
+│  ├─ Stringline.Core/          net10.0   Domain model, sim time, IDs, shared abstractions
+│  ├─ Stringline.Gateway/       net10.0   STOMP client, message parsing, recorder, replay source
+│  ├─ Stringline.Timetable/     net10.0   .wtt import, train matching
+│  ├─ Stringline.Network/       net10.0   Corridors, sections, profile I/O, auto-generation, distance axis
+│  ├─ Stringline.Planning/      net10.0   Working plan + commands, forecaster, conflicts, suggestions
+│  ├─ Stringline.Persistence/   net10.0   SQLite session store (Microsoft.Data.Sqlite)
+│  ├─ Stringline.Graph/         net10.0   Graph scene model + Skia renderer (SkiaSharp), hit testing — no WPF
+│  ├─ Stringline.App/           net10.0-windows  WPF shell, MVVM, SKElement host, dialogs
+│  └─ Stringline.Tools/         net10.0   CLI: record, replay-server, wtt-dump, render-png
+├─ tests/
+│  ├─ Stringline.*.Tests/       xUnit + FluentAssertions 7.x (+ Verify for snapshot tests)
+│  ├─ Stringline.Architecture.Tests/  guards the WPF/portability rule below
+│  └─ fixtures/                 sample .wtt, .sslog recordings, profiles
+└─ docs/
+```
+
+`Stringline.Portable.slnf` is the solution minus `Stringline.App`; use it to build and test on Linux (CI's `ubuntu-latest` job and cloud sessions).
+
+Rule: **only `Stringline.App` references WPF.** `Stringline.Architecture.Tests` enforces it. The graph renderer draws to any `SKCanvas`, so it renders PNGs in tests and CLI on Linux. That lets Claude Code sessions verify graph output visually without Windows.
+
+## 2. Runtime data flow
+
+```
+SimSig ──STOMP──► GatewayClient ──► MessageParser ──► IGatewayEvent stream
+   ▲                                   │                   │
+   │ (assist, opt-in)                  ▼                   ▼
+   └──────────── CommandSender     Recorder(.sslog)    EventBus (Channel<T>)
+                                                           │
+       ReplaySource(.sslog) ───────────────────────────────┤
+                                                           ▼
+                                                  LiveState (actuals, clock, TD)
+                                                           │
+                         WTT ─► TrainMatcher ◄─────────────┤
+                                                           ▼
+                       WorkingPlan (commands) ─► Forecaster ─► ConflictDetector ─► Suggester
+                                                           │
+                                                           ▼
+                                                   PlanSnapshot (immutable)
+                                                           │
+                                          GraphSceneBuilder (per corridor, per viewport)
+                                                           │
+                                                SkiaRenderer ─► SKElement (WPF)
+```
+
+- **Single-writer model:** one background `PlanningEngine` loop consumes the event channel and user commands, and publishes immutable `PlanSnapshot`s. The UI thread only reads snapshots — no locks on the hot path.
+- Recomputation is debounced (e.g. coalesce events within 100 ms wall time) and incremental where cheap.
+- `ISimEventSource` has two implementations: `LiveGatewaySource` and `ReplaySource`. Everything downstream is identical.
+
+## 3. Key abstractions
+
+```csharp
+public readonly record struct SimTime(int Seconds);             // seconds after midnight of sim day 0; may exceed 86400
+public readonly record struct Tiploc(string Code);            // trimmed + upper-cased; also holds signal IDs from train_location
+public readonly record struct Headcode(string Value);          // trimmed + upper-cased; IsStandard, ClassDigit (default priority)
+public readonly record struct TrainId(string Value);           // opaque, case-sensitive identity of one planned train
+// SimTime text: "HH:mm:ss" / "HH:mm" / "HH:mm½" plus "+N"/"-N" day marker; parse also accepts HHmm, HHmm½/H, hours ≥ 24.
+// Stringline.Core.Json: LenientJson (Utf8JsonReader helpers) + lenient bool/int/long/string/SimTime/ID converters.
+
+public interface ISimEventSource { IAsyncEnumerable<GatewayEvent> ReadAllAsync(CancellationToken ct); }
+
+public abstract record GatewayEvent(DateTimeOffset ReceivedAt);
+public sealed record ClockEvent(...)          : GatewayEvent;
+public sealed record TrainLocationEvent(...)  : GatewayEvent;
+public sealed record TrainDelayEvent(...)     : GatewayEvent;
+public sealed record TdStepEvent(...)         : GatewayEvent;   // CA/CB/CC
+public sealed record SignallingStateEvent(...) : GatewayEvent;  // SG_MSG, obj_type discriminated
+public sealed record UnknownEvent(string Raw) : GatewayEvent;
+
+public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); string Describe(); }
+```
+
+## 4. Threading
+- `GatewayClient`: dedicated read loop on a `TcpClient` stream; writes through a `SemaphoreSlim`; heart-beats if negotiated.
+- `PlanningEngine`: `Channel<EngineInput>` (bounded, `DropOldest` never for train events — use unbounded with monitoring).
+- UI: subscribes to `IObservable<PlanSnapshot>` (or a simple event) and marshals to the dispatcher; graph invalidates at most at display refresh rate.
+- Sim clock between `clock_msg`s: `SimClock` interpolates with `Stopwatch`, speed = 500/interval, frozen when paused.
+
+## 5. Persistence
+- **Profile** `%APPDATA%\Stringline\profiles\{area_id}.json` — corridors, location names, distances, categories, priorities.
+- **Session** `Documents\Stringline\sessions\{area_id}-{yyyyMMdd-HHmm}.stringline` (SQLite): tables `events`, `plan_commands`, `disruptions`, `notes`, `train_links`, `meta`. Working plan is rebuilt by replaying commands over the WTT.
+- **Recordings** `.sslog` — JSON Lines: `{"t":"2026-10-18T09:12:03.123Z","topic":"/topic/TRAIN_MVT_ALL_TOC","body":"..."}`; first line a header with app version and sim info.
+
+## 6. Packages
+| Purpose | Package |
+|---|---|
+| MVVM | CommunityToolkit.Mvvm |
+| Rendering | SkiaSharp, SkiaSharp.Views.WPF |
+| DI / hosting | Microsoft.Extensions.Hosting |
+| Logging | Serilog (+ File sink) |
+| SQLite | Microsoft.Data.Sqlite |
+| Tests | xUnit, FluentAssertions, Verify.Xunit |
+| CLI | System.CommandLine |
+
+No third-party STOMP library: the protocol subset is small (CONNECT, SUBSCRIBE, SEND, DISCONNECT, MESSAGE, ERROR, RECEIPT) and owning it avoids the SimSig quirks other clients have tripped over.
+
+## 7. Error handling principles
+- Never crash on a bad message: log, emit `UnknownEvent`, continue.
+- Never send malformed JSON to SimSig (it shows an error dialog to the host) — all outbound bodies built with `Utf8JsonWriter` and unit-tested.
+- Planning failures for one train must not stop others; mark that train "forecast unavailable".

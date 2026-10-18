@@ -1,0 +1,17 @@
+{
+  "solution": {
+    "path": "Stringline.sln",
+    "projects": [
+      "src\\Stringline.Core\\Stringline.Core.csproj",
+      "src\\Stringline.Gateway\\Stringline.Gateway.csproj",
+      "src\\Stringline.Timetable\\Stringline.Timetable.csproj",
+      "src\\Stringline.Network\\Stringline.Network.csproj",
+      "src\\Stringline.Planning\\Stringline.Planning.csproj",
+      "src\\Stringline.Persistence\\Stringline.Persistence.csproj",
+      "src\\Stringline.Graph\\Stringline.Graph.csproj",
+      "src\\Stringline.Tools\\Stringline.Tools.csproj",
+      "tests\\Stringline.Core.Tests\\Stringline.Core.Tests.csproj",
+      "tests\\Stringline.Architecture.Tests\\Stringline.Architecture.Tests.csproj"
+    ]
+  }
+}

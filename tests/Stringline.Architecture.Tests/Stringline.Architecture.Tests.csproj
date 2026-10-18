@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Stringline.Core\Stringline.Core.csproj" />
+    <ProjectReference Include="..\..\src\Stringline.Gateway\Stringline.Gateway.csproj" />
+    <ProjectReference Include="..\..\src\Stringline.Timetable\Stringline.Timetable.csproj" />
+    <ProjectReference Include="..\..\src\Stringline.Network\Stringline.Network.csproj" />
+    <ProjectReference Include="..\..\src\Stringline.Planning\Stringline.Planning.csproj" />
+    <ProjectReference Include="..\..\src\Stringline.Persistence\Stringline.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Stringline.Graph\Stringline.Graph.csproj" />
+    <ProjectReference Include="..\..\src\Stringline.Tools\Stringline.Tools.csproj" />
+  </ItemGroup>
+
+</Project>

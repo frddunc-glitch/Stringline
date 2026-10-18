@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Stringline.App</RootNamespace>
+    <AssemblyName>Stringline</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Stringline.Core\Stringline.Core.csproj" />
+    <ProjectReference Include="..\Stringline.Gateway\Stringline.Gateway.csproj" />
+    <ProjectReference Include="..\Stringline.Timetable\Stringline.Timetable.csproj" />
+    <ProjectReference Include="..\Stringline.Network\Stringline.Network.csproj" />
+    <ProjectReference Include="..\Stringline.Planning\Stringline.Planning.csproj" />
+    <ProjectReference Include="..\Stringline.Persistence\Stringline.Persistence.csproj" />
+    <ProjectReference Include="..\Stringline.Graph\Stringline.Graph.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Stringline.Tools</RootNamespace>
+    <AssemblyName>stringline</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Stringline.Core\Stringline.Core.csproj" />
+    <ProjectReference Include="..\Stringline.Gateway\Stringline.Gateway.csproj" />
+    <ProjectReference Include="..\Stringline.Timetable\Stringline.Timetable.csproj" />
+    <ProjectReference Include="..\Stringline.Network\Stringline.Network.csproj" />
+    <ProjectReference Include="..\Stringline.Graph\Stringline.Graph.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+</Project>
