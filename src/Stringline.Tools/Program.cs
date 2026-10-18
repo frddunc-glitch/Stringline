@@ -10,6 +10,7 @@ internal static class Program
         root.Subcommands.Add(RecordCommand.Create());
         root.Subcommands.Add(ReplayServerCommand.Create());
         root.Subcommands.Add(WttDumpCommand.Create());
+        root.Subcommands.Add(MatchCommand.Create());
 
         // Subcommands still to come: corridors (S6), render-png (S7).
         return root.Parse(args).InvokeAsync();

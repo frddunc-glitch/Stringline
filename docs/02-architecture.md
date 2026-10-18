@@ -86,6 +86,11 @@ Replay.ReplayTimeline // paces recorded frames by their wall-clock gaps × Speed
 Replay.ReplaySource   // ISimEventSource = ReplayTimeline + MessageParser; ReplayRewoundEvent after a backward seek
 Replay.ReplayServer   // fake SimSig STOMP server for `stringline replay-server`; answers idrequest/snapshot/ttsummary from replayed state
 
+// Stringline.Core.Live — LiveTrain (sim uid → workings + actuals), LiveWorking, ActualEvent, MatchStatus/MatchMethod, SimClock
+// Stringline.Timetable.Live
+TrainMatcher         // pure: MatchRequest (headcode, actuals, taken trains, present at start, previous train) → MatchDecision; 04-…md §3
+LiveState            // reducer: Apply(GatewayEvent) → clock, live trains + matches, TD berth map, entry-delay hints; manual Link/ClearLink
+
 // Stringline.Core.Timetables — the WTT domain model: WorkingTimetable(Header, Categories, Trains, Rules), Train, TimingPoint, TrainActivity, TimetableRule
 // Stringline.Timetable
 WttReader            // .wtt (zip) or SavedTimetable.xml → WttImportResult(WorkingTimetable, Warnings, UnknownElements, SkippedTrains); tolerant, see 04-…md §1
@@ -97,7 +102,7 @@ public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); s
 - `GatewayClient`: dedicated read loop on a `TcpClient` stream; writes through a `SemaphoreSlim`; heart-beats if negotiated.
 - `PlanningEngine`: `Channel<EngineInput>` (bounded, `DropOldest` never for train events — use unbounded with monitoring).
 - UI: subscribes to `IObservable<PlanSnapshot>` (or a simple event) and marshals to the dispatcher; graph invalidates at most at display refresh rate.
-- Sim clock between `clock_msg`s: `SimClock` interpolates with `Stopwatch`, speed = 500/interval, frozen when paused. At SimSig's flat-out setting the interval is 1 and the real speed depends on the PC, so measure the speed from successive `clock_msg`s instead (a replay at 8× also arrives 8× faster than its recorded intervals say).
+- Sim clock between `clock_msg`s (`Stringline.Core.Live.SimClock`, S5): interpolates from the events' `ReceivedAt` wall times, frozen when paused. The speed is **measured** from successive running `clock_msg`s (Δsim / Δwall, over at least 20 sim s), because at SimSig's flat-out setting the interval is 1 and a replay at 8× still reports the recorded interval. 500/interval is only the first guess, and at flat out the clock holds until measured. It never runs past the end of the current sim minute (the next `clock_msg` is due then) or past the latest `train_location` time, which runs up to a minute ahead of the clock and moves it on.
 
 ## 5. Persistence
 - **Profile** `%APPDATA%\Stringline\profiles\{area_id}.json` — corridors, location names, distances, categories, priorities.

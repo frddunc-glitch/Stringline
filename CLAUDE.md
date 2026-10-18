@@ -31,6 +31,7 @@ C# / .NET 10 LTS. WPF + CommunityToolkit.Mvvm for the shell; SkiaSharp for the g
 - Record: `dotnet run --project src/Stringline.Tools -- record --host localhost --port 51515 --out x.sslog`
 - Replay server: `dotnet run --project src/Stringline.Tools -- replay-server x.sslog --speed 8`
 - Inspect a WTT: `dotnet run --project src/Stringline.Tools -- wtt-dump t.wtt [--train 1A23] [--warnings]`. The WTT corpus test reads every `.wtt` under `STRINGLINE_WTT_CORPUS` (default `C:\Users\Public\Documents\SimSig\Timetables`; skipped if absent).
+- Match a recording to its WTT: `dotnet run --project src/Stringline.Tools -- match --wtt t.wtt --log x.sslog [--all]` (lists unmatched workings; `--all` lists every one).
 - Render PNG: `dotnet run --project src/Stringline.Tools -- render-png --wtt t.wtt --log x.sslog --corridor main --at 09:00 --hours 3 out.png`
 
 ## End of every session

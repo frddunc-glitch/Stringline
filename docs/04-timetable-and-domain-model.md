@@ -79,10 +79,14 @@ record TimetableRule(RuleKind Kind, int Code, string? TrainText, string? Train2T
 // Profile (S6): display colour, priority and line style per category; they are not in the WTT.
 record CategoryStyle(string CategoryId, string Name, int Priority, SkColour Colour, LineStyle Style);
 
-// Live
-record LiveTrain(string SimUid, Headcode Headcode, TrainId? MatchedTrain,
-                 IReadOnlyList<ActualEvent> Actuals, LiveStatus Status);
-record ActualEvent(Tiploc Location, ActualAction Action, SimTime Time, string? Platform);
+// Live — Stringline.Core.Live, implemented in S5. Immutable; LiveState (Stringline.Timetable.Live) replaces them on change.
+record LiveTrain(string SimUid, ImmutableList<LiveWorking> Workings, ImmutableList<ActualEvent> Actuals, bool PresentAtStart);
+                 // Current, Headcode, MatchedTrain (of the current working), FirstSeen, LastSeen, ActualsOf(working), WorkingOf(TrainId)
+record LiveWorking(Headcode Headcode, int FirstActual, MatchStatus Status, TrainId? Train, MatchMethod Method,
+                   int? DeviationSeconds, string? Reason);   // one headcode in the uid's life; Pending | Unmatched | Matched
+record ActualEvent(Tiploc Location, TrainLocationAction Action, SimTime Time, string Platform, bool AtTimingPoint, int Working);
+enum MatchMethod { None, HeadcodeAndTime, NextWorking, Formed, Manual }
+class SimClock    // interpolated sim time between clock_msgs; speed measured from clock arrivals (see 02-…md §4)
 
 // Network
 record Corridor(string Id, string Name, IReadOnlyList<CorridorLocation> Locations,
@@ -107,11 +111,18 @@ Up/Down direction of a train on a corridor is inferred from whether its location
 
 ## 3. Train matching (live ↔ WTT)
 
-1. On first event for a new `SimUid`: candidates = WTT trains with the same headcode (exact, including any `-1` suffix) and not already matched. Several WTT trains can share a headcode and even a UID (alternative paths).
-2. Score each by |actual time − planned time| at that location (or at entry point); accept the best within 60 min.
-3. If a matched train has a next-working link and a new uid appears with the linked headcode at the same location, link it. If the uid persists across a headcode change, follow it.
-4. Ambiguity or no candidate → `Unmatched`; draw actuals in grey; user can link manually from the train panel (stored in the session).
-5. Matching is pure and unit-tested with fixtures.
+*Implemented in S5: `TrainMatcher` (pure) and `LiveState` (the reducer that calls it), both in `Stringline.Timetable.Live`. Fred's four recordings match 100%: Waterloo 1× 35/35 workings, 4× 205/205, failure 39/39, and Penrith 9/9 (`stringline match` prints the report).*
+
+A live train is a sim **uid**. Its life is split into **workings**, one per headcode: when SimSig gives the uid a new headcode (its next working), a new working starts. Each working is matched on its own, and is re-matched on every movement while it is `Pending`. `Matched` and `Unmatched` are final unless the user links by hand.
+
+1. **Same uid, new headcode:** if the WTT train it was matched to forms a train with the new headcode (a `Next` activity first, then divide/detach/drop), that train is taken (`NextWorking` or `Formed`).
+2. **Candidates** are the WTT trains with exactly this headcode (including any `-1` suffix) that no other working has. None: `Unmatched`.
+3. **Score** each candidate by the mean |actual − booked| over the reported locations that are timed points of that train. The arrival time is used for an `arrive`, and the departure/pass time otherwise; for a second call at the same place, the nearer one is used. An `arrive` where only a departure is booked (an origin) costs nothing if early, because trains in the sim at the start report `arrive` at their origin long before they are due away. Before any such point has been reported (signals only), the score is how far the first actual lies outside the train's booked span (entry or first time to last time). Penalties are added on top for ranking only, not for the window:
+   - +120 s per reported timing location that is not on the candidate's path. This is kept small, because **SimSig reports every timing location a train passes, including ones its own schedule leaves out** (Waterloo's 1W51 is booked WLOO–CJML–WIMB but reports INTJN, VAUX, QTRDBAT and EARLSFD too). So it only separates alternative paths.
+   - +600 s for a **seeded** candidate when the live train was first seen more than 2 min after the session start, and for an **unseeded** candidate when it was seen at the start and a seeded alternative exists. Penrith has a seeded `…S` UID and an unseeded version of each train in the sim at 14:00, booked seconds apart.
+4. **Decide:** drop candidates whose deviation exceeds the **60 min window**. If none are left, `Unmatched`. If one is left, `Matched`, even on a signal alone. If several are left, `Matched` once the best leads the next by 60 s, or after 3 timing points ("close call"; ties go to file order). Until then, `Pending`. A train whose WTT parent (`FormedFrom`) is matched elsewhere is marked `Formed`: a divided portion gets a new uid.
+5. **Manual links** (`LiveState.Link(uid, headcode, train)`; `null` = "do not match") are keyed by (uid, headcode). They apply as soon as that working appears, take the train from any other working (which becomes `Unmatched`), and survive a reset/rewind, so S16 can restore them before replaying a session. `ClearLink` returns the working to automatic matching.
+6. Unmatched workings keep their actuals (drawn grey) and a `Reason`. Matching is pure and unit-tested; `LiveFixtureTests` replays every recording and checks each match is consistent: same headcode, and well inside the window where the train calls.
 
 ## 4. Auto corridor generation (Stringline.Network)
 

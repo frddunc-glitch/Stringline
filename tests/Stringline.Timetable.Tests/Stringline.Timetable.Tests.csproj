@@ -2,6 +2,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Stringline.Timetable\Stringline.Timetable.csproj" />
+    <!-- For the live fixture tests: recordings are read and parsed with the gateway's own code. -->
+    <ProjectReference Include="..\..\src\Stringline.Gateway\Stringline.Gateway.csproj" />
   </ItemGroup>
 
   <ItemGroup>

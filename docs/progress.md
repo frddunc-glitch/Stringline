@@ -168,6 +168,46 @@
 - The description template fields (`$originTime`, `$originName`, `$destName`, `$destTime`, `$operator`, `$stock`) are inferred from the templates in the corpus, not from SimSig documentation. Unknown fields are kept as written.
 - Rule `Time` is assumed to be seconds (Penrith 480–600, Waterloo 1500). That's plausible but unverified; S11 can check it against a recording.
 
+## 2026-10-19 — S5: Live state and train matching
+
+### Done
+- **`Stringline.Core.Live`:**
+  - `LiveTrain`: one sim uid, with its `Workings` (one per headcode: a next working keeps the uid) and all its `Actuals` (timing points and signals, each flagged `AtTimingPoint` and tagged with its working). It is immutable; `LiveState` replaces it on each change.
+  - `LiveWorking` (`MatchStatus` Pending/Unmatched/Matched, `MatchMethod` HeadcodeAndTime/NextWorking/Formed/Manual, deviation, reason) and `ActualEvent`.
+  - **`SimClock`** interpolates between `clock_msg`s from the events' `ReceivedAt`, and measures the speed from clock arrivals (500/interval is only the first guess; flat out holds until measured). It never runs past the end of the sim minute or the latest `train_location` time, which moves it on. Paused freezes it. Implausible measurements, such as a stale `idrequest` clock followed by a real tick, are ignored.
+- **`Stringline.Timetable.Live.TrainMatcher`** is pure. It follows next workings and formed trains by uid, scores candidates with the exact headcode by mean |actual − booked|, and applies a 60 min window, a 60 s margin and a "decide after 3 timing points" rule. Penalties separate alternative paths and seeded/unseeded duplicates. The full algorithm is in `04-…md` §3.
+- **`LiveState`** is the reducer: `Apply(GatewayEvent)` covers the clock (ignoring the pre-start placeholder clock 0), movements (with matching), TD berth map, `train_delay` hints per headcode, the latest `ttsummary`, and a reset on `ReplayRewoundEvent`.
+  - Manual links: `Link(uid, headcode, train|null)` and `ClearLink`, keyed by (uid, headcode). They apply when the working appears, take the train from another working, and survive resets.
+  - Also `FindByTrain(TrainId)`, `Summarise()` and `Version`.
+- **`stringline match --wtt t.wtt --log x.sslog [--all] [--verbose]`** plays a recording flat out through `LiveState` and prints the match summary and a table of unmatched workings (`--all` for every one).
+- **Results on Fred's recordings:** 100% matched. Waterloo 1× 35/35 workings (31 uids), 4× 205/205 (128 uids; 77 next workings), failure 39/39, and Penrith 9/9, where every train in the sim at 14:00 got its seeded `…S` version. Each match is checked to be consistent: same headcode, and mean deviation where the train calls under 20 min (worst 15 min, in the failure recording).
+- **Tests:**
+  - `SimClockTests` (Core, 18), `TrainMatcherTests` (29), `LiveStateTests` (31) and `LiveFixtureTests` (11, including one end to end through `ReplaySource`) in Timetable, and `MatchCommandTests` (Tools, 4).
+  - Totals: 643 (Core 244, Architecture 9, Gateway 202, Timetable 157, Tools 31). Green on Windows (Debug and Release) and on Linux (`sdk:10.0` container, portable filter, Release).
+  - Coverage: TrainMatcher 98% line / 93% branch, LiveState 98% / 95%, SimClock 100% / 93%.
+
+### Decisions
+- **Placement.** The live model and `SimClock` are in Core (`Stringline.Core.Live`), so Planning/Graph can read them. `TrainMatcher` and `LiveState` are in `Stringline.Timetable.Live`, next to the WTT they match against, as `02-…md` puts "train matching" in Timetable. Neither references Gateway.
+- **A live train is a uid split into workings by headcode.** This is not one record per headcode. The graph can draw a uid's whole run and still attribute each stretch to its WTT train.
+- **Matching is evidence-based and final.** A working is re-scored on each movement while `Pending`. Once `Matched` or `Unmatched`, it stays that way unless the user links by hand. Matches never flap.
+- **New finding: SimSig reports timing locations outside the train's own schedule** (`03-…md` §6.2). The off-path penalty is therefore small (120 s) and only separates alternative paths.
+- **An early `arrive` at an origin costs nothing.** Without this, the seeded trains at Waterloo 1× (sitting at WLOO from 04:30, booked away up to 2 h later) were unmatched.
+- **Seeded vs unseeded duplicates** (Penrith) are told apart by whether the live train was first seen within 2 min of the session start.
+- **Timetable.Tests references Gateway**, so the fixture tests parse recordings with the real parser. Core.Tests gains `Microsoft.Extensions.TimeProvider.Testing` (already used by Gateway.Tests).
+- `SimClock` takes wall times from `ReceivedAt`. That is correct for live sources and for `ReplaySource`'s default restamping, but not with `PreserveTimestamps`.
+
+### Next
+- S6: corridors, profile, derived axis (independent of S5).
+- S7: the graph scene builder can take actual layers from `LiveState`. Use `LiveTrain.ActualsOf(working)` with `AtTimingPoint`, and `FindByTrain` to go from a WTT train to its actuals. Unmatched workings have no `TrainId`, so draw them grey from their actuals.
+- S10's `PlanningEngine` should own a `LiveState` and use `Version` to decide when to publish a snapshot.
+- S16: persist `LiveState.ManualLinks` in `train_links`, and apply them before replaying session events.
+
+### Known issues
+- A working that is `Unmatched` on its first movement (e.g. the window is exceeded because the train is over an hour late) stays unmatched until linked by hand. A train over 60 min late at its first report needs a manual link.
+- "Present at start" means "first seen within 2 min of the first clock *this session*". On connecting to a sim already running, trains present then do not tell us which seeded duplicates SimSig used. For Penrith-style timetables the time scores then decide alone, which is usually but not always right.
+- `train_delay` and `ttsummary` are stored but not used for matching yet.
+- Not run against a live SimSig. Everything was tested against recordings.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
