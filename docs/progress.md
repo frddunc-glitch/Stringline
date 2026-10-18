@@ -208,6 +208,50 @@
 - `train_delay` and `ttsummary` are stored but not used for matching yet.
 - Not run against a live SimSig. Everything was tested against recordings.
 
+## 2026-10-19 — S6: Corridors, profile, derived axis
+
+### Done
+- **`Stringline.Network`** (first code in the project). The full algorithm is in `04-…md` §4–5.
+  - **Model:** `Corridor`, `CorridorLocation`, `Section` (tracks, headway, min run overall and per direction, samples), `TrackDef`, `TrackDirection`, `AxisMode`. `Corridor` has `IndexOf`/`PositionOf`/`FindSection`, and `DirectionOf(locations)` for S7.
+  - **`LocationGraph`:** location sequences per train, with skip edges expanded (WLOO–CJML → WLOO–VAUX–CJML), each train counted once per edge and through move, and out-and-back moves counted separately.
+  - **`CorridorGenerator`:** greedy candidates from the busiest uncovered edge, extended along through traffic. Branches follow their trains onto the main line. Each is oriented Up end first from SimSig's Down flags, falling back to the busier end. Short, contained and near-duplicate candidates are dropped; "via X" names tell apart corridors with the same ends.
+  - **`CorridorMeasurement`:** per-location calls, stops, platforms, starts and terminations; per-section minimum run times less allowances, with runs past skipped locations shared between sections; single-line hint.
+  - **`CorridorBuilder`** (`Create`, `Refresh` keeping user settings) and **`CorridorAxis`** (derived, or km with interpolation and extrapolation).
+  - **Profiles:** `StringlineProfile` (corridors, location names, category styles; `Create`, `Refresh`), `CategoryStyle` with defaults by headcode class, `Colour`, `LineStyle`, `ProfileJson` (with validation → `ProfileFormatException`) and `ProfileStore` (`{area_id}.json` under `%APPDATA%\Stringline\profiles`, atomic save).
+- **`stringline corridors t.wtt [--top] [--min-trains] [--edges] [--profile out.json] [--force]`** prints each candidate as a table: axis position, platforms, calls/stops, run times each way, runs, opposing overlaps and single-line hint. It can write a starter profile.
+- **Results:**
+  - Waterloo: Main WLOO–WIMB (8 locations, 1 626 trains) and Windsor WLOO–BARNES (10, 1 156).
+  - Llangollen: LLANGOLLEN–CARROG, every section hinted single line.
+  - Penrith: BLAKTWN–VLYHGTS (14 locations).
+  - Corpus: all 284 timetables give consistent corridors (1 265 in total), the slowest in 0.49 s.
+- **Tests:**
+  - New `Stringline.Network.Tests` (103): model, axis, measurement, graph, generator, builder, profile, JSON and store. It also has fixture tests for Waterloo, Llangollen and Penrith (local) and a corpus test (skipped without the folder).
+  - `CorridorsCommandTests` in Tools (10).
+  - Totals: 756 (Core 244, Architecture 9, Gateway 202, Timetable 157, Network 103, Tools 41). Green on Windows (Debug) and on Linux (`sdk:10.0` container, portable filter, Release).
+  - Network coverage: 99.9% line, 97% branch.
+
+### Decisions
+- **Fred's choices:** corridors run **Up end first** (Down trains ascend), and **a branch follows its trains through** onto the main line, so corridors may overlap. Waterloo's Windsor corridor starts at WLOO.
+- **Edge weight = distinct trains**, not runs. Counting runs made looping shunts (e.g. cowlairs `CWLRSWJ–CWLRSW534`) the "main" corridor.
+- **Skip-edge chains must agree with each other.** Without that check, contradictory chains expanded each other without end: Tyneside took over 4 min; it now takes milliseconds.
+- **Runs past skipped corridor locations are shared** in proportion to direct minimums. Otherwise Waterloo's QTRDBAT–CJML had 4 timed runs out of 1 100 trains.
+- **Single line is a hint only.** Sections start double line with a 3 min headway; opposing overlaps of a minute or less are treated as booking rounding.
+- **Display names live once per TIPLOC** in `StringlineProfile.LocationNames`, not on `CorridorLocation` (the doc sketch had them there). Renaming a location then renames it in every corridor.
+- **Category defaults** come from the headcode class most trains in the category use. All are solid lines, because dashes are reserved for the forecast layer. Colours are a Stringline `Colour` struct, so Network does not depend on SkiaSharp.
+- `AxisPosition` is stored in the profile, but always recomputed by `Refresh`. User-editable: order, distances, platforms (if set), tracks, headways, axis mode.
+- **No Verify snapshots yet.** Plain assertions were clearer for tables and JSON; S7 introduces Verify for PNGs.
+
+### Next
+- S7: `GraphSceneBuilder` takes a `Corridor` from the profile. Use `PositionOf` for each point, and `DirectionOf` to pick Up/Down. Skip points not on the corridor; a train's straight line between non-adjacent corridor locations is right, because it was booked past them. Label locations with `profile.DisplayName(tiploc)`. `render-png --corridor main` can build a profile on the fly with `StringlineProfile.Create(tt)` when none is saved.
+- S8: load the profile with `ProfileStore.Load(area_id)`; if there is none, call `StringlineProfile.Create(tt)` and save it. Call `Refresh(tt)` when a WTT is (re-)imported.
+- S11: section run times per direction are `Section.MinRunFor(direction)`. They are pass-to-pass minimums less allowances, so starting and stopping need their own allowance.
+
+### Known issues
+- Corridor generation is heuristic. Complex areas (London Bridge, Sydney, Kings Cross) give plausible but overlapping candidates such as "KNGX – ROYSTON via BOWESPK". The profile is the source of truth once edited, and there is no corridor editor until the app has one.
+- The single-line hint cannot see layouts: it also fires on lightly used double-line sections where opposing trains happen never to overlap.
+- The minimum run time comes from the WTT, so it is only as good as the timetable. A section where every train stops at both ends has a slower minimum than a pass-to-pass run would.
+- No CSV import for location names yet (mentioned in `04-…md` §1); names are edited in the profile JSON for now.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
@@ -221,3 +265,6 @@ New from S3:
 
 New from S4:
 5. Rule `Time` is taken as seconds. If you know otherwise (e.g. from the timetable editor), say so; otherwise S11 will check it against a recording.
+
+New from S6:
+6. When convenient, run `stringline corridors` on the sims you play most and say whether the main corridor and branches look right. In particular: are all of Llangollen's sections really single line (LLANGOLLEN–GOODSJNC is hinted too)?

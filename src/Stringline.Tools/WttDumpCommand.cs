@@ -244,7 +244,7 @@ internal static class WttDumpCommand
         }
     }
 
-    private static void WriteTable(TextWriter w, string[] header, List<string[]> rows)
+    internal static void WriteTable(TextWriter w, string[] header, List<string[]> rows)
     {
         var widths = header.Select((h, i) => Math.Max(h.Length, rows.Count == 0 ? 0 : rows.Max(r => r[i].Length))).ToArray();
         WriteRow(header);

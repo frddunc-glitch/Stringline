@@ -76,8 +76,9 @@ record TimingPoint { int Index; Tiploc Location; SimTime? Arrive; SimTime? Depar
 record TrainActivity(ActivityKind Kind, int Code, Headcode? AssociatedHeadcode, string? AssociatedUid, TrainId? Train);
 record TimetableRule(RuleKind Kind, int Code, string? TrainText, string? Train2Text, TrainId? Train, TrainId? Train2, int? DelaySeconds, Tiploc? Location);
 
-// Profile (S6): display colour, priority and line style per category; they are not in the WTT.
-record CategoryStyle(string CategoryId, string Name, int Priority, SkColour Colour, LineStyle Style);
+// Profile — Stringline.Network.Profiles, implemented in S6 (§5): display colour, priority and line style per category; they are not in the WTT.
+record CategoryStyle(string CategoryId, string Name, int Priority, Colour Colour, LineStyle Style = Solid);   // CreateDefaults(tt), Fallback
+record StringlineProfile { Version; AreaId; Name; Corridors; LocationNames /* Tiploc → name */; Categories }  // DisplayName, FindCorridor, StyleFor, Create, Refresh
 
 // Live — Stringline.Core.Live, implemented in S5. Immutable; LiveState (Stringline.Timetable.Live) replaces them on change.
 record LiveTrain(string SimUid, ImmutableList<LiveWorking> Workings, ImmutableList<ActualEvent> Actuals, bool PresentAtStart);
@@ -88,14 +89,14 @@ record ActualEvent(Tiploc Location, TrainLocationAction Action, SimTime Time, st
 enum MatchMethod { None, HeadcodeAndTime, NextWorking, Formed, Manual }
 class SimClock    // interpolated sim time between clock_msgs; speed measured from clock arrivals (see 02-…md §4)
 
-// Network
+// Network — implemented in S6 (§4). Locations are in Down order: the first is the Up end.
 record Corridor(string Id, string Name, IReadOnlyList<CorridorLocation> Locations,
-                IReadOnlyList<Section> Sections, AxisMode Axis);
-record CorridorLocation(Tiploc Tiploc, string DisplayName, double AxisPosition,
-                        double? DistanceKm, int Platforms, bool IsTimingPointOnly);
-record Section(Tiploc From, Tiploc To, IReadOnlyList<TrackDef> Tracks,
-               int DefaultHeadwaySeconds, int MinRunSeconds /*derived*/);
+                IReadOnlyList<Section> Sections, AxisMode Axis = Derived);   // IndexOf, PositionOf, FindSection, DirectionOf(locations)
+record CorridorLocation(Tiploc Tiploc, double AxisPosition /*0..1*/, double? DistanceKm, int Platforms, bool IsTimingPointOnly);
+record Section(Tiploc From, Tiploc To, IReadOnlyList<TrackDef> Tracks, int DefaultHeadwaySeconds,
+               int MinRunSeconds, int? MinRunDownSeconds, int? MinRunUpSeconds, int Samples /*derived*/);   // MinRunFor(direction), IsSingleLine
 record TrackDef(string Name, TrackDirection Direction);         // Up, Down, BiDirectional
+// Display names are not on CorridorLocation: they live once per TIPLOC in StringlineProfile.LocationNames.
 
 // Planning
 record PlannedPoint(Tiploc Location, SimTime? Arrive, SimTime? Depart, string? Platform, string? Line);
@@ -126,9 +127,23 @@ A live train is a sim **uid**. Its life is split into **workings**, one per head
 
 ## 4. Auto corridor generation (Stringline.Network)
 
-1. Build a directed graph of consecutive TIPLOC pairs from all trains' timing points.
-2. Collapse to an undirected graph; find the longest simple paths through high-traffic edges (weight = number of trains). Offer the top N as candidate corridors; branches become extra corridors.
-3. Order locations along each corridor; mark a location "timing point only" if no train stops there.
-4. Section min run time = minimum over trains of (arrive/pass at B − depart/pass at A), excluding obviously bad data (≤ 0).
-5. Derived axis: cumulative sum of min run times normalised to 0..1; configured distances override.
-6. Tracks per section: infer 2 (Up+Down) unless the user edits; single-line flagged when the user sets it (we cannot reliably infer it from the WTT, though trains crossing at loops hint at it — show a hint).
+*Implemented in S6: `LocationGraph`, `CorridorGenerator`, `CorridorMeasurement`, `CorridorBuilder` and `CorridorAxis`. `stringline corridors t.wtt [--edges] [--profile out.json]` prints the candidates. Waterloo gives the Main (WLOO–WIMB) and Windsor (WLOO–BARNES) lines, Llangollen one single-line corridor, and Penrith Blacktown–Valley Heights. All 284 timetables in Fred's corpus give consistent corridors, in under 0.5 s each.*
+
+1. **Location graph.** Each train becomes a sequence of locations; repeats in a row (a reversal) are merged. An edge joins locations a train calls at one after the other. Weights count **trains, not runs**, so a shunt that loops does not inflate an edge.
+2. **Skip edges.** SimSig schedules leave out timing locations a train passes. Waterloo's fast trains are booked WLOO–CJML, past VAUX. So an edge A–C is replaced by A–B–C when another train is booked A, B, C. The chain may hold at most 6 locations, none twice, and must be booked no slower than 2 × the direct time + 5 min (otherwise it is another route). The most common chain wins, and only if it agrees with the orders already accepted (B between A and C forbids A between B and C). Without that check, contradictory chains expanded each other without end: Tyneside took over 4 min. This repeats until nothing changes. Waterloo has 15 skip edges.
+3. **Corridors, greedily.** The busiest edge not yet on a corridor seeds a new one. The edge's weight here excludes trains that only go out and back over it (run-rounds such as Llangollen's CARROG–REVCA19, shunts into sidings). The corridor grows at each end towards the neighbour most trains continue to. It stops when fewer than 25% of the trains arriving carry on.
+   - **A branch follows its trains onto the main line** (Fred's choice), so corridors may overlap. Waterloo's Windsor corridor starts at WLOO.
+   - After the first candidate, a candidate is dropped if it is shorter than 3 locations, lies inside an earlier corridor, or adds less than 5% new traffic (a siding off a corridor).
+   - At most 6 candidates; the seed edge needs at least 2 trains. The first is `main`; the others are `{first}-{last}`, and a repeated pair of ends is named "A – B via X".
+4. **Orientation: Up end first**, so Down trains ascend (Fred's choice). Each train votes by the share of its corridor points that SimSig flags Down. In a file that uses the flag, an unflagged point is Up: `DownDirection` is only ever written as true. With no flags, or a tie, the end where more trains start or finish goes first.
+5. **Measurement** (`CorridorMeasurement`, also run for user-edited corridors). Each train's points are projected onto the corridor. A step between adjacent corridor locations is a run: the departure or pass at one end to the arrival or pass at the other, less the allowances booked in between. Runs of zero or less are ignored. A train booked straight past corridor locations (nothing in between) has its run shared over the sections it covers, in proportion to their direct minimums. Without this, most Waterloo sections would have only a handful of timed trains. The section's `MinRunSeconds` is the fastest run either way; `MinRunDownSeconds`/`MinRunUpSeconds` are kept per direction. A section with no timed run gets 60 s. Location stats: calls, stops, distinct platform names, starts and terminations. *Timing point only* means booked calls but no stops.
+6. **Single-line hint.** A section is hinted single line when it has at least two timed runs each way and an Up and a Down run never share it. Overlaps up to 1 min, or half the shorter run on short sections, are booking rounding. Llangollen's trains cross at DEESIDE loop booked a minute apart. The hint is shown, not applied. Every section starts as double line (`Section.DoubleLine`) with a 3 min headway until the user changes it. Llangollen's sections are all hinted; Waterloo's main line has none.
+7. **Axis** (`CorridorAxis`). Derived: cumulative minimum run time, normalised to 0..1. A section of 0 s still gets 1 s, so locations never coincide. Distance mode: configured `DistanceKm` values are used; missing ones are interpolated by run time between known ones, and extrapolated beyond them at the known stretch's average rate. Distances may count down the corridor. With fewer than two distinct distances, the derived axis is used.
+8. **Refresh** (`CorridorBuilder.Refresh`, `StringlineProfile.Refresh`) recomputes the derived values against a (re-)imported WTT. It keeps the order, distances, platform overrides, tracks, headways and axis mode. A section keeps its settings while its two locations stay neighbours, in either order.
+
+## 5. Profile (Stringline.Network.Profiles)
+
+*Implemented in S6.* `StringlineProfile` has `version` (1), `areaId`, `name`, `corridors` (in tab order), `locationNames` (TIPLOC → display name; a missing or blank name shows the TIPLOC) and `categories` (`CategoryStyle`).
+- **JSON** (`ProfileJson`): camelCase, indented, LF line ends, enums as names, colours as `#RRGGBB`/`#RRGGBBAA`, nulls left out. Reading accepts comments and trailing commas, and ignores unknown properties. A file is refused with `ProfileFormatException` if it is not JSON, is from a newer version, has no `areaId`, or has an inconsistent corridor: a duplicate ID or location, sections that do not match the locations, or a section with no tracks.
+- **Store** (`ProfileStore`): `{dir}/{area_id}.json`. The area ID is lower-cased and unsafe characters become `_`. The default directory is `%APPDATA%\Stringline\profiles` (`~/.config/Stringline/profiles` on Linux). Saves are atomic (temp file, then move). `Load` returns null when there is no file and refuses a file whose `areaId` is another sim's.
+- **Default category styles** follow the headcode class most of the category's trains use: 1 red/90, 9 purple/85, 2 blue/70, 3 orange/60, 4 green/50, 6 brown/40, 7 olive/35, 8 teal/30, 5 grey/20, 0 near-black/10. An unused category goes by its freight flag. All styles are solid: dashes are reserved for the forecast layer. A category the profile lacks uses `CategoryStyle.Fallback`.

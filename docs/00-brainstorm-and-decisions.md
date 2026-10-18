@@ -95,9 +95,9 @@ Headcodes repeat across a day and change at next-working associations. Matcher: 
 
 ## 5. Open questions (defaults assumed in brackets)
 
-1. **Which sims first?** Ideally one busy two-track main line and one with single-line sections and crossing loops. [One free sim for committed test data plus one payware sim you own, recordings kept local.] **Done for S3:** Waterloo (free, two-track main line, in `tests/fixtures/`) and Penrith (payware, `local-fixtures/`). A single-line sim with crossing loops is still wanted for S6/S11.
+1. **Which sims first?** Ideally one busy two-track main line and one with single-line sections and crossing loops. [One free sim for committed test data plus one payware sim you own, recordings kept local.] **Done for S3:** Waterloo (free, two-track main line, in `tests/fixtures/`) and Penrith (payware, `local-fixtures/`). A single-line sim with crossing loops was added in S4: Llangollen (free, `tests/fixtures/`).
 2. **Multiplayer:** connect to another player's host? [Host/port configurable; default localhost.]
-3. **Distance axis:** derived by default OK? [Yes.]
+3. **Distance axis:** derived by default OK? [Yes.] **S6:** derived by default; configured km override per location. **Decided 2026-10-19 (Fred):** corridors run Up end first (Down trains ascend), and an auto-generated branch follows its trains through onto the main line, so corridors may overlap (`04-…md` §4).
 4. **Assist writes** (route requests / TD interposes): keep on roadmap? [Yes, final optional session.]
 5. **Priorities:** source? [Headcode first digit by default, overridable per WTT category.]
 6. **Distribution:** personal or community release? **Decided 2026-10-18: open source, public on GitHub, GPL-3.0-or-later.** Recordings from payware sims are not redistributed.
@@ -109,6 +109,6 @@ Headcodes repeat across a day and change at next-working associations. Matcher: 
 | Gateway behaviour differs from community docs | Recorder first; build parsers from real captures. **S3:** checked against real recordings; differences recorded in `03-…md` §6 (e.g. `ttsummary` is an array, flat-out `interval:1`, failures not reported) |
 | WTT XML varies between versions | Tolerant parser, fixture tests over several real WTTs |
 | Timetable edited in-game after `.wtt` saved | Detect unknown trains, allow re-import and manual linking |
-| Auto corridor generation wrong at complex junctions | Editable profile + corridor editor |
+| Auto corridor generation wrong at complex junctions | Editable profile + corridor editor. **S6:** skip edges expanded, out-and-back spurs ignored, checked on all 284 corpus timetables; still heuristic, so the profile is the source of truth |
 | Graph performance | Single Skia surface, viewport culling, cached geometry |
 | Sim fast-forward / pause | All logic in sim time; clock interpolation uses `interval` and `paused` |

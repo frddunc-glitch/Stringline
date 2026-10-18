@@ -11,8 +11,9 @@ internal static class Program
         root.Subcommands.Add(ReplayServerCommand.Create());
         root.Subcommands.Add(WttDumpCommand.Create());
         root.Subcommands.Add(MatchCommand.Create());
+        root.Subcommands.Add(CorridorsCommand.Create());
 
-        // Subcommands still to come: corridors (S6), render-png (S7).
+        // Still to come: render-png (S7).
         return root.Parse(args).InvokeAsync();
     }
 }
