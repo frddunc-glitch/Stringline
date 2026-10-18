@@ -100,7 +100,7 @@ Headcodes repeat across a day and change at next-working associations. Matcher: 
 3. **Distance axis:** derived by default OK? [Yes.]
 4. **Assist writes** (route requests / TD interposes): keep on roadmap? [Yes, final optional session.]
 5. **Priorities:** source? [Headcode first digit by default, overridable per WTT category.]
-6. **Distribution:** personal or community release? [Personal first; licence later. Recordings from payware sims are not redistributed.]
+6. **Distribution:** personal or community release? **Decided 2026-10-18: open source, public on GitHub, GPL-3.0-or-later.** Recordings from payware sims are not redistributed.
 
 ## 6. Risks
 

@@ -21,6 +21,7 @@ C# / .NET 10 LTS. WPF + CommunityToolkit.Mvvm for the shell; SkiaSharp for the g
 - Never log credentials.
 - Australian English in UI text and docs; railway terms as SimSig uses them (headcode, TIPLOC, Up/Down).
 - Payware-sim recordings and WTTs live in git-ignored `local-fixtures/`; only free-sim data goes in `tests/fixtures/`.
+- Licence is GPL-3.0-or-later. Every new dependency must be GPLv3-compatible (MIT, BSD, Apache-2.0, LGPL, GPLv3 are fine; GPLv2-only, proprietary or "commercial licence" packages such as FluentAssertions 8.x are not). Check before adding to `Directory.Packages.props`.
 
 ## Commands
 - Build: `dotnet build -warnaserror`

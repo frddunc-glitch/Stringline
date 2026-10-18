@@ -36,8 +36,14 @@
 - S4 and S6 can start in parallel with S2–S3.
 
 ### Known issues
-- None. CI has not run yet; it starts on the first push to GitHub.
+- None. CI is green on Windows and Ubuntu.
+
+## 2026-10-18 — Licence
+- Fred chose **GPL-3.0-or-later**: official GNU text in `LICENSE`, `PackageLicenseExpression` and `Copyright` in `Directory.Build.props`, licence and SimSig non-affiliation disclaimer in `README.md`, CI and licence badges. Decision recorded in `00-…md` §5.6; dependency rule added to `CLAUDE.md`.
+- Every current dependency is MIT, BSD or Apache-2.0, so all are compatible with GPLv3.
+- No per-file licence headers, to keep files short. The `LICENSE` file and README notice cover the repository.
+- **For S18 (packaging):** GPLv3 §5(d) requires an interactive program to show "Appropriate Legal Notices". The About box must show the copyright, the no-warranty statement, the licence name and a link to the source. Also ship `LICENSE` with the published build.
 
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
-1. Licence for the GitHub repo? (No `LICENSE` file added yet. Personal-first per §5.6.)
+1. Copyright holder is "Fred and Stringline contributors". Should it be your full name or Railnexus Consulting instead? (Change `Directory.Build.props` and `README.md`.)
