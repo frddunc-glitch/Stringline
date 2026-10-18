@@ -76,9 +76,60 @@
 - Not yet run against a real SimSig. Everything is tested against the fake server only.
 - On Windows, a refused connection to `localhost` takes about 4 s to fail, because Windows retries the SYN and tries IPv6 first. That's harmless, but it makes retries slower than the back-off suggests. Use `--host 127.0.0.1` if it matters.
 
+## 2026-10-19 — S3: Replay source, replay server, parser checked against real recordings
+
+### Done
+- **Fred's recordings examined** (`tests/fixtures/waterloo-1x|4x|failure.sslog` + `waterloo 2010.WTT`; `local-fixtures/penrith-payware.sslog`). The S2 parser read every message with **zero unknown events**. The one new shape is the `ttsummary` reply, a top-level JSON array. All §6 questions in `03-…md` are answered except multiplayer. Highlights:
+  - CONNECTED is `version:1.1`, `server:SimSig`, with no heart-beat, and nothing drops without heart-beats.
+  - Every WTT timing point is reported. Entry points never appear as locations.
+  - A new working keeps the uid; a divided portion gets a new one. SimSig sometimes suffixes headcodes with `-1`.
+  - Flat-out speed reports `interval:1`.
+  - Failures are not reported: the track circuit failure shows only as T1620 occupied for 32 min.
+- **Core events:** `TimetableSummaryEvent` + `TrainSummary`/`TrainSummaryStatus` (the `ttsummary` reply); `ReplayRewoundEvent`; `ClockEvent.IsMaximumSpeed`.
+- **`MessageParser`** turns a top-level array into one `TimetableSummaryEvent`. `RecordingStats` counts it and shows flat-out speed as "max speed" in `record`.
+- **`SslogRecording`**: a whole recording in memory, with `FirstSim`/`LastSim`/`Duration` and `IndexOf(SimTime)`.
+- **`ReplayTimeline`**: paces frames by their recorded wall-clock gaps × speed (∞ = flat out). Pause, resume, speed change and seek are thread-safe and take effect mid-wait. A forward seek fast-forwards; a backward seek rewinds and flags the frame. `TimeProvider`-based.
+- **`ReplaySource : ISimEventSource`** = timeline + parser. It restamps events with replay time by default (`PreserveTimestamps` to keep recorded times) and yields `ReplayRewoundEvent` after a backward seek.
+- **`ReplayServer`**, a fake SimSig on STOMP:
+  - SimSig's CONNECTED headers, any login accepted.
+  - Per-topic fan-out with `content-length`; per-client send queues, so it never waits for slow clients.
+  - Waits for the first client to be ready (first SEND, or 1 s after the first SUBSCRIBE).
+  - `StartAt` pre-roll before listening.
+  - Answers `idrequest`, `snapshot` (rebuilt from the latest `SG_MSG` per object) and `ttsummary` from replayed state.
+  - Logs and ignores other or malformed commands. RECEIPT on request. `FlushAsync`.
+- **`stringline replay-server file.sslog [--speed 8] [--port] [--host] [--start 09:00] [--no-wait] [--exit-at-end] [--verbose]`**: prints a summary of the recording and status every 10 s. Keys: Space pause, `+`/`-` speed, Q quit.
+- **Fix:** `SslogReader` leaked the file handle when the header was invalid.
+- Smoke-tested by hand: `replay-server` → `record` round trip of `waterloo-1x.sslog` gave identical message counts per type, and the `--start` pre-roll answered `idrequest` with the right clock and served a rebuilt snapshot.
+- **Tests:**
+  - `RecordedFixtureTests`: exact counts per message type for each fixture, real examples of every type, and each §6 fact.
+  - `ReplayTimelineTests` (`FakeTimeProvider`), `ReplaySourceTests`, and `ReplayServerTests` (real `GatewayClient` and raw STOMP sockets end to end).
+  - `ReplayServerCommandTests`, plus new parser and sslog tests.
+  - Totals: 444 (Core 210, Architecture 9, Gateway 202, Tools 23). Green on Windows (Debug and Release) and on Linux (`sdk:10.0` container, portable filter). Coverage: MessageParser 100%, ReplayTimeline 98%, ReplayServer 93%; Gateway overall 91% line, 87% branch.
+
+### Decisions
+- **Replay is paced by the recorded wall-clock time, not by sim time.** It reproduces the real arrival pattern, including pauses and speed changes in the recording. `--speed` multiplies on top.
+- **Replayed events are stamped with the time they are replayed**, so a consumer measuring speed from clock arrivals sees the replay speed. Recorded bodies are not rewritten (`interval` still says the recorded speed). **S5's `SimClock` should therefore measure speed from successive `clock_msg` arrivals** and use `500/interval` only as a first guess. It has to anyway, because flat out reports `interval:1`.
+- **Seeking forward fast-forwards** (hands out every skipped frame) rather than skipping, so downstream state is complete. Seeking back restarts and announces it with `ReplayRewoundEvent`; the replay server never sends skipped frames to clients.
+- `ttsummary` gets a typed event (it is cheap and S5 may use it as a cross-check), but the WTT stays the plan source: the summary has no times or paths.
+- `SignallingStateEvent` stays untyped: the recorded field sets are now documented in `03-…md` §3.5 for S13/S14.
+- New test package **Microsoft.Extensions.TimeProvider.Testing 10.9.0** (MIT).
+
+### Next
+- S4 (WTT import) and S6 (corridors) — `tests/fixtures/waterloo 2010.WTT` is ready. S5 (live state and matching) can now use `ReplaySource` with the Waterloo fixtures: the WTT has 1 768 trains; the 4× recording has 128 uids.
+- For S5: strip `-1` headcode suffixes when matching, follow new workings by uid, and expect divided portions to appear as new uids that start with `depart`.
+
+### Known issues
+- Multiplayer behaviour (§6.9) is still unverified.
+- Frame, crossing and AHB `SG_MSG` objects are still unverified (Waterloo has none).
+- The replay server answers `idrequest` with nothing until the recording's first `clock_msg` (like a sim not yet started, but SimSig would send its placeholder clock).
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
 
 New from S2:
-2. When you record, does SimSig send heart-beats or drop idle clients? Does it show any dialog when Stringline connects or disconnects? (We send no `heart-beat` header and a plain DISCONNECT.)
+2. ~~Heart-beats, idle drops, dialogs?~~ Resolved in S3: none needed, no drops, no dialogs; a wrong password gives ERROR (see `03-…md` §6).
+
+New from S3:
+3. When convenient: a short **multiplayer** recording (§6.9), and a recording from a sim with **level crossings or AHBs** (to verify those `SG_MSG` fields).
+4. A **single-line sim with crossing loops** (free if possible) would help S6/S11 golden scenarios. Do you have one in mind?

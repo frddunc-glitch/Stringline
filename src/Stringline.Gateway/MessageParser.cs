@@ -13,7 +13,8 @@ namespace Stringline.Gateway;
 /// Turns gateway message bodies into <see cref="GatewayEvent"/>s. A body is a JSON object whose
 /// properties are messages keyed by type (<c>{"train_location":{…}}</c>); a TD snapshot is one object
 /// with many duplicate <c>SG_MSG</c> keys, so bodies are streamed with <see cref="Utf8JsonReader"/> and
-/// each property becomes one event. Never throws on bad input: unknown types, missing fields and
+/// each property becomes one event. The one exception is the <c>ttsummary</c> reply, a top-level array that
+/// becomes a single <see cref="TimetableSummaryEvent"/>. Never throws on bad input: unknown types, missing fields and
 /// malformed JSON become <see cref="UnknownEvent"/>s and are logged.
 /// </summary>
 /// <remarks>Thread-safe; one instance can serve several sources.</remarks>
@@ -51,7 +52,13 @@ public sealed partial class MessageParser
         try
         {
             var reader = new Utf8JsonReader(body, ReaderOptions);
-            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            if (reader.Read() && reader.TokenType == JsonTokenType.StartArray)
+            {
+                events.Add(TimetableSummary(topic, ref reader, body, receivedAt));
+                return events;
+            }
+
+            if (reader.TokenType != JsonTokenType.StartObject)
             {
                 events.Add(Unknown(receivedAt, topic, string.Empty, Text(body), "Body is not a JSON object."));
                 return events;
@@ -112,6 +119,51 @@ public sealed partial class MessageParser
         }
 
         return Unknown(at, topic, messageType, Text(raw), problem);
+    }
+
+    /// <summary>
+    /// The <c>ttsummary</c> reply: an array of per-train objects. Entries without a headcode are skipped; an
+    /// array with no usable entries (or anything other than objects in it) is unknown.
+    /// </summary>
+    private GatewayEvent TimetableSummary(string topic, ref Utf8JsonReader reader, ReadOnlySpan<byte> body, DateTimeOffset at)
+    {
+        var trains = new List<TrainSummary>();
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+        {
+            if (reader.TokenType != JsonTokenType.StartObject)
+            {
+                return Unknown(at, topic, string.Empty, Text(body), "Array element is not an object.");
+            }
+
+            var f = ReadFields(ref reader);
+            if (!Headcode.TryCreate(Get(f, "headcode"), out var headcode))
+            {
+                continue;
+            }
+
+            var statusText = Get(f, "status")?.Trim() ?? string.Empty;
+            var status = statusText.ToUpperInvariant() switch
+            {
+                "OK" => TrainSummaryStatus.Ok,
+                "ACTIVE" => TrainSummaryStatus.Active,
+                "DONE" => TrainSummaryStatus.Done,
+                _ => TrainSummaryStatus.Unknown,
+            };
+            Tiploc? location = Tiploc.TryCreate(Get(f, "locationId"), out var tiploc) ? tiploc : null;
+            trains.Add(new TrainSummary(
+                headcode,
+                Get(f, "uid")?.Trim() ?? string.Empty,
+                status,
+                statusText,
+                Int(f, "delay"),
+                location,
+                Get(f, "location")?.Trim() ?? string.Empty,
+                Get(f, "platform")?.Trim() ?? string.Empty));
+        }
+
+        return trains.Count > 0
+            ? new TimetableSummaryEvent(at, topic, trains)
+            : Unknown(at, topic, string.Empty, Text(body), "Array has no train summaries.");
     }
 
     /// <summary>Reads an object's scalar properties as text; the last duplicate wins, nested values are skipped.</summary>

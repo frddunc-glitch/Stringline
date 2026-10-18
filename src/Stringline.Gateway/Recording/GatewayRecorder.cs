@@ -97,6 +97,7 @@ public sealed class RecordingStats
 
     public SimTime? LastClock { get; private set; }
 
+    /// <summary>From the latest clock: sim seconds per real second, or infinity when SimSig runs flat out.</summary>
     public double? SpeedRatio { get; private set; }
 
     public bool Paused { get; private set; }
@@ -147,6 +148,7 @@ public sealed class RecordingStats
             TdStepEvent { Kind: TdStepKind.Cancel } => "CB_MSG",
             TdStepEvent => "CC_MSG",
             SignallingStateEvent s => "SG_MSG:" + s.ObjectType.ToString().ToLowerInvariant(),
+            TimetableSummaryEvent => "ttsummary",
             UnknownEvent u => "unknown:" + (u.MessageType.Length > 0 ? u.MessageType : "(malformed)"),
             _ => e.GetType().Name,
         };
@@ -159,7 +161,7 @@ public sealed class RecordingStats
                 case ClockEvent clock:
                     AreaId = clock.AreaId;
                     LastClock = clock.Clock;
-                    SpeedRatio = clock.SpeedRatio;
+                    SpeedRatio = clock.IsMaximumSpeed ? double.PositiveInfinity : clock.SpeedRatio;
                     Paused = clock.Paused;
                     break;
                 case UnknownEvent:

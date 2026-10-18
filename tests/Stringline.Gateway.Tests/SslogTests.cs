@@ -169,4 +169,41 @@ public class SslogTests
     }
 
     private sealed record OtherEntry(DateTimeOffset At) : SslogEntry(At);
+
+    [Fact]
+    public void Opening_a_file_that_is_not_a_recording_does_not_leave_it_locked()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"stringline-{Guid.NewGuid():N}.sslog");
+        File.WriteAllText(path, "not a recording");
+        try
+        {
+            var open = () => SslogReader.Open(path);
+            open.Should().Throw<InvalidDataException>();
+            var load = () => SslogRecording.Load(path);
+            load.Should().Throw<InvalidDataException>();
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+
+        File.Exists(path).Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_recording_loads_into_memory_with_its_connections_and_skipped_lines()
+    {
+        var text = Write(w =>
+        {
+            w.Write(new SslogConnection(T0, GatewayConnectionState.Connected));
+            w.WriteMessage(new GatewayMessage(T0.AddSeconds(1), GatewayTopics.SimSig, "{}"), new SimTime(36000));
+        }) + "{\"t\":\n";
+
+        var recording = SslogRecording.Load(new MemoryStream(Encoding.UTF8.GetBytes(text)));
+
+        recording.Header.App.Should().Be("Stringline test");
+        recording.Connections.Should().ContainSingle();
+        recording.Messages.Should().ContainSingle().Which.Sim.Should().Be(new SimTime(36000));
+        recording.SkippedLines.Should().ContainSingle();
+    }
 }

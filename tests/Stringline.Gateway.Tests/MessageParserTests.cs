@@ -244,6 +244,47 @@ public class MessageParserTests
         Single<SignallingStateEvent>("""{"sg_msg":{"obj_id":"T1"}}""");
     }
 
+    // ---- ttsummary reply ----
+
+    [Fact]
+    public void Parses_a_ttsummary_array()
+    {
+        var e = Single<TimetableSummaryEvent>("""
+            [{"headcode":"1W51","uid":"","status":"active","delay":"0","locationId":"WLOO","location":"Waterloo","platformId":"","platform":"11"},
+             {"headcode":"2C05","uid":"","status":"ok","delay":"-120"},
+             {"uid":"x","status":"ok"},
+             {"headcode":"2X99","status":"done","delay":"","locationId":" "},
+             {"headcode":"9Z99","status":"queued","nested":{"a":1}}]
+            """);
+
+        e.Topic.Should().Be(GatewayTopics.TrainMovements);
+        e.Trains.Should().HaveCount(4);
+        e.Trains[0].Should().Be(new TrainSummary(new Headcode("1W51"), "", TrainSummaryStatus.Active, "active", 0, new Tiploc("WLOO"), "Waterloo", "11"));
+        e.Trains[1].Should().Be(new TrainSummary(new Headcode("2C05"), "", TrainSummaryStatus.Ok, "ok", -120, null, "", ""));
+        e.Trains[2].Should().BeEquivalentTo(new { Status = TrainSummaryStatus.Done, DelaySeconds = (int?)null, Location = (Tiploc?)null });
+        e.Trains[3].Should().BeEquivalentTo(new { Status = TrainSummaryStatus.Unknown, StatusText = "queued" });
+    }
+
+    [Fact]
+    public void Flat_out_clock_is_flagged()
+    {
+        Single<ClockEvent>("""{"clock_msg":{"area_id":"waterloo","clock":21360,"interval":1,"paused":false}}""").IsMaximumSpeed.Should().BeTrue();
+        Single<ClockEvent>("""{"clock_msg":{"area_id":"waterloo","clock":21360,"interval":31,"paused":false}}""").IsMaximumSpeed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Payware_style_headcodes_and_delay_uids_are_kept()
+    {
+        // Shapes seen in an Australian payware sim: non-standard headcodes, and train_delay carrying the WTT UID.
+        var move = Single<TrainLocationEvent>("""{"train_location":{"headcode":"178H","uid":"6","action":"pass","location":"SM269","platform":"","time":50405,"aspPass":0,"aspAppr":0}}""");
+        var delay = Single<TrainDelayEvent>("""{"train_delay":{"headcode":"1127","uid":"1127S","delay":-60}}""");
+
+        move.Headcode.Should().Be(new Headcode("178H"));
+        move.Headcode.IsStandard.Should().BeFalse();
+        move.AspectPassed.Should().Be(0);
+        delay.Uid.Should().Be("1127S");
+    }
+
     // ---- Bad input never throws ----
 
     [Fact]
@@ -262,7 +303,9 @@ public class MessageParserTests
     [Theory]
     [InlineData("""{"train_location":"oops"}""", "not an object")]
     [InlineData("""{"train_location":[1,2]}""", "not an object")]
-    [InlineData("[1,2,3]", "not a JSON object")]
+    [InlineData("[1,2,3]", "Array element is not an object")]
+    [InlineData("[]", "no train summaries")]
+    [InlineData("""[{"status":"ok"}]""", "no train summaries")]
     [InlineData("\"text\"", "not a JSON object")]
     [InlineData("{\"train_location\":{\"uid\":", "Malformed JSON")]
     [InlineData("{not json}", "Malformed JSON")]

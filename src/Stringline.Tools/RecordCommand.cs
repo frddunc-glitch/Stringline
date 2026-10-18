@@ -217,7 +217,12 @@ internal static partial class RecordCommand
 
             var messages = stats.Messages;
             var clock = stats.LastClock?.ToString() ?? "--:--:--";
-            var speed = stats.SpeedRatio is { } ratio ? ratio.ToString("0.##", CultureInfo.InvariantCulture) + "×" + (stats.Paused ? " paused" : string.Empty) : "?";
+            var speed = stats.SpeedRatio switch
+            {
+                null => "?",
+                double.PositiveInfinity => "max speed",
+                var ratio => ratio.Value.ToString("0.##", CultureInfo.InvariantCulture) + "×",
+            } + (stats.Paused ? " paused" : string.Empty);
             var rate = (messages - lastMessages) / 10.0;
             LogStatus(log, stats.State, stats.AreaId ?? "?", clock, speed, messages, rate);
             lastMessages = messages;

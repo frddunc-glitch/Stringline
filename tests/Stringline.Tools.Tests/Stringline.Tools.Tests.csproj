@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <Compile Include="..\Stringline.Gateway.Tests\FakeStompServer.cs" Link="FakeStompServer.cs" />
+    <Compile Include="..\Stringline.Gateway.Tests\Fixtures.cs" Link="Fixtures.cs" />
   </ItemGroup>
 
 </Project>

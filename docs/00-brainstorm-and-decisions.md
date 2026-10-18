@@ -95,7 +95,7 @@ Headcodes repeat across a day and change at next-working associations. Matcher: 
 
 ## 5. Open questions (defaults assumed in brackets)
 
-1. **Which sims first?** Ideally one busy two-track main line and one with single-line sections and crossing loops. [One free sim for committed test data plus one payware sim you own, recordings kept local.]
+1. **Which sims first?** Ideally one busy two-track main line and one with single-line sections and crossing loops. [One free sim for committed test data plus one payware sim you own, recordings kept local.] **Done for S3:** Waterloo (free, two-track main line, in `tests/fixtures/`) and Penrith (payware, `local-fixtures/`). A single-line sim with crossing loops is still wanted for S6/S11.
 2. **Multiplayer:** connect to another player's host? [Host/port configurable; default localhost.]
 3. **Distance axis:** derived by default OK? [Yes.]
 4. **Assist writes** (route requests / TD interposes): keep on roadmap? [Yes, final optional session.]
@@ -106,7 +106,7 @@ Headcodes repeat across a day and change at next-working associations. Matcher: 
 
 | Risk | Mitigation |
 |---|---|
-| Gateway behaviour differs from community docs | Recorder first; build parsers from real captures |
+| Gateway behaviour differs from community docs | Recorder first; build parsers from real captures. **S3:** checked against real recordings; differences recorded in `03-…md` §6 (e.g. `ttsummary` is an array, flat-out `interval:1`, failures not reported) |
 | WTT XML varies between versions | Tolerant parser, fixture tests over several real WTTs |
 | Timetable edited in-game after `.wtt` saved | Detect unknown trains, allow re-import and manual linking |
 | Auto corridor generation wrong at complex junctions | Editable profile + corridor editor |

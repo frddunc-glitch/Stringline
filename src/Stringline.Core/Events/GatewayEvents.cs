@@ -18,8 +18,17 @@ public abstract record GatewayEvent(DateTimeOffset ReceivedAt);
 public sealed record ClockEvent(DateTimeOffset ReceivedAt, string AreaId, SimTime Clock, int IntervalMs, bool Paused)
     : GatewayEvent(ReceivedAt)
 {
-    /// <summary>Sim seconds per real second (500 / interval); 0 if the interval is not positive.</summary>
+    /// <summary>
+    /// Sim seconds per real second (500 / interval); 0 if the interval is not positive. Not meaningful when
+    /// <see cref="IsMaximumSpeed"/>: measure the speed from successive clock messages instead.
+    /// </summary>
     public double SpeedRatio => IntervalMs > 0 ? 500.0 / IntervalMs : 0;
+
+    /// <summary>
+    /// True for SimSig's flat-out setting, which reports an interval of 1 ms. The real speed then depends on
+    /// the PC (about 32× in Fred's Waterloo recordings), not on the interval.
+    /// </summary>
+    public bool IsMaximumSpeed => IntervalMs == 1;
 }
 
 public enum TrainLocationAction
@@ -122,6 +131,52 @@ public sealed record SignallingStateEvent(
     public override string ToString() =>
         string.Create(CultureInfo.InvariantCulture, $"SG {ObjectTypeText} {ObjectId} [{string.Join(", ", Fields.Select(f => $"{f.Key}={f.Value}"))}]");
 }
+
+public enum TrainSummaryStatus
+{
+    Unknown,
+
+    /// <summary><c>ok</c>: by the recordings, a train that has not yet entered the sim.</summary>
+    Ok,
+
+    /// <summary><c>active</c>: in the sim now; the summary then also gives its location.</summary>
+    Active,
+
+    /// <summary><c>done</c>: finished.</summary>
+    Done,
+}
+
+/// <summary>One train in a <see cref="TimetableSummaryEvent"/>.</summary>
+/// <param name="Uid">SimSig's UID for the train; empty in every summary recorded so far.</param>
+/// <param name="StatusText">The raw <c>status</c>, kept so unknown values can still be told apart.</param>
+/// <param name="DelaySeconds">The reported delay (sent as a string); null if missing.</param>
+/// <param name="Location">The current location's TIPLOC (<c>locationId</c>), for active trains.</param>
+/// <param name="LocationName">The current location's display name, e.g. <c>Waterloo</c>; empty if none.</param>
+/// <param name="Platform">The current platform; empty if none.</param>
+public sealed record TrainSummary(
+    Headcode Headcode,
+    string Uid,
+    TrainSummaryStatus Status,
+    string StatusText,
+    int? DelaySeconds,
+    Tiploc? Location,
+    string LocationName,
+    string Platform);
+
+/// <summary>
+/// The reply to <c>{"ttsummary":{}}</c>: a JSON <em>array</em> (not an object) on <c>/topic/TRAIN_MVT_SUMMARY</c>
+/// with one entry per timetabled train, about 1 800 for a full day at Waterloo.
+/// </summary>
+/// <param name="Topic">The STOMP destination it arrived on.</param>
+public sealed record TimetableSummaryEvent(DateTimeOffset ReceivedAt, string Topic, IReadOnlyList<TrainSummary> Trains)
+    : GatewayEvent(ReceivedAt);
+
+/// <summary>
+/// Not from SimSig: a replay jumped back in time. Everything built from earlier events is stale; the
+/// events that follow replay the recording again from the start up to <see cref="Target"/>.
+/// </summary>
+/// <param name="Target">The sim time the replay was asked to seek to.</param>
+public sealed record ReplayRewoundEvent(DateTimeOffset ReceivedAt, SimTime Target) : GatewayEvent(ReceivedAt);
 
 /// <summary>
 /// A message the parser could not turn into a typed event: an unknown message type, a known type with

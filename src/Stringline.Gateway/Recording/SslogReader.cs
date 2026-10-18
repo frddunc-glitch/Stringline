@@ -18,9 +18,18 @@ public sealed class SslogReader : IDisposable
     {
         ArgumentNullException.ThrowIfNull(stream);
         _reader = new StreamReader(stream, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: true, bufferSize: 64 * 1024, leaveOpen);
-        var first = _reader.ReadLine();
-        _lineNumber = 1;
-        Header = first is null ? throw new InvalidDataException("The recording is empty.") : ParseHeader(first);
+        try
+        {
+            var first = _reader.ReadLine();
+            _lineNumber = 1;
+            Header = first is null ? throw new InvalidDataException("The recording is empty.") : ParseHeader(first);
+        }
+        catch
+        {
+            // Not a recording: release the file (unless the caller keeps the stream).
+            _reader.Dispose();
+            throw;
+        }
     }
 
     public SslogHeader Header { get; }

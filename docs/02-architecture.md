@@ -67,11 +67,13 @@ public readonly record struct TrainId(string Value);           // opaque, case-s
 public interface ISimEventSource { IAsyncEnumerable<GatewayEvent> ReadAllAsync(CancellationToken ct); }
 
 public abstract record GatewayEvent(DateTimeOffset ReceivedAt);
-public sealed record ClockEvent(AreaId, Clock, IntervalMs, Paused) : GatewayEvent;   // SpeedRatio = 500 / IntervalMs
+public sealed record ClockEvent(AreaId, Clock, IntervalMs, Paused) : GatewayEvent;   // SpeedRatio = 500 / IntervalMs; IsMaximumSpeed when IntervalMs == 1 (flat out: ratio unknown)
 public sealed record TrainLocationEvent(Headcode, Uid, Action, Location, Platform, Time, AspectPassed?, AspectApproach?) : GatewayEvent;
 public sealed record TrainDelayEvent(Headcode, Uid, DelaySeconds) : GatewayEvent;
 public sealed record TdStepEvent(Kind, AreaId, From, To, Description, Time?) : GatewayEvent;   // CA/CB/CC
 public sealed record SignallingStateEvent(AreaId, ObjectType, ObjectTypeText, ObjectId, Time?, Fields) : GatewayEvent;  // SG_MSG; object-specific fields as text + lenient getters
+public sealed record TimetableSummaryEvent(Topic, Trains) : GatewayEvent;   // ttsummary reply: TrainSummary(Headcode, Uid, Status, StatusText, DelaySeconds?, Location?, LocationName, Platform)
+public sealed record ReplayRewoundEvent(Target) : GatewayEvent;              // not from SimSig: a replay sought backwards; drop state, events restart from the beginning
 public sealed record UnknownEvent(Topic, MessageType, Raw, Reason) : GatewayEvent;
 
 // Stringline.Gateway
@@ -79,7 +81,10 @@ GatewayClient        // STOMP 1.1 client: ReadAllAsync() yields GatewayMessage(R
 MessageParser        // GatewayMessage → IReadOnlyList<GatewayEvent>, Utf8JsonReader streaming, never throws
 GatewayCommands      // the only way to build outbound bodies (Utf8JsonWriter)
 LiveGatewaySource    // ISimEventSource = GatewayClient + MessageParser
-Recording.SslogWriter / SslogReader / GatewayRecorder
+Recording.SslogWriter / SslogReader / GatewayRecorder / SslogRecording (whole file in memory, IndexOf(SimTime))
+Replay.ReplayTimeline // paces recorded frames by their wall-clock gaps × Speed (∞ = flat out); Pause/Resume/SeekTo from any thread
+Replay.ReplaySource   // ISimEventSource = ReplayTimeline + MessageParser; ReplayRewoundEvent after a backward seek
+Replay.ReplayServer   // fake SimSig STOMP server for `stringline replay-server`; answers idrequest/snapshot/ttsummary from replayed state
 
 public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); string Describe(); }
 ```
@@ -88,7 +93,7 @@ public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); s
 - `GatewayClient`: dedicated read loop on a `TcpClient` stream; writes through a `SemaphoreSlim`; heart-beats if negotiated.
 - `PlanningEngine`: `Channel<EngineInput>` (bounded, `DropOldest` never for train events — use unbounded with monitoring).
 - UI: subscribes to `IObservable<PlanSnapshot>` (or a simple event) and marshals to the dispatcher; graph invalidates at most at display refresh rate.
-- Sim clock between `clock_msg`s: `SimClock` interpolates with `Stopwatch`, speed = 500/interval, frozen when paused.
+- Sim clock between `clock_msg`s: `SimClock` interpolates with `Stopwatch`, speed = 500/interval, frozen when paused. At SimSig's flat-out setting the interval is 1 and the real speed depends on the PC, so measure the speed from successive `clock_msg`s instead (a replay at 8× also arrives 8× faster than its recorded intervals say).
 
 ## 5. Persistence
 - **Profile** `%APPDATA%\Stringline\profiles\{area_id}.json` — corridors, location names, distances, categories, priorities.
@@ -107,7 +112,7 @@ public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); s
 | DI / hosting | Microsoft.Extensions.Hosting |
 | Logging | Microsoft.Extensions.Logging.Abstractions in libraries (`ILogger<T>`, `[LoggerMessage]`); Serilog (+ Console/File sinks, Serilog.Extensions.Logging) as the provider in Tools and App |
 | SQLite | Microsoft.Data.Sqlite |
-| Tests | xUnit, FluentAssertions, Verify.Xunit |
+| Tests | xUnit, FluentAssertions, Verify.Xunit, Microsoft.Extensions.TimeProvider.Testing (`FakeTimeProvider`) |
 | CLI | System.CommandLine |
 
 No third-party STOMP library: the protocol subset is small (CONNECT, SUBSCRIBE, SEND, DISCONNECT, MESSAGE, ERROR, RECEIPT) and owning it avoids the SimSig quirks other clients have tripped over.

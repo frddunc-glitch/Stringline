@@ -57,7 +57,7 @@ public static class GatewayTopics
     /// <summary>TD berth steps and <c>SG_MSG</c> signalling state; accepts snapshot and assist commands.</summary>
     public const string TrainDescriber = "/topic/TD_ALL_SIG_AREA";
 
-    /// <summary>Reportedly carries the reply to <c>ttsummary</c>. Unverified.</summary>
+    /// <summary>Carries the reply to <c>ttsummary</c> (sent to <see cref="SimSig"/>): a JSON array, one entry per train.</summary>
     public const string TrainMovementSummary = "/topic/TRAIN_MVT_SUMMARY";
 
     /// <summary>Movements and clock — what the graph needs.</summary>

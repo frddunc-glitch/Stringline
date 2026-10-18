@@ -26,7 +26,7 @@ public static class GatewayCommands
     /// <summary><c>{"snapshot":{}}</c> on the TD topic: SimSig replies with the state of every signalling object.</summary>
     public static GatewayCommand Snapshot() => Build(GatewayTopics.TrainDescriber, "snapshot");
 
-    /// <summary><c>{"ttsummary":{}}</c> on the SimSig topic. Unverified — see 03-simsig-gateway-integration.md §6.</summary>
+    /// <summary><c>{"ttsummary":{}}</c> on the SimSig topic; the reply comes on <see cref="GatewayTopics.TrainMovementSummary"/>.</summary>
     public static GatewayCommand TimetableSummary() => Build(GatewayTopics.SimSig, "ttsummary");
 
     /// <summary>TD step: move <paramref name="description"/> from one berth to another.</summary>
