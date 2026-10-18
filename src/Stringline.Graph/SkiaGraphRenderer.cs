@@ -13,7 +13,7 @@ public sealed class SkiaGraphRenderer : IDisposable
     /// <summary>Shortest a segment may be on screen, in pixels, for a headcode label to go on it.</summary>
     public const float MinLabelSegmentPixels = 24;
 
-    private readonly Dictionary<(Colour Colour, GraphLayer Layer), SKPaint> _pathPaints = [];
+    private readonly Dictionary<(Colour Colour, GraphLayer Layer, bool Dim), SKPaint> _pathPaints = [];
     private readonly Dictionary<(Colour Colour, float Width), SKPaint> _strokes = [];
     private readonly Dictionary<Colour, SKPaint> _fills = [];
     private readonly SKFont _locationFont;
@@ -40,18 +40,19 @@ public sealed class SkiaGraphRenderer : IDisposable
     public GraphTheme Theme { get; }
 
     /// <summary>Renders to a new PNG of the viewport's size.</summary>
-    public byte[] RenderPng(GraphScene scene, GraphViewport viewport)
+    public byte[] RenderPng(GraphScene scene, GraphViewport viewport, GraphSelection? selection = null)
     {
         ArgumentNullException.ThrowIfNull(viewport);
         var info = new SKImageInfo(viewport.Width, viewport.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
         using var surface = SKSurface.Create(info) ?? throw new InvalidOperationException($"Cannot create a {viewport.Width}×{viewport.Height} surface.");
-        Render(surface.Canvas, scene, viewport);
+        Render(surface.Canvas, scene, viewport, selection);
         using var image = surface.Snapshot();
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
     }
 
-    public void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport)
+    /// <param name="selection">A selected train to draw heavier while the rest dims, if any.</param>
+    public void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection = null)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(scene);
@@ -67,7 +68,7 @@ public sealed class SkiaGraphRenderer : IDisposable
         DrawPast(canvas, scene, viewport, plot);
         DrawTimeGrid(canvas, ticks, viewport, plot);
         DrawLocationLines(canvas, scene, viewport, plot);
-        var drawn = DrawPaths(canvas, scene, viewport);
+        var drawn = DrawPaths(canvas, scene, viewport, selection);
         DrawNow(canvas, scene, viewport, plot);
         DrawHeadcodes(canvas, drawn, viewport, plot);
         canvas.Restore();
@@ -116,10 +117,11 @@ public sealed class SkiaGraphRenderer : IDisposable
         }
     }
 
-    /// <returns>The paths drawn (in view), for labelling.</returns>
-    private List<GraphPath> DrawPaths(SKCanvas canvas, GraphScene scene, GraphViewport viewport)
+    /// <returns>The paths drawn (in view), for labelling; the selected ones first.</returns>
+    private List<GraphPath> DrawPaths(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection)
     {
         var drawn = new List<GraphPath>();
+        var selected = new List<GraphPath>();
         using var builder = new SKPathBuilder();
         foreach (var layer in Enum.GetValues<GraphLayer>())
         {
@@ -130,27 +132,48 @@ public sealed class SkiaGraphRenderer : IDisposable
                     continue;
                 }
 
-                builder.Reset();
-                for (var i = 0; i < p.Vertices.Count; i++)
+                if (selection?.Matches(p) == true)
                 {
-                    var s = viewport.ToScreen(p.Vertices[i].Time, p.Vertices[i].Axis);
-                    if (i == 0)
-                    {
-                        builder.MoveTo((float)s.X, (float)s.Y);
-                    }
-                    else
-                    {
-                        builder.LineTo((float)s.X, (float)s.Y);
-                    }
+                    selected.Add(p);
+                    continue;
                 }
 
-                using var path = builder.Snapshot();
-                canvas.DrawPath(path, PathPaint(p.Colour, layer));
+                using var path = Project(builder, p, viewport);
+                canvas.DrawPath(path, PathPaint(p.Colour, layer, dim: selection is not null));
                 drawn.Add(p);
             }
         }
 
+        // The selected train on top: a halo, then a heavy opaque line (05-…md §2).
+        foreach (var p in selected)
+        {
+            using var path = Project(builder, p, viewport);
+            var width = Math.Max(Theme.StyleOf(p.Layer).Width, p.Layer == GraphLayer.Wtt ? Theme.SelectedWttWidth : Theme.SelectedWidth);
+            canvas.DrawPath(path, Stroke(Theme.Halo, width + (2 * Theme.HaloWidth)));
+            canvas.DrawPath(path, Stroke(p.Colour with { A = 0xFF }, width));
+        }
+
+        drawn.InsertRange(0, selected);
         return drawn;
+    }
+
+    private static SKPath Project(SKPathBuilder builder, GraphPath p, GraphViewport viewport)
+    {
+        builder.Reset();
+        for (var i = 0; i < p.Vertices.Count; i++)
+        {
+            var s = viewport.ToScreen(p.Vertices[i].Time, p.Vertices[i].Axis);
+            if (i == 0)
+            {
+                builder.MoveTo((float)s.X, (float)s.Y);
+            }
+            else
+            {
+                builder.LineTo((float)s.X, (float)s.Y);
+            }
+        }
+
+        return builder.Snapshot();
     }
 
     private void DrawNow(SKCanvas canvas, GraphScene scene, GraphViewport viewport, SKRect plot)
@@ -170,6 +193,7 @@ public sealed class SkiaGraphRenderer : IDisposable
     {
         var withActuals = drawn.Where(p => p.Layer == GraphLayer.Actual && p.Train is not null).Select(p => p.Train).ToHashSet();
         var placed = new List<SKRect>();
+        // Stable sort: the selected train, which comes first, keeps its place within its layer.
         foreach (var p in drawn.OrderByDescending(p => p.Layer))
         {
             if (p.Layer is not (GraphLayer.Actual or GraphLayer.Wtt) || (p.Layer == GraphLayer.Wtt && withActuals.Contains(p.Train)))
@@ -346,9 +370,9 @@ public sealed class SkiaGraphRenderer : IDisposable
         canvas.DrawText(text, 8, 17, SKTextAlign.Left, _titleFont, Fill(Theme.Text));
     }
 
-    private SKPaint PathPaint(Colour colour, GraphLayer layer)
+    private SKPaint PathPaint(Colour colour, GraphLayer layer, bool dim)
     {
-        if (!_pathPaints.TryGetValue((colour, layer), out var paint))
+        if (!_pathPaints.TryGetValue((colour, layer, dim), out var paint))
         {
             var style = Theme.StyleOf(layer);
             paint = new SKPaint
@@ -358,10 +382,10 @@ public sealed class SkiaGraphRenderer : IDisposable
                 StrokeWidth = style.Width,
                 StrokeJoin = SKStrokeJoin.Round,
                 StrokeCap = SKStrokeCap.Round,
-                Color = ToSk(colour with { A = (byte)Math.Round(colour.A * style.Opacity) }),
+                Color = ToSk(colour with { A = (byte)Math.Round(colour.A * style.Opacity * (dim ? Theme.DimOpacity : 1)) }),
                 PathEffect = style.Dashed ? _dash : null,
             };
-            _pathPaints[(colour, layer)] = paint;
+            _pathPaints[(colour, layer, dim)] = paint;
         }
 
         return paint;
@@ -371,7 +395,7 @@ public sealed class SkiaGraphRenderer : IDisposable
     {
         if (!_strokes.TryGetValue((colour, width), out var paint))
         {
-            paint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = width, Color = ToSk(colour) };
+            paint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = width, StrokeJoin = SKStrokeJoin.Round, Color = ToSk(colour) };
             _strokes[(colour, width)] = paint;
         }
 

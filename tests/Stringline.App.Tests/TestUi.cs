@@ -1,0 +1,191 @@
+using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging.Abstractions;
+using Stringline.App.Services;
+using Stringline.App.ViewModels;
+using Stringline.Gateway.Recording;
+using Stringline.Network.Profiles;
+using Stringline.Planning;
+
+namespace Stringline.App.Tests;
+
+/// <summary>
+/// A stand-in UI thread: one thread with its own synchronisation context, so view-model code (and its awaits) runs
+/// there exactly as it would on the WPF dispatcher. Tests drive it with <see cref="Run{T}(Func{T})"/>.
+/// </summary>
+internal sealed class TestUiThread : SynchronizationContext, IUiDispatcher, IDisposable
+{
+    private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> _queue = [];
+    private readonly Thread _thread;
+
+    public TestUiThread()
+    {
+        _thread = new Thread(Loop) { IsBackground = true, Name = "Test UI" };
+        _thread.Start();
+    }
+
+    public void Post(Action action) => Post(_ => action(), null);
+
+    public override void Post(SendOrPostCallback d, object? state)
+    {
+        try
+        {
+            _queue.Add((d, state));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            // Shut down: late posts from background work are dropped, as the real dispatcher drops them.
+        }
+    }
+
+    public override void Send(SendOrPostCallback d, object? state) => Run(() =>
+    {
+        d(state);
+        return 0;
+    }).GetAwaiter().GetResult();
+
+    /// <summary>Run on the UI thread and wait for the result.</summary>
+    public Task<T> Run<T>(Func<T> func)
+    {
+        var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Post(() =>
+        {
+            try
+            {
+                done.SetResult(func());
+            }
+            catch (Exception ex)
+            {
+                done.SetException(ex);
+            }
+        });
+        return done.Task;
+    }
+
+    public Task Run(Action action) => Run(() =>
+    {
+        action();
+        return 0;
+    });
+
+    /// <summary>Run an async view-model method on the UI thread (its continuations come back here) and wait for it.</summary>
+    public async Task RunAsync(Func<Task> func) => await (await Run(func));
+
+    /// <summary>Poll a condition on the UI thread until it holds.</summary>
+    public async Task WaitUntil(Func<bool> condition, string what, int seconds = 30)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(seconds);
+        while (!await Run(condition))
+        {
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException($"Timed out waiting for {what}.");
+            }
+
+            await Task.Delay(20);
+        }
+    }
+
+    public void Dispose()
+    {
+        _queue.CompleteAdding();
+        _thread.Join(TimeSpan.FromSeconds(5));
+        _queue.Dispose();
+    }
+
+    private void Loop()
+    {
+        SetSynchronizationContext(this);
+        foreach (var (callback, state) in _queue.GetConsumingEnumerable())
+        {
+            callback(state);
+        }
+    }
+}
+
+/// <summary>Dialogs that answer from a script instead of showing anything.</summary>
+internal sealed class ScriptedDialogs : IDialogService
+{
+    public Func<ConnectViewModel, bool> Connect { get; set; } = _ => false;
+
+    public Func<ReplayViewModel, bool> Replay { get; set; } = _ => false;
+
+    public Queue<string?> Files { get; } = new();
+
+    public List<string> Errors { get; } = [];
+
+    public List<(string Title, IReadOnlyList<string> Lines)> Lists { get; } = [];
+
+    public bool ShowConnect(ConnectViewModel viewModel) => Connect(viewModel);
+
+    public bool ShowReplay(ReplayViewModel viewModel) => Replay(viewModel);
+
+    public string? PickFile(string title, string filter, string? initialPath) => Files.Count > 0 ? Files.Dequeue() : null;
+
+    public void ShowError(string title, string message) => Errors.Add(message);
+
+    public void ShowList(string title, string heading, IReadOnlyList<string> lines) => Lists.Add((title, lines));
+}
+
+/// <summary>A main view model wired as the app wires it, with files under a temporary folder.</summary>
+internal sealed class TestApp : IAsyncDisposable
+{
+    private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("stringline-app-");
+    private readonly CancellationTokenSource _stop = new();
+    private readonly Task _engineLoop;
+
+    public TestApp(Func<AppSettings, AppSettings>? settings = null)
+    {
+        Paths = AppPaths.Under(_root.FullName);
+        Settings = new AppSettingsStore(Paths, new DpapiSecretProtector(), NullLogger<AppSettingsStore>.Instance);
+        if (settings is not null)
+        {
+            Settings.Save(settings(new AppSettings()));
+        }
+
+        Engine = new LiveEngine(new LiveEngineOptions { PublishInterval = TimeSpan.FromMilliseconds(20) });
+        _engineLoop = Engine.RunAsync(_stop.Token);
+        Recorder = new SessionRecorder();
+        ViewModel = Ui.Run(() => new MainViewModel(
+            Engine,
+            Recorder,
+            new TimetableLoader(new ProfileStore(Paths.Profiles), NullLoggerFactory.Instance),
+            Settings,
+            Dialogs,
+            Ui,
+            Paths,
+            TimeProvider.System,
+            NullLoggerFactory.Instance)).GetAwaiter().GetResult();
+    }
+
+    public TestUiThread Ui { get; } = new();
+
+    public ScriptedDialogs Dialogs { get; } = new();
+
+    public AppPaths Paths { get; }
+
+    public AppSettingsStore Settings { get; }
+
+    public LiveEngine Engine { get; }
+
+    public SessionRecorder Recorder { get; }
+
+    public MainViewModel ViewModel { get; }
+
+    public async ValueTask DisposeAsync()
+    {
+        await Ui.RunAsync(async () => await ViewModel.DisposeAsync());
+        await _stop.CancelAsync();
+        await _engineLoop;
+        Ui.Dispose();
+        Recorder.Dispose();
+        _stop.Dispose();
+        try
+        {
+            _root.Delete(recursive: true);
+        }
+        catch (IOException)
+        {
+            // A file still open by a background thread; the temp folder is cleaned up eventually.
+        }
+    }
+}

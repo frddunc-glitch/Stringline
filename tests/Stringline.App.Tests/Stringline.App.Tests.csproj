@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Windows only (references the WPF app), so it is not in Stringline.Portable.slnf. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Stringline.App\Stringline.App.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Stringline.Gateway.Tests\FakeStompServer.cs" Link="FakeStompServer.cs" />
+    <Compile Include="..\Stringline.Gateway.Tests\Fixtures.cs" Link="Fixtures.cs" />
+  </ItemGroup>
+
+</Project>

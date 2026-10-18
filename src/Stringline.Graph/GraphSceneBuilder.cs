@@ -3,6 +3,7 @@ using Stringline.Core.Live;
 using Stringline.Core.Timetables;
 using Stringline.Network;
 using Stringline.Network.Profiles;
+using Stringline.Planning;
 
 namespace Stringline.Graph;
 
@@ -22,6 +23,18 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
     public bool ShowWtt { get; init; } = true;
 
     public bool ShowActual { get; init; } = true;
+
+    /// <summary>A request for the timetable and live trains of a <see cref="LiveSnapshot"/>, with the now line at its last reported clock.</summary>
+    public static GraphSceneRequest For(StringlineProfile profile, Corridor corridor, LiveSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        return new GraphSceneRequest(profile, corridor)
+        {
+            Timetable = snapshot.Timetable,
+            LiveTrains = snapshot.Trains,
+            Now = snapshot.Clock.HasTime ? snapshot.Clock.LastReported : null,
+        };
+    }
 }
 
 /// <summary>
@@ -123,7 +136,7 @@ public static class GraphSceneBuilder
         foreach (var (segment, index, count) in builder.Finish())
         {
             paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", GraphLayer.Actual, w.Train, w.Headcode, colour,
-                segment.Vertices, IsUnmatched: !w.IsMatched, Direction: corridor.DirectionOf(segment.Locations)));
+                segment.Vertices, IsUnmatched: !w.IsMatched, Direction: corridor.DirectionOf(segment.Locations), LiveUid: live.SimUid, Working: working));
         }
     }
 

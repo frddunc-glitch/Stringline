@@ -12,7 +12,7 @@ Stringline.sln
 │  ├─ Stringline.Planning/      net10.0   Working plan + commands, forecaster, conflicts, suggestions
 │  ├─ Stringline.Persistence/   net10.0   SQLite session store (Microsoft.Data.Sqlite)
 │  ├─ Stringline.Graph/         net10.0   Graph scene model + Skia renderer (SkiaSharp), hit testing — no WPF
-│  ├─ Stringline.App/           net10.0-windows  WPF shell, MVVM, SKElement host, dialogs
+│  ├─ Stringline.App/           net10.0-windows10.0.19041.0  WPF shell, MVVM, SKElement host, dialogs (SkiaSharp.Views.WPF 4 needs the versioned TFM)
 │  └─ Stringline.Tools/         net10.0   CLI: record, replay-server, wtt-dump, render-png
 ├─ tests/
 │  ├─ Stringline.*.Tests/       xUnit + FluentAssertions 7.x (+ Verify for snapshot tests)
@@ -101,6 +101,18 @@ GraphScene           // per corridor, world coordinates (sim seconds, axis 0..1)
 GraphSceneBuilder    // pure: GraphSceneRequest(profile, corridor, timetable?, live trains, now) → GraphScene; WTT + actual layers (plan/forecast from S10/S11)
 TimeGrid             // tick spacing from zoom (5 min / 30 min at a 3 h view), hour lines heaviest
 SkiaGraphRenderer    // Render(SKCanvas, scene, viewport), RenderPng; pooled paints, culling by path bounds, greedy headcode labels; GraphTheme, GraphFonts (embedded Noto Sans)
+SkiaGraphRenderer.Render(…, GraphSelection?) // S8: the selected train (WTT train and/or live uid) heavy with a halo, the rest dimmed
+GraphNavigator       // S8: pan/zoom/follow state for one surface, toolkit-free: Resize, Tick(now), Wheel (Ctrl = corridor, Shift = pan), drag, presets, CentreOn
+GraphHitTester       // S8: nearest projected segment within 5 px, actual preferred over WTT; linear scan (grid in S9) → GraphHit(path, segment, nearest vertex, time)
+GraphHover           // S8: GraphHit + scene + LiveSnapshot → HoverInfo (location, WTT and actual times, delay, match, train)
+
+// Stringline.Planning (S8)
+LiveEngine           // single writer: queue of GatewayEvents + SetTimetable/Clear → LiveState → LiveSnapshot at most every 100 ms; keeps the session's events so a timetable loaded mid-session rebuilds the matches
+LiveSnapshot         // immutable: timetable, live trains, SimClockReading (interpolate on any thread), match summary; FindByTrain/FindByUid
+TrainDelays          // actual − booked at a timing point (arrive vs arrival, else departure); Current(live) = latest booked point of the current working
+
+// Stringline.Timetable: WttCatalogue (S8) — ReadInfo(path) peeks the sim ID and name; FindForArea(folder, area) for timetable suggestions
+// Stringline.Gateway: SessionRecorder (S8) — toggleable, thread-safe .sslog recording of a live connection; LiveGatewaySource.MessageParsed feeds it
 
 public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); string Describe(); }
 ```

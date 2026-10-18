@@ -12,7 +12,7 @@ Stringline is a Windows desktop app that shows a live electronic train graph (ti
 C# / .NET 10 LTS. WPF + CommunityToolkit.Mvvm for the shell; SkiaSharp for the graph. xUnit + FluentAssertions + Verify. Serilog. Microsoft.Data.Sqlite. System.CommandLine for `Stringline.Tools`.
 
 ## Rules
-- Only `Stringline.App` may reference WPF or target `net10.0-windows`. Everything else targets `net10.0` and must build and test on Linux.
+- Only `Stringline.App` (and its test project) may reference WPF or target `net10.0-windows…` (the App targets `net10.0-windows10.0.19041.0` for SkiaSharp.Views.WPF 4). Everything else targets `net10.0` and must build and test on Linux.
 - All times are `SimTime` (int seconds after midnight of sim day 0, may exceed 86400). Never use `DateTime` for sim time.
 - Gateway JSON: numbers and booleans may arrive as strings — use the lenient converters. Snapshot bodies contain duplicate keys — parse with `Utf8JsonReader`, never `JsonDocument`.
 - Never send hand-built JSON to SimSig; use the tested command builders. Assist (outbound) features are opt-in and off by default.
@@ -28,12 +28,14 @@ C# / .NET 10 LTS. WPF + CommunityToolkit.Mvvm for the shell; SkiaSharp for the g
 - Test: `dotnet test`
 - On Linux (no WPF): `dotnet build Stringline.Portable.slnf -warnaserror` and `dotnet test Stringline.Portable.slnf`
 - New test projects go in `tests/`, and in `Stringline.Portable.slnf` too unless they reference `Stringline.App`.
+- View-model logic lives in `Stringline.App` but must not touch WPF types (use `IUiDispatcher`/`IDialogService`), so `Stringline.App.Tests` can drive it without a window.
 - Record: `dotnet run --project src/Stringline.Tools -- record --host localhost --port 51515 --out x.sslog`
 - Replay server: `dotnet run --project src/Stringline.Tools -- replay-server x.sslog --speed 8`
 - Inspect a WTT: `dotnet run --project src/Stringline.Tools -- wtt-dump t.wtt [--train 1A23] [--warnings]`. The WTT corpus test reads every `.wtt` under `STRINGLINE_WTT_CORPUS` (default `C:\Users\Public\Documents\SimSig\Timetables`; skipped if absent).
 - Match a recording to its WTT: `dotnet run --project src/Stringline.Tools -- match --wtt t.wtt --log x.sslog [--all]` (lists unmatched workings; `--all` lists every one).
 - Propose corridors: `dotnet run --project src/Stringline.Tools -- corridors t.wtt [--edges] [--top 6] [--min-trains 2] [--profile out.json]` (sections, min run times, derived axis, single-line hints; `--profile` writes a starter profile).
 - Render PNG: `dotnet run --project src/Stringline.Tools -- render-png --wtt t.wtt --log x.sslog --corridor main --at 09:00 --hours 3 out.png`
+- Run the app (Windows): `dotnet run --project src/Stringline.App -- [--wtt t.wtt] [--replay x.sslog --speed 8|max --start 07:30]`. App logs go to `%LOCALAPPDATA%\Stringline\logs`.
 
 ## End of every session
 Build and tests green → update `docs/progress.md` (done, decisions, next, known issues, questions for Fred) → update any design doc you changed → commit.

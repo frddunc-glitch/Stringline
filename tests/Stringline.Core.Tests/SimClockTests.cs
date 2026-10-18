@@ -235,4 +235,42 @@ public sealed class SimClockTests
         clock.IntervalMs.Should().Be(0);
         clock.NowAt(At(61)).Should().Be(SimTime.Zero);
     }
+
+    [Fact]
+    public void A_reading_interpolates_like_the_clock_and_does_not_change_with_it()
+    {
+        var clock = new SimClock();
+        clock.Observe(Clock(0, "05:00:00", interval: 125));
+        var reading = clock.Reading;
+
+        reading.HasTime.Should().BeTrue();
+        reading.AreaId.Should().Be("waterloo");
+        reading.Speed.Should().Be(4);
+        reading.IsMaximumSpeed.Should().BeFalse();
+        reading.SecondsAt(At(10)).Should().Be(clock.SecondsAt(At(10)));
+        reading.NowAt(At(10)).Should().Be(SimTime.Parse("05:00:40"));
+
+        clock.Observe(Clock(20, "06:00:00", paused: true));
+        reading.NowAt(At(10)).Should().Be(SimTime.Parse("05:00:40"), "a reading is a copy");
+        clock.Reading.Paused.Should().BeTrue();
+        clock.Reading.SecondsAt(At(100)).Should().Be(SimTime.Parse("06:00:00").Seconds);
+    }
+
+    [Fact]
+    public void A_reading_without_a_clock_is_zero()
+    {
+        SimClockReading.None.HasTime.Should().BeFalse();
+        SimClockReading.None.SecondsAt(At(5)).Should().Be(0);
+        new SimClock().Reading.Should().Be(SimClockReading.None);
+    }
+
+    [Fact]
+    public void A_reading_knows_flat_out()
+    {
+        var clock = new SimClock();
+        clock.Observe(Clock(0, "05:00:00", interval: 1));
+
+        clock.Reading.IsMaximumSpeed.Should().BeTrue();
+        clock.Reading.Speed.Should().Be(0, "flat out holds until measured");
+    }
 }

@@ -49,7 +49,7 @@ public class LayeringTests
 
             if (name == "Stringline.App")
             {
-                tfm.Should().Be("net10.0-windows");
+                tfm.Should().StartWith("net10.0-windows");
                 usesWpf.Should().BeTrue();
             }
             else

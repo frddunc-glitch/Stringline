@@ -1,0 +1,59 @@
+<Window x:Class="Stringline.App.Views.ReplayDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Open replay" SizeToContent="Height" Width="560" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <Grid Margin="14">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="Auto" />
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="Auto" />
+    </Grid.ColumnDefinitions>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <Grid.Resources>
+      <Style TargetType="Label">
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+      </Style>
+      <Style TargetType="TextBox">
+        <Setter Property="Margin" Value="0,3" />
+        <Setter Property="Padding" Value="2" />
+      </Style>
+    </Grid.Resources>
+
+    <TextBlock Grid.ColumnSpan="3" TextWrapping="Wrap" Foreground="#555" Margin="0,0,0,10"
+               Text="Plays a recording (.sslog) through the same pipeline as a live sim." />
+
+    <Label Grid.Row="1" Content="_Recording" Target="{Binding ElementName=RecordingBox}" />
+    <TextBox Grid.Row="1" Grid.Column="1" x:Name="RecordingBox" Text="{Binding RecordingPath, UpdateSourceTrigger=PropertyChanged}" />
+    <Button Grid.Row="1" Grid.Column="2" Content="Browse…" Margin="6,3,0,3" Padding="8,0" Command="{Binding BrowseRecordingCommand}" />
+
+    <Label Grid.Row="2" Content="_Timetable" Target="{Binding ElementName=TimetableBox}" />
+    <TextBox Grid.Row="2" Grid.Column="1" x:Name="TimetableBox" Text="{Binding TimetablePath, UpdateSourceTrigger=PropertyChanged}"
+             ToolTip="Optional: the .wtt the recording was made with." />
+    <Button Grid.Row="2" Grid.Column="2" Content="Browse…" Margin="6,3,0,3" Padding="8,0" Command="{Binding BrowseTimetableCommand}" />
+
+    <Label Grid.Row="3" Content="_Speed" Target="{Binding ElementName=SpeedBox}" />
+    <ComboBox Grid.Row="3" Grid.Column="1" x:Name="SpeedBox" Width="90" HorizontalAlignment="Left" Margin="0,3"
+              ItemsSource="{Binding Speeds}" SelectedItem="{Binding Speed}" ToolTip="Relative to the speed it was recorded at" />
+
+    <Label Grid.Row="4" Content="Start _at" Target="{Binding ElementName=StartBox}" />
+    <TextBox Grid.Row="4" Grid.Column="1" x:Name="StartBox" Width="90" HorizontalAlignment="Left" Text="{Binding StartAt, UpdateSourceTrigger=PropertyChanged}"
+             ToolTip="A sim time such as 07:30, or empty to start at the beginning" />
+
+    <DockPanel Grid.Row="5" Grid.ColumnSpan="3" Margin="0,14,0,0">
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <Button Content="Replay" IsDefault="True" Width="84" Margin="0,0,6,0" Click="OnOk" />
+        <Button Content="Cancel" IsCancel="True" Width="84" />
+      </StackPanel>
+      <TextBlock Text="{Binding Error}" Foreground="#C62828" TextWrapping="Wrap" VerticalAlignment="Center" />
+    </DockPanel>
+  </Grid>
+</Window>

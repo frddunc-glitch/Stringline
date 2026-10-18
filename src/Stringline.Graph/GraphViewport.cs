@@ -33,6 +33,15 @@ public sealed record GraphViewport(double TimeStart, double TimeEnd, double Axis
     /// <summary>Widest time range a zoom may reach: 2 days.</summary>
     public const double MaxTimeSpan = 2 * SimTime.SecondsPerDay;
 
+    /// <summary>Narrowest share of the corridor a distance zoom may reach.</summary>
+    public const double MinAxisSpan = 0.05;
+
+    /// <summary>The top of the whole padded corridor.</summary>
+    public const double FullAxisStart = -DefaultAxisPadding;
+
+    /// <summary>The bottom of the whole padded corridor.</summary>
+    public const double FullAxisEnd = 1 + DefaultAxisPadding;
+
     public double TimeSpan => TimeEnd - TimeStart;
 
     public double AxisSpan => AxisEnd - AxisStart;
@@ -119,6 +128,40 @@ public sealed record GraphViewport(double TimeStart, double TimeEnd, double Axis
     {
         var start = now - (TimeSpan * nowFraction);
         return this with { TimeStart = start, TimeEnd = start + TimeSpan };
+    }
+
+    /// <summary>
+    /// Zoomed along the corridor about the pixel row <paramref name="anchorY"/>, which keeps its axis position. A
+    /// factor above 1 zooms in. The view never shows more than the whole padded corridor, nor less than
+    /// <see cref="MinAxisSpan"/> of it.
+    /// </summary>
+    public GraphViewport ZoomAxis(double factor, double anchorY)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(factor);
+        var anchor = YToAxis(anchorY);
+        var span = Math.Clamp(AxisSpan / factor, MinAxisSpan, FullAxisEnd - FullAxisStart);
+        var share = (anchor - AxisStart) / AxisSpan;
+        return WithAxis(anchor - (share * span), span);
+    }
+
+    /// <summary>Moved along the corridor by this many pixels, as a drag would, but never past either padded end.</summary>
+    public GraphViewport PanAxisPixels(double dy) => WithAxis(AxisStart - (dy / PlotHeight * AxisSpan), AxisSpan);
+
+    /// <summary>The same time range, showing the whole corridor.</summary>
+    public GraphViewport WithFullAxis() => this with { AxisStart = FullAxisStart, AxisEnd = FullAxisEnd };
+
+    /// <summary>True if the whole corridor is in view.</summary>
+    public bool ShowsFullAxis => AxisStart <= FullAxisStart + 1e-9 && AxisEnd >= FullAxisEnd - 1e-9;
+
+    private GraphViewport WithAxis(double start, double span)
+    {
+        if (span >= FullAxisEnd - FullAxisStart - 1e-12)
+        {
+            return WithFullAxis();
+        }
+
+        start = Math.Max(FullAxisStart, Math.Min(start, FullAxisEnd - span));
+        return this with { AxisStart = start, AxisEnd = start + span };
     }
 
     /// <summary>The same world range drawn on a surface of a new size.</summary>

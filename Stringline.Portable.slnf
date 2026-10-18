@@ -15,6 +15,7 @@
       "tests\\Stringline.Timetable.Tests\\Stringline.Timetable.Tests.csproj",
       "tests\\Stringline.Network.Tests\\Stringline.Network.Tests.csproj",
       "tests\\Stringline.Graph.Tests\\Stringline.Graph.Tests.csproj",
+      "tests\\Stringline.Planning.Tests\\Stringline.Planning.Tests.csproj",
       "tests\\Stringline.Tools.Tests\\Stringline.Tools.Tests.csproj",
       "tests\\Stringline.Architecture.Tests\\Stringline.Architecture.Tests.csproj"
     ]

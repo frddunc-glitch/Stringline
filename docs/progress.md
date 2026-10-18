@@ -295,6 +295,66 @@
 - `ActualEvent` has no "at a signal between timing points" position, so actual lines run straight between timing points.
 - Titles use the WTT name, so Waterloo shows "SX May 2010 (Updated - Loader) v1.0.1"; the profile's `Name` can be edited.
 
+## 2026-10-19 — S8: WPF shell and live graph (MVP milestone)
+
+### Done
+- **The app runs and shows a live graph of plan vs actual.** It was checked by hand by replaying `waterloo-4x.sslog` at 8× with its WTT: corridor tabs, WTT and actual layers, now line, train list with delays, transport bar and status bar (`Sim 06:04:36 ×32`) all work. The window's design is in `05-…md` §8.
+- **Portable parts (tested on Linux):**
+  - Core: **`SimClockReading`**, a value copy of `SimClock`, so the UI interpolates the now line without touching the clock. `SimClock.SecondsAt` uses it.
+  - Planning (first code):
+    - **`LiveEngine`**, the single writer. It takes a queue of events plus `SetTimetable`/`Clear`, and publishes immutable **`LiveSnapshot`**s at most every 100 ms, coalescing events in between.
+    - It keeps the session's events, so a timetable loaded mid-session rebuilds the state and matches as if it had been loaded from the start.
+    - Failing events and handlers are logged and skipped.
+    - **`TrainDelays`**: delay at a timing point, and the current delay of a live train.
+  - Graph:
+    - **`GraphNavigator`**: pan, zoom and follow, independent of the UI toolkit.
+    - `GraphViewport.ZoomAxis`, `PanAxisPixels` and `WithFullAxis`, for distance zoom.
+    - **`GraphHitTester`**: 5 px tolerance, preferring actual over WTT; a linear scan for now.
+    - **`GraphHover`** builds the tooltip text. **`GraphSelection`**: the renderer draws the selected train with a halo and dims the rest. `GraphPath` gains `LiveUid`/`Working`, and there is `GraphSceneRequest.For(snapshot)`.
+  - Timetable: **`WttCatalogue`** reads only a `.wtt`'s sim ID and name, and finds a sim's timetables in a folder tree.
+  - Gateway: **`SessionRecorder`** records a live connection, can be switched on and off at any time, and is thread-safe. `LiveGatewaySource.MessageParsed` feeds it.
+- **App (`Stringline.App`):**
+  - Generic host with DI, and Serilog writing rolling files to `%LOCALAPPDATA%\Stringline\logs`.
+  - Settings in `%APPDATA%\Stringline\settings.json`, with the password encrypted by DPAPI (`DpapiSecretProtector`).
+  - `SimSession` runs a live or replay session. `TimetableLoader` loads the WTT plus its profile (load+refresh, or create, then save).
+  - View models: `MainViewModel`, `TrainListViewModel` (rows updated in place), `TransportViewModel`, and the Connect and Replay dialog view models.
+  - Views: the main window, Connect, Replay and a list window (import warnings), and the `GraphView` control (`SKElement`, DPI-scaled, mouse, tooltip popup, click to select).
+  - Command line: `--wtt`, `--replay`, `--speed`, `--start`.
+  - A minimal About box with the GPL notice.
+- **Tests:**
+  - New `Stringline.Planning.Tests` (22): engine, coalescing with `FakeTimeProvider`, rebuild on timetable, rewind, a Waterloo fixture with the WTT loaded halfway, and delays.
+  - New `Stringline.App.Tests` (33, Windows only). They run view models on a test "UI thread" with its own synchronisation context, and cover: replaying Waterloo end to end into a scene, hover and selection; timetable suggestions; the mismatch warning; a live connection to `FakeStompServer` with recording and remembered settings; a refused login; DPAPI settings; status text; the train list; dialogs; transport.
+  - Additions to Graph (+40: navigator, axis zoom, hit testing, hover, selection rendering), Gateway (+5 recorder), Timetable (+6 catalogue) and Core (+3).
+  - Totals: 936 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 103, Planning 22, Graph 97, Tools 55, App 33). Green on Windows, Debug and Release. The Linux container was not run this session; the new portable code has no Windows dependencies.
+
+### Decisions
+- **Fred's choices:**
+  - **Timetables are picked and suggested.** A path in the dialogs (remembered per sim), plus suggestions from SimSig's Timetables folder once the area is known.
+  - **Replay runs in-process** with a transport bar.
+  - **Rec is in S8.**
+  - **"Remember password" is an opt-in checkbox.**
+- **The App targets `net10.0-windows10.0.19041.0`**, because SkiaSharp.Views.WPF 4.x ships only that build (Windows 10 2004 or later). The architecture test now accepts any `net10.0-windows…` for the App. Its transitive OpenTK/GLWpfControl packages (for `SKGLElement`) are MIT. DPAPI (`ProtectedData`) is part of the Windows Desktop framework, so no package is added.
+- **The App sets `InvariantGlobalization=false`.** With the repository-wide `true`, WPF throws on XAML `Language` lookups. The libraries stay invariant.
+- **`LiveSnapshot` is a class, not a record,** so `with` cannot copy its lazy lookup caches stale.
+- **The engine stands in for S10's `PlanningEngine`.** The UI already reads snapshots only, so S10 can extend `LiveSnapshot` into `PlanSnapshot` (or wrap it) without changing the shell's threading.
+- **The WTT layer draws as soon as a timetable is loaded**, even with no session. The now line then sits at the timetable's start.
+- **Follow-mode zoom keeps the now line in place.** Panning in time turns follow off; panning only along the corridor does not.
+- **Delay minutes round towards zero** (59 s late is right time). They are shown as `+3`/`0`/`−1` in the list, and as "3 min late" in tooltips.
+- **View models never touch WPF types**, so they are tested without a window (`IUiDispatcher`, `IDialogService`).
+
+### Next
+- S9: path caching, a hit-test grid (replacing `GraphHitTester`'s linear scan; same API), a label grid, the benchmark, colouring by delay band (`TrainDelays` is ready), the vertical orientation, and PNG export (`RenderPng` takes a selection now).
+- S10: turn `LiveEngine` into `PlanningEngine`, with commands and undo, publishing a `PlanSnapshot` that carries what `LiveSnapshot` does.
+- S12: the train detail panel goes in the right-hand column. `GraphSelection` and `TrainListViewModel.Selected` already keep in step.
+
+### Known issues
+- **Not yet run against a live SimSig.** Live mode is tested against `FakeStompServer`, and replay against the real recordings. 👤 Fred: please try Connect against a running sim (with and without a timetable chosen), and Rec.
+- Running the app here wrote `settings.json` and `profiles\waterloo.json` under Fred's `%APPDATA%\Stringline` (the replay check). They are harmless; delete them for a clean first run.
+- Seeking a replay forward fast-forwards every frame at once, so the speed shown may jump for a minute until it is measured again.
+- The tooltip and train list use the WTT time for delays; there is no forecast until S11.
+- Hit testing scans every path in view; that is fine for Waterloo, and S9 adds the grid.
+- The UI language is the WPF default (en-US) for number and date formatting in controls. Everything we format ourselves is invariant `HH:mm:ss`.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

@@ -68,16 +68,10 @@ public sealed class SimClock
     public SimTime NowAt(DateTimeOffset wall) => new((int)Math.Floor(SecondsAt(wall)));
 
     /// <summary>The interpolated sim time at <paramref name="wall"/>, in fractional seconds, for a smooth now line.</summary>
-    public double SecondsAt(DateTimeOffset wall)
-    {
-        if (!HasTime)
-        {
-            return 0;
-        }
+    public double SecondsAt(DateTimeOffset wall) => Reading.SecondsAt(wall);
 
-        var elapsed = Math.Max(0, (wall - _baseWall).TotalSeconds);
-        return Math.Min(_baseSim + (elapsed * Speed), Math.Max(_baseSim, _limit));
-    }
+    /// <summary>The clock as a value, for readers on other threads to interpolate from.</summary>
+    public SimClockReading Reading => new(HasTime, AreaId, LastReported, Paused, IntervalMs, MeasuredSpeed, Speed, _baseSim, _baseWall, _limit);
 
     /// <summary>Take a <c>clock_msg</c>.</summary>
     public void Observe(ClockEvent clock)

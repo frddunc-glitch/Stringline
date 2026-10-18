@@ -33,6 +33,8 @@ public readonly record struct GraphVertex(double Time, double Axis);
 /// <param name="Colour">The category colour, or grey for an unmatched live working.</param>
 /// <param name="IsUnmatched">An actual path of a live working not (yet) matched to the WTT.</param>
 /// <param name="Direction">Down if the path runs away from the corridor's first location, Up towards it; null if neither.</param>
+/// <param name="LiveUid">For an actual path: the sim uid of the live train.</param>
+/// <param name="Working">For an actual path: the index of the working in <c>LiveTrain.Workings</c>.</param>
 public sealed record GraphPath(
     string Key,
     GraphLayer Layer,
@@ -41,7 +43,9 @@ public sealed record GraphPath(
     Colour Colour,
     IReadOnlyList<GraphVertex> Vertices,
     bool IsUnmatched = false,
-    TrackDirection? Direction = null)
+    TrackDirection? Direction = null,
+    string? LiveUid = null,
+    int? Working = null)
 {
     public double TimeMin => Vertices[0].Time;
 

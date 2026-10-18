@@ -45,6 +45,20 @@ public sealed record GraphTheme
 
     public LayerStyle Forecast { get; init; } = new(1.5f, 1, Dashed: true);
 
+    /// <summary>Line width of the selected train's actual, plan and forecast paths.</summary>
+    public float SelectedWidth { get; init; } = 4;
+
+    /// <summary>Line width of the selected train's WTT path.</summary>
+    public float SelectedWttWidth { get; init; } = 2;
+
+    /// <summary>The halo around the selected train, this wide on each side.</summary>
+    public float HaloWidth { get; init; } = 2;
+
+    public Colour Halo { get; init; } = new(0xFF, 0xFF, 0xFF, 0xE6);
+
+    /// <summary>Other trains' opacity while one is selected.</summary>
+    public double DimOpacity { get; init; } = 0.5;
+
     public float LocationFontSize { get; init; } = 12;
 
     public float TiplocFontSize { get; init; } = 9;

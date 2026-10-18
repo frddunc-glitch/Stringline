@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Stringline.Planning\Stringline.Planning.csproj" />
+    <!-- For the fixture tests: recordings are read and parsed with the gateway's own code. -->
+    <ProjectReference Include="..\..\src\Stringline.Gateway\Stringline.Gateway.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Stringline.Gateway.Tests\Fixtures.cs" Link="Fixtures.cs" />
+    <Compile Include="..\Stringline.Timetable.Tests\Live\TestTimetable.cs" Link="TestTimetable.cs" />
+  </ItemGroup>
+
+</Project>

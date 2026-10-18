@@ -1,0 +1,238 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using SkiaSharp.Views.Desktop;
+using Stringline.Core;
+using Stringline.Graph;
+
+namespace Stringline.App.Controls;
+
+/// <summary>
+/// Hosts the Skia train graph (<c>05-…md</c> §3): draws <see cref="Scene"/> through the <see cref="Navigator"/>'s
+/// viewport, and turns the mouse into pan, zoom, hover tooltips and clicks. All graph logic is in Stringline.Graph;
+/// this control only adapts WPF input and the <c>SKElement</c> surface to it. Units are device-independent pixels;
+/// the canvas is scaled to the screen's DPI so text is sharp.
+/// </summary>
+#pragma warning disable CA1001 // The renderer is disposed when the dispatcher shuts down; WPF controls are not disposable.
+public partial class GraphView : UserControl
+#pragma warning restore CA1001
+{
+    public static readonly DependencyProperty SceneProperty = DependencyProperty.Register(
+        nameof(Scene), typeof(GraphScene), typeof(GraphView), new PropertyMetadata(null, OnVisualChanged));
+
+    public static readonly DependencyProperty SelectionProperty = DependencyProperty.Register(
+        nameof(Selection), typeof(GraphSelection), typeof(GraphView), new PropertyMetadata(null, OnVisualChanged));
+
+    public static readonly DependencyProperty NavigatorProperty = DependencyProperty.Register(
+        nameof(Navigator), typeof(GraphNavigator), typeof(GraphView), new PropertyMetadata(null, OnNavigatorChanged));
+
+    /// <summary>Pixels the mouse may move between press and release and still count as a click.</summary>
+    private const double ClickSlop = 3;
+
+    private readonly SkiaGraphRenderer _renderer = new();
+    private Point? _pressedAt;
+    private bool _dragged;
+    private double? _now;
+    private double _nowX = double.NaN;
+    private (string Key, int Vertex)? _tipFor;
+
+    public GraphView()
+    {
+        InitializeComponent();
+        SizeChanged += (_, _) => Navigator?.Resize((int)Math.Round(Surface.ActualWidth), (int)Math.Round(Surface.ActualHeight));
+        Dispatcher.ShutdownStarted += (_, _) => _renderer.Dispose();
+    }
+
+    /// <summary>Raised on a click: the path hit, or null for the background.</summary>
+    public event EventHandler<GraphHit?>? PathClicked;
+
+    public GraphScene? Scene
+    {
+        get => (GraphScene?)GetValue(SceneProperty);
+        set => SetValue(SceneProperty, value);
+    }
+
+    public GraphSelection? Selection
+    {
+        get => (GraphSelection?)GetValue(SelectionProperty);
+        set => SetValue(SelectionProperty, value);
+    }
+
+    public GraphNavigator? Navigator
+    {
+        get => (GraphNavigator?)GetValue(NavigatorProperty);
+        set => SetValue(NavigatorProperty, value);
+    }
+
+    /// <summary>Builds the tooltip for a path under the cursor.</summary>
+    public Func<GraphHit, HoverInfo?>? Describer { get; set; }
+
+    /// <summary>Move the now line (interpolated sim seconds). Redraws only when it moves at least half a pixel.</summary>
+    public void SetNow(double? now)
+    {
+        _now = now;
+        if (Navigator is not { } nav || now is not { } seconds)
+        {
+            return;
+        }
+
+        var x = nav.Viewport.TimeToX(seconds);
+        if (double.IsNaN(_nowX) || Math.Abs(x - _nowX) >= 0.5)
+        {
+            Surface.InvalidateVisual();
+        }
+    }
+
+    private static void OnVisualChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) => ((GraphView)d).Surface.InvalidateVisual();
+
+    private static void OnNavigatorChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var view = (GraphView)d;
+        if (e.OldValue is GraphNavigator old)
+        {
+            old.Changed -= view.OnNavigatorMoved;
+        }
+
+        if (e.NewValue is GraphNavigator nav)
+        {
+            nav.Changed += view.OnNavigatorMoved;
+            nav.Resize((int)Math.Round(view.Surface.ActualWidth), (int)Math.Round(view.Surface.ActualHeight));
+        }
+
+        view.Surface.InvalidateVisual();
+    }
+
+    private void OnNavigatorMoved(object? sender, EventArgs e)
+    {
+        Surface.InvalidateVisual();
+        if (_tipFor is not null)
+        {
+            HideTip();
+        }
+    }
+
+    private void OnPaintSurface(object? sender, SKPaintSurfaceEventArgs e)
+    {
+        var canvas = e.Surface.Canvas;
+        if (Navigator is not { } nav || Scene is not { } scene || Surface.ActualWidth < 1)
+        {
+            canvas.Clear(SkiaSharp.SKColors.White);
+            return;
+        }
+
+        var scale = (float)(e.Info.Width / Surface.ActualWidth);
+        canvas.Save();
+        canvas.Scale(scale);
+        var now = _now is { } seconds ? new SimTime((int)Math.Floor(seconds)) : scene.Now;
+        _renderer.Render(canvas, scene with { Now = now }, nav.Viewport, Selection);
+        canvas.Restore();
+        _nowX = now is { } n ? nav.Viewport.TimeToX(n.Seconds) : double.NaN;
+    }
+
+    protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonDown(e);
+        Focus();
+        var p = e.GetPosition(Surface);
+        _pressedAt = p;
+        _dragged = false;
+        Navigator?.BeginDrag(new ScreenPoint(p.X, p.Y));
+        CaptureMouse();
+        e.Handled = true;
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        var p = e.GetPosition(Surface);
+        if (_pressedAt is { } from && IsMouseCaptured)
+        {
+            if (!_dragged && (Math.Abs(p.X - from.X) > ClickSlop || Math.Abs(p.Y - from.Y) > ClickSlop))
+            {
+                _dragged = true;
+                Cursor = Cursors.SizeAll;
+                HideTip();
+            }
+
+            if (_dragged)
+            {
+                Navigator?.DragTo(new ScreenPoint(p.X, p.Y));
+            }
+
+            return;
+        }
+
+        UpdateTip(p);
+    }
+
+    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonUp(e);
+        var wasClick = _pressedAt is not null && !_dragged;
+        _pressedAt = null;
+        Navigator?.EndDrag();
+        ReleaseMouseCapture();
+        Cursor = null;
+        if (wasClick)
+        {
+            PathClicked?.Invoke(this, HitTest(e.GetPosition(Surface)));
+        }
+
+        e.Handled = true;
+    }
+
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        var p = e.GetPosition(Surface);
+        var modifiers = GraphModifiers.None;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            modifiers |= GraphModifiers.Shift;
+        }
+
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            modifiers |= GraphModifiers.Control;
+        }
+
+        Navigator?.Wheel(e.Delta, p.X, p.Y, modifiers);
+        e.Handled = true;
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        HideTip();
+    }
+
+    private GraphHit? HitTest(Point p) =>
+        Scene is { } scene && Navigator is { } nav ? GraphHitTester.HitTest(scene, nav.Viewport, new ScreenPoint(p.X, p.Y)) : null;
+
+    private void UpdateTip(Point p)
+    {
+        if (HitTest(p) is not { } hit || Describer?.Invoke(hit) is not { } info)
+        {
+            HideTip();
+            return;
+        }
+
+        var key = (hit.Path.Key, hit.NearestVertex);
+        if (_tipFor != key)
+        {
+            _tipFor = key;
+            TipHeading.Text = info.Heading;
+            TipLines.ItemsSource = info.Lines;
+        }
+
+        Tip.HorizontalOffset = p.X + 16;
+        Tip.VerticalOffset = p.Y + 16;
+        Tip.IsOpen = true;
+    }
+
+    private void HideTip()
+    {
+        _tipFor = null;
+        Tip.IsOpen = false;
+    }
+}
