@@ -46,4 +46,4 @@
 
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
-1. Copyright holder is "Fred and Stringline contributors". Should it be your full name or Railnexus Consulting instead? (Change `Directory.Build.props` and `README.md`.)
+1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
