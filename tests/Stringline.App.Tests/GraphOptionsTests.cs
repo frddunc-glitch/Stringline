@@ -43,6 +43,26 @@ public sealed class GraphOptionsTests
     }
 
     [Fact]
+    public async Task The_forecast_is_drawn_and_its_knock_on_can_be_turned_off_and_is_remembered()
+    {
+        await using var app = new TestApp();
+        var vm = app.ViewModel;
+        (await app.Ui.Run(() => vm.ForecastKnockOn)).Should().BeTrue("knock-on is on unless turned off");
+        await ReplayWaterloo(app);
+        await app.Ui.WaitUntil(() => vm.Scene?.InLayer(GraphLayer.Forecast).Any() == true && vm.Snapshot.Forecast.Interaction, "forecast lines with knock-on");
+
+        await app.Ui.Run(() => vm.ShowForecast = false);
+        await app.Ui.WaitUntil(() => vm.Scene?.InLayer(GraphLayer.Forecast).Any() == false, "no forecast lines");
+
+        await app.Ui.Run(() => vm.ForecastKnockOn = false);
+        await app.Ui.WaitUntil(() => !vm.Snapshot.Forecast.Interaction && vm.Snapshot.Forecast.Trains.Count > 0, "a forecast without knock-on");
+        app.Settings.Load().ForecastKnockOn.Should().BeFalse();
+
+        await using var again = new TestApp(s => s with { ForecastKnockOn = false });
+        (await again.Ui.Run(() => again.ViewModel.ForecastKnockOn)).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Colour_by_delay_recolours_the_graph_and_the_train_list()
     {
         await using var app = new TestApp();

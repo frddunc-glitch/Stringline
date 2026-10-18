@@ -480,6 +480,65 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - The hover tooltip still shows WTT times only; it does not show the plan's.
 - An undo replays the whole history over the WTT. For Waterloo with a command per train this takes milliseconds, so there is no caching.
 
+## 2026-10-19 — S11: Forecaster
+
+### Done
+- **Forecaster (`Stringline.Planning`).** The rules are written up in `06-…md` §2.
+  - `Forecaster.Run(ForecastRequest)` → `Forecast`, which holds a `TrainForecast` per train: `ForecastPoint`s with a basis (Actual, Arrived, Forecast, None) and delay, a status (NotStarted, Running, Finished, Unavailable), `PossiblyStopped` and `KnockOnSeconds`.
+  - It is one discrete-event pass, with departures queued by time, priority and plan order. It covers steps 1–3 (start from the latest actual or the planned start plus the `train_delay` hint; minimum runs with recovery; dwells; no time before now), step 4 (the interaction pass, behind `ForecastOptions.Interaction`) and step 5 (possibly stopped after 5 min).
+  - It also handles trains formed from another (next working, divide, detach), speed restrictions and blocks.
+  - `ForecastNetwork` is built from the profile's corridor sections, with their headway and single-line setting. Shared sections are merged, and the tracks each way are widened to what the WTT uses at once. It also carries the category priorities.
+  - `MinRunTable.Along(points, from, to, depart, disruptions, fallback)` is now shared by the plan builder and the forecaster.
+- **Engine.** `PlanningEngine.SetForecast(network, options)`. The engine re-forecasts when the live state, the plan or the settings change, and logs a slow forecast (over 100 ms) or failed trains. `PlanSnapshot` gains `Forecast` and `EntryDelays`; `LiveState.EntryDelays` is new.
+- **Graph.**
+  - `GraphSceneRequest.Forecast` and `ShowForecast` add the forecast layer: `Forecast.Drawn`, dashed. Each running train's line starts at its latest actual, and a dwell it is in draws as a step. The line is in the category colour, or by forecast delay band when colouring by delay.
+  - The tooltip adds Forecast (times and delay at the location) and Notes (knock-on, possibly stopped).
+- **App.**
+  - A Forecast check box on the toolbar and View → "Show forecast".
+  - View → "Forecast knock-on from other trains" (remembered, on by default).
+  - The network is built when a timetable loads.
+- **Tools:** `render-png` draws the forecast with `--log`. `--no-forecast` leaves it out; `--no-knock-on` forecasts without the interaction pass.
+- **Benchmarks:** `ForecastBenchmarks` (Waterloo, half way through the 4× recording). `--quick` prints them.
+- **Tests:**
+  - Planning +47 (140):
+    - the forecaster's rules, one by one (lateness and recovery, dwell, early running, now and possibly stopped, signals, unseen trains, the session start, entry delays, cancellation and termination, speed restriction, block, formed trains, finished trains, determinism, the snapshot request);
+    - **golden scenarios** worked out by hand: a double line with a loop (late fast behind the stopper; late stopper recovering), a single line with a crossing loop (on time, rounding overlap, a late train holding the opposing one, an unbooked meeting), and a junction (a shared section, priority ties), plus tracks side by side and a formed-train regression;
+    - the network (shared sections, tracks, routes and shares, `TracksNeeded`, priorities);
+    - the engine (forecast in snapshots, settings, entry delays);
+    - Waterloo fixtures: the properties of `06-…md` §6 over all three recordings (about 450 000 forecast points: never before now, never leaving a stop early, never faster than the minimum), determinism, the on-time WTT making little knock-on, and the time taken.
+  - Graph +8 (153): the forecast layer, hiding, delay colours, tooltips and a PNG snapshot.
+  - Tools +1 (57), App +1 (38).
+  - Totals: 1 117 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 103, Planning 140, Graph 153, Tools 57, App 38). Green on Windows (Debug) and on Linux (`sdk:10.0` container, portable filter, Release: 1 079).
+- **Measured** (`benchmarks/ --quick`, Release): Waterloo, 1 768 trains / 7 834 points, takes 10 ms independent and 23 ms with the interaction pass (both passes).
+
+### Decisions
+- **Fred's choices:**
+  - **Forecast lines** go on running trains, and on trains not started whose forecast is off the plan (a late entry or knock-on). On-time future trains show only their plan.
+  - The **interaction pass is on by default**, using the profile's corridor sections (headway, single line). Runs off every corridor are not checked.
+  - The **minimum dwell** is 30 s when the WTT gives none. A train is **possibly stopped** after 5 min unreported past its forecast.
+  - **No horizon:** every train is forecast to the end of its run.
+- **The WTT never makes knock-on.** A pair booked through a section in that order is held no further apart than its booked spacing (or the headway, if less). Opposing trains booked to overlap by up to a minute keep it. Without this, Llangollen's booked crossings and Waterloo's close running would all show delay.
+- **Tracks each way are at least what the WTT uses at once.** A pair within a minute at either end, or overtaking, needs two tracks. Without this, Waterloo's four-track main line, which the profile calls double, held trains for minutes.
+- **"Deviates" means a minute or more**, as railway delay minutes go. Otherwise nearly every future train was drawn, because the forecast's shortest dwells differ from the WTT's half-minute bookings by seconds: Waterloo drew 563 lines, against 126 with the threshold.
+- **The first train not started with a headcode takes its `train_delay`.** The sim gives entry delays by headcode only.
+- **A block with a track** applies when the train's planned line out of its departure point has that name. S13 will refine this with the corridor's tracks.
+- **Forecast times are the plan's running points** (`TrainPlan.RunningPoints`), so a train terminated short is forecast to its new end. Cancelled trains, and trains not seen whose plan ended before the session started, are left out.
+- **The engine forecasts on every published change** rather than lazily, so S14/S15 can read the same forecast. It is cheap enough: 23 ms for Waterloo in Release.
+- **Found while testing on Waterloo:** a train formed from a one-point train (an ECS arrival, such as 5L45 → 2L45) was started only after every other train. It then queued behind the whole day and showed up to 18 min of false knock-on. Fixed, with a regression test.
+
+### Next
+- S12: the detail panel's Forecast column comes from `PlanSnapshot.Forecast.Find(train)`, with points by plan index. Drag previews can call `Forecaster.Run` on the previewed plan.
+- S13: draw disruptions, and refine track-specific blocks. The forecaster already honours speed restrictions and blocks.
+- S14: conflicts on the plan without the interaction pass (`ForecastOptions { Interaction = false }`), with knock-on from `TrainForecast.KnockOnSeconds`.
+
+### Known issues
+- **Not yet tried in the app by hand.** 👤 Fred: please replay or run a sim and check that the dashed lines and the knock-on look sensible. Try toggling View → "Forecast knock-on from other trains", especially on a single-line sim (Llangollen) and on Waterloo.
+- The interaction pass does not model platforms or junction conflicts inside a location; it only covers sections. The order is first come, first served; S15 suggests regulation.
+- When a section's tracks are not set in the profile, they are inferred from the WTT, which can be too generous: a WTT booked tighter than the headway counts as two tracks.
+- Waterloo's on-time WTT still gives 8 trains small knock-ons (4 s to 3 min), where a booking is tighter than the forecast's dwell or the headway.
+- In a Debug build, Waterloo takes 80–110 ms with both passes, and the engine logs forecasts over 100 ms. Release is about 23 ms.
+- The train list does not show forecast delays or "possibly stopped" yet.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
@@ -496,3 +555,7 @@ New from S4:
 
 New from S6:
 6. When convenient, run `stringline corridors` on the sims you play most and say whether the main corridor and branches look right. In particular: are all of Llangollen's sections really single line (LLANGOLLEN–GOODSJNC is hinted too)?
+
+New from S11:
+7. The forecaster does not yet use the WTT's **rules** (for example "X appears after Y leaves", 331 at Waterloo). They would hold an entering train until another has gone. Should S13/S14 apply them to entry forecasts? (Question 5, whether rule `Time` is in seconds, is still open: S11 did not need the rules.)
+8. Is a **minute's tolerance** right for booked single-line crossings? The forecaster keeps a booked overlap of up to 60 s between opposing trains as rounding, the same as the single-line hint (S6).

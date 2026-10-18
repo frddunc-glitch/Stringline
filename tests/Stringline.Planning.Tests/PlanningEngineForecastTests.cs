@@ -1,0 +1,98 @@
+using Stringline.Core;
+using Stringline.Core.Events;
+using static Stringline.Planning.Tests.ForecastTesting;
+using static Stringline.Timetable.Tests.Live.TestTimetable;
+
+namespace Stringline.Planning.Tests;
+
+/// <summary>The forecast in the engine's snapshots: made on each change, with the network and options set on the engine.</summary>
+public sealed class PlanningEngineForecastTests : IAsyncDisposable
+{
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+    private static readonly TrainId Slow = new("2B01");
+
+    private readonly PlanningEngine _engine = new(new PlanningEngineOptions { PublishInterval = TimeSpan.Zero });
+    private readonly CancellationTokenSource _stop = new();
+    private readonly Task _loop;
+
+    public PlanningEngineForecastTests() => _loop = _engine.RunAsync(_stop.Token);
+
+    public async ValueTask DisposeAsync()
+    {
+        await _stop.CancelAsync();
+        await _loop;
+        _stop.Dispose();
+    }
+
+    private async Task<PlanSnapshot> Snapshot(Func<PlanSnapshot, bool> until)
+    {
+        var found = new TaskCompletionSource<PlanSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnPublished(object? sender, PlanSnapshot s)
+        {
+            if (until(s))
+            {
+                found.TrySetResult(s);
+            }
+        }
+
+        _engine.SnapshotPublished += OnPublished;
+        try
+        {
+            return until(_engine.Current) ? _engine.Current : await found.Task.WaitAsync(Timeout);
+        }
+        finally
+        {
+            _engine.SnapshotPublished -= OnPublished;
+        }
+    }
+
+    [Fact]
+    public async Task Snapshots_carry_the_forecast_of_the_plan_and_live_trains()
+    {
+        _engine.SetTimetable(WorkingPlanTests.Timetable());
+        var loaded = await Snapshot(s => s.Plan.Count == 2);
+        loaded.Forecast.Trains.Should().HaveCount(2);
+        loaded.Forecast.Find(Slow)!.Status.Should().Be(TrainForecastStatus.NotStarted);
+
+        _engine.Post(Clock("07:03:30"));
+        _engine.Post(Location("10", "2B01", "A", "07:03", TrainLocationAction.Depart));
+        var running = await Snapshot(s => s.Forecast.Find(Slow)?.Status == TrainForecastStatus.Running);
+
+        running.Forecast.Now.Should().Be(SimTime.Parse("07:03:30"));
+        Times(running.Forecast.Find(Slow)!).Should().Equal("A -/07:03:00 A", "B 07:08:00/07:08:30 F", "C pass 07:12:30 F", "D 07:17:30/- F");
+
+        var result = await _engine.Execute(new CancelTrain(Slow)).WaitAsync(Timeout);
+        result.Applied.Should().BeTrue();
+        var cancelled = await Snapshot(s => s.PlanVersion > running.PlanVersion);
+        cancelled.Forecast.Find(Slow).Should().BeNull("a cancelled train has no forecast");
+    }
+
+    [Fact]
+    public async Task The_network_and_options_are_set_on_the_engine()
+    {
+        _engine.SetTimetable(WorkingPlanTests.Timetable());
+        var loaded = await Snapshot(s => s.Plan.Count == 2);
+        loaded.Forecast.Interaction.Should().BeFalse("there are no sections yet");
+
+        _engine.SetForecast(ForecastNetwork.Build([Line("main", 180, single: false, "A", "B", "C", "D")], WorkingPlanTests.Timetable()));
+        var withNetwork = await Snapshot(s => s.Forecast.Interaction);
+        withNetwork.Sequence.Should().BeGreaterThan(loaded.Sequence);
+
+        _engine.SetForecast(options: new ForecastOptions { Interaction = false });
+        var off = await Snapshot(s => s.Sequence > withNetwork.Sequence);
+        off.Forecast.Interaction.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Entry_delays_reach_the_snapshot_and_the_forecast()
+    {
+        _engine.SetTimetable(WorkingPlanTests.Timetable());
+        await Snapshot(s => s.Plan.Count == 2);
+
+        _engine.Post(new TrainDelayEvent(T0, new Headcode("2B01"), "", 120));
+        var snapshot = await Snapshot(s => s.EntryDelays.Count == 1);
+
+        snapshot.EntryDelays[new Headcode("2B01")].Should().Be(120);
+        Times(snapshot.Forecast.Find(Slow)!)[0].Should().Be("A -/07:02:00 F");
+    }
+}

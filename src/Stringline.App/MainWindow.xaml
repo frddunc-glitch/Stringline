@@ -49,6 +49,9 @@
         <Separator />
         <MenuItem Header="Show _WTT" IsCheckable="True" IsChecked="{Binding ShowWtt}" />
         <MenuItem Header="Show _actual" IsCheckable="True" IsChecked="{Binding ShowActual}" />
+        <MenuItem Header="Show _forecast" IsCheckable="True" IsChecked="{Binding ShowForecast}" />
+        <MenuItem Header="Forecast _knock-on from other trains" IsCheckable="True" IsChecked="{Binding ForecastKnockOn}"
+                  ToolTip="Hold trains in the forecast for headways and single lines, so a late train delays the ones behind it" />
         <MenuItem Header="Colour by _delay" IsCheckable="True" IsChecked="{Binding ColourByDelay}" />
         <MenuItem Header="_Vertical (time down)" IsCheckable="True" IsChecked="{Binding IsVertical}" />
         <Separator />
@@ -79,6 +82,8 @@
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
           <CheckBox Content="WTT" IsChecked="{Binding ShowWtt}" Margin="6,0" VerticalAlignment="Center" />
           <CheckBox Content="Actual" IsChecked="{Binding ShowActual}" Margin="6,0" VerticalAlignment="Center" />
+          <CheckBox Content="Forecast" IsChecked="{Binding ShowForecast}" Margin="6,0" VerticalAlignment="Center"
+                    ToolTip="Dashed lines: where each running train is expected to go" />
           <TextBlock Text="Colour:" Margin="8,0,4,0" VerticalAlignment="Center" />
           <ComboBox Width="84" ItemsSource="{Binding ColourModes}" SelectedItem="{Binding ColourMode}" VerticalAlignment="Center"
                     ToolTip="Colour actual lines by train category, or by delay band (green right time, amber 1–5 min, orange 6–15, red over 15)" />

@@ -1,7 +1,9 @@
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Stringline.Core;
 using Stringline.Core.Events;
+using Stringline.Core.Live;
 using Stringline.Core.Timetables;
 using Stringline.Timetable.Live;
 
@@ -17,6 +19,9 @@ public sealed record PlanningEngineOptions
     public TimeSpan PublishInterval { get; init; } = TimeSpan.FromMilliseconds(100);
 
     public MatcherOptions? Matcher { get; init; }
+
+    /// <summary>The forecaster's settings to start with; <see cref="PlanningEngine.SetForecast"/> changes them.</summary>
+    public ForecastOptions Forecast { get; init; } = new();
 }
 
 /// <summary>
@@ -40,6 +45,9 @@ public sealed partial class PlanningEngine
 {
     private static readonly WorkingTimetable NoTimetable = WorkingPlan.Empty.Timetable;
 
+    /// <summary>A forecast slower than this is logged (the budget in <c>06-…md</c> §2 is 50 ms for 500 trains).</summary>
+    private static readonly TimeSpan SlowForecast = TimeSpan.FromMilliseconds(100);
+
     private readonly Channel<Input> _queue = Channel.CreateUnbounded<Input>(new UnboundedChannelOptions { SingleReader = true });
     private readonly PlanningEngineOptions _options;
     private readonly TimeProvider _time;
@@ -59,6 +67,12 @@ public sealed partial class PlanningEngine
     private long _publishedVersion;
     private DateTimeOffset _lastPublish = DateTimeOffset.MinValue;
     private int _running;
+    private ForecastNetwork _network = ForecastNetwork.Empty;
+    private ForecastOptions _forecastOptions;
+    private long _forecastSettingsVersion;
+    private (long State, long Plan, long Settings) _forecastKey = (-1, -1, -1);
+    private Forecast _forecast = Forecast.Empty;
+    private IReadOnlyDictionary<Headcode, int> _entryDelays = new Dictionary<Headcode, int>();
 
     public PlanningEngine(PlanningEngineOptions? options = null, TimeProvider? timeProvider = null, ILoggerFactory? loggerFactory = null)
     {
@@ -66,6 +80,7 @@ public sealed partial class PlanningEngine
         _time = timeProvider ?? TimeProvider.System;
         _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
         _logger = _loggerFactory.CreateLogger<PlanningEngine>();
+        _forecastOptions = _options.Forecast;
         _state = CreateState(null);
     }
 
@@ -84,6 +99,13 @@ public sealed partial class PlanningEngine
 
     /// <summary>Use this timetable from now on (null for none), rebuilding the live state from the session's events.</summary>
     public void SetTimetable(WorkingTimetable? timetable) => _queue.Writer.TryWrite(new Input(InputKind.Timetable, Timetable: timetable));
+
+    /// <summary>
+    /// Forecast over this network (from the profile's corridors) with these settings from now on; null keeps the
+    /// current one. Publishes a new forecast straight away.
+    /// </summary>
+    public void SetForecast(ForecastNetwork? network = null, ForecastOptions? options = null) =>
+        _queue.Writer.TryWrite(new Input(InputKind.Forecast, Network: network, ForecastOptions: options));
 
     /// <summary>Start a new session: forget all events, live trains and plan edits; keep the timetable.</summary>
     public void Clear() => _queue.Writer.TryWrite(new Input(InputKind.Clear));
@@ -192,6 +214,12 @@ public sealed partial class PlanningEngine
                     break;
                 case InputKind.Redo:
                     forced |= Step(RedoStep(), input.Step!);
+                    break;
+                case InputKind.Forecast:
+                    _network = input.Network ?? _network;
+                    _forecastOptions = input.ForecastOptions ?? _forecastOptions;
+                    _forecastSettingsVersion++;
+                    forced = true;
                     break;
             }
         }
@@ -394,17 +422,22 @@ public sealed partial class PlanningEngine
     private void Publish()
     {
         _planHistory ??= new PlanHistory([.. _done], Enumerable.Reverse(_undone).ToArray());
+        var trains = _state.Trains.ToArray();
+        var clock = _state.Clock.Reading;
+        UpdateForecast(trains, clock);
         var snapshot = new PlanSnapshot(
             ++_sequence,
             _timetable,
-            _state.Trains.ToArray(),
-            _state.Clock.Reading,
+            trains,
+            clock,
             _state.Summarise(),
             _state.Version,
             _state.SessionStart,
             _plan,
             _planHistory,
-            _planVersion);
+            _planVersion,
+            _entryDelays,
+            _forecast);
         _publishedVersion = _state.Version;
         _lastPublish = _time.GetUtcNow();
         Volatile.Write(ref _current, snapshot);
@@ -428,6 +461,51 @@ public sealed partial class PlanningEngine
         }
     }
 
+    /// <summary>Re-forecasts if the live state, the plan or the forecast settings changed since the last one.</summary>
+    private void UpdateForecast(IReadOnlyList<LiveTrain> trains, SimClockReading clock)
+    {
+        var key = (_state.Version, _planVersion, _forecastSettingsVersion);
+        if (key == _forecastKey)
+        {
+            return;
+        }
+
+        _forecastKey = key;
+        _entryDelays = new Dictionary<Headcode, int>(_state.EntryDelays);
+        var started = _time.GetTimestamp();
+        try
+        {
+            _forecast = Forecaster.Run(new ForecastRequest(_plan)
+            {
+                LiveTrains = trains,
+                Now = clock.HasTime ? clock.LastReported : null,
+                SessionStart = _state.SessionStart,
+                EntryDelays = _entryDelays,
+                Network = _network,
+                Options = _forecastOptions,
+            });
+        }
+#pragma warning disable CA1031 // A forecaster fault must not stop the live picture: the forecast is dropped.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            LogForecastFailed(ex);
+            _forecast = Forecast.Empty;
+            return;
+        }
+
+        var elapsed = _time.GetElapsedTime(started);
+        if (elapsed > SlowForecast)
+        {
+            LogForecastSlow(_forecast.Trains.Count, elapsed.TotalMilliseconds);
+        }
+
+        if (_forecast.Trains.Count(t => t.Status == TrainForecastStatus.Unavailable) is var failed and > 0)
+        {
+            LogForecastUnavailable(failed);
+        }
+    }
+
     private LiveState CreateState(WorkingTimetable? timetable) =>
         new(timetable ?? NoTimetable, _options.Matcher, _time, _loggerFactory.CreateLogger<LiveState>());
 
@@ -439,6 +517,7 @@ public sealed partial class PlanningEngine
         Execute,
         Undo,
         Redo,
+        Forecast,
     }
 
     private readonly record struct Input(
@@ -447,7 +526,9 @@ public sealed partial class PlanningEngine
         WorkingTimetable? Timetable = null,
         IPlanCommand? Command = null,
         TaskCompletionSource<PlanCommandResult>? Result = null,
-        TaskCompletionSource<bool>? Step = null);
+        TaskCompletionSource<bool>? Step = null,
+        ForecastNetwork? Network = null,
+        ForecastOptions? ForecastOptions = null);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not apply a {Event}; skipped")]
     private partial void LogApplyFailed(Exception ex, string @event);
@@ -469,4 +550,13 @@ public sealed partial class PlanningEngine
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Plan command no longer applies and was dropped from the history: {Description}: {Error}")]
     private partial void LogCommandDropped(string description, string? error);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The forecast failed; no forecast is shown")]
+    private partial void LogForecastFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Forecast of {Trains} trains took {Milliseconds:0} ms")]
+    private partial void LogForecastSlow(int trains, double milliseconds);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The forecast failed for {Trains} trains; they are shown without one")]
+    private partial void LogForecastUnavailable(int trains);
 }

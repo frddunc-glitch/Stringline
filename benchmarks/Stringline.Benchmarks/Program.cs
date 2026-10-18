@@ -31,6 +31,12 @@ static void Quick()
         Time("100 hover tests (linear)", 10, () => bench.LinearHitTest());
     }
 
+    var forecast = new ForecastBenchmarks();
+    forecast.Setup();
+    Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Forecast, Waterloo ({forecast.Trains} trains, {forecast.Points} points):"));
+    Time("independent", 20, () => forecast.Independent());
+    Time("with knock-on (both passes)", 20, () => forecast.WithKnockOn());
+
     static void Time(string what, int runs, Action action)
     {
         for (var i = 0; i < Math.Max(5, runs / 2); i++)

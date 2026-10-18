@@ -27,6 +27,19 @@ public sealed class RenderPngCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task The_forecast_can_be_left_out()
+    {
+        var (exit, output, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo4x), "--at", "07:00", "--no-forecast", Out());
+
+        exit.Should().Be(0, error);
+        output.Should().Contain(" 0 forecast in all");
+
+        (exit, output, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo4x), "--at", "07:00", "--no-knock-on", Out());
+        exit.Should().Be(0, error);
+        output.Should().NotContain(" 0 forecast in all");
+    }
+
+    [Fact]
     public async Task Draws_wtt_and_actuals_around_the_time_given()
     {
         var (exit, output, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo4x), "--corridor", "main", "--at", "07:00", "--hours", "3", Out());
@@ -34,7 +47,7 @@ public sealed class RenderPngCommandTests : IDisposable
         exit.Should().Be(0, error);
         error.Should().BeEmpty();
         output.Should().StartWith("Wrote graph.png: main (WLOO – WIMB), 06:00:00–09:00:00, now 07:00:00, ");
-        output.Should().MatchRegex(@"\d+ paths in view \(\d+ actual in all\)\.");
+        output.Should().MatchRegex(@"\d+ paths in view \(\d+ actual, [1-9]\d* forecast in all\)\.");
         using var bitmap = SKBitmap.Decode(Out());
         (bitmap.Width, bitmap.Height).Should().Be((1600, 900));
     }
@@ -65,7 +78,7 @@ public sealed class RenderPngCommandTests : IDisposable
         exit.Should().Be(0);
         var start = new WttReader().Read(Fixtures.Path("llangollen 2012 B.WTT")).Timetable.Header.StartTime;
         output.Should().Contain($"main (LLANGOLLEN – CARROG), {start}–{start + (3 * 3600)}, now {start}, ");
-        output.Should().Contain("(0 actual in all)");
+        output.Should().Contain("(0 actual, 0 forecast in all)");
         using var bitmap = SKBitmap.Decode(Out());
         (bitmap.Width, bitmap.Height).Should().Be((800, 400));
     }

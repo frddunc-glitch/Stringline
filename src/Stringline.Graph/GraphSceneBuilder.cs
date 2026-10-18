@@ -29,6 +29,11 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
 
     public bool ShowActual { get; init; } = true;
 
+    /// <summary>The forecast: <see cref="Forecast.Drawn"/> trains draw on the forecast layer, on from their latest actual.</summary>
+    public Forecast? Forecast { get; init; }
+
+    public bool ShowForecast { get; init; } = true;
+
     /// <summary>Colour actual lines by category (the default) or by delay band.</summary>
     public GraphColourMode ColourMode { get; init; } = GraphColourMode.Category;
 
@@ -41,6 +46,7 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
             Timetable = snapshot.Timetable,
             LiveTrains = snapshot.Trains,
             Plan = snapshot.Plan,
+            Forecast = snapshot.Forecast,
             Now = snapshot.Clock.HasTime ? snapshot.Clock.LastReported : null,
         };
     }
@@ -102,6 +108,14 @@ public static class GraphSceneBuilder
             }
         }
 
+        if (request.ShowForecast && request.Forecast is { } forecast)
+        {
+            foreach (var train in forecast.Drawn)
+            {
+                AddForecast(paths, corridor, train, request);
+            }
+        }
+
         var title = $"{profile.Name ?? profile.AreaId} — {corridor.Name}";
         return new GraphScene(corridor.Id, title, locations, paths, request.Now);
     }
@@ -131,6 +145,57 @@ public static class GraphSceneBuilder
         }
 
         AddPaths(paths, corridor, builder, $"plan:{train.Id}", GraphLayer.Plan, train.Id, train.Headcode, colour);
+    }
+
+    /// <summary>
+    /// A train's forecast path: from its latest actual time (so it carries on from the end of its actual line) through
+    /// every forecast point. Coloured by category, or by forecast delay band like an actual line.
+    /// </summary>
+    private static void AddForecast(List<GraphPath> paths, Corridor corridor, TrainForecast forecast, GraphSceneRequest request)
+    {
+        var first = forecast.FirstForecast;
+        if (first < 0)
+        {
+            return;
+        }
+
+        var categoryId = request.Plan?.Find(forecast.Train)?.CategoryId ?? request.Timetable?.Find(forecast.Train)?.CategoryId;
+        var colour = request.Profile.StyleFor(categoryId).Colour;
+        var byDelay = request.ColourMode == GraphColourMode.Delay;
+        var builder = new PathAccumulator(corridor);
+        if (forecast.Points[first].Basis == ForecastBasis.Forecast)
+        {
+            for (var k = first - 1; k >= 0; k--)
+            {
+                if (forecast.Points[k] is { Basis: ForecastBasis.Actual, LastTime: { } anchor } p)
+                {
+                    builder.Add(p.Location, anchor, p.DelaySeconds);
+                    break;
+                }
+            }
+        }
+
+        for (var k = first; k < forecast.Points.Count; k++)
+        {
+            var p = forecast.Points[k];
+            if (p.Arrive is { } arrive && p.Depart is { } depart && depart > arrive)
+            {
+                builder.Add(p.Location, arrive, p.DelaySeconds);
+                builder.Add(p.Location, depart, p.DelaySeconds);
+            }
+            else if (p.FirstTime is { } time)
+            {
+                builder.Add(p.Location, time, p.DelaySeconds);
+            }
+        }
+
+        var key = $"fc:{forecast.Train}";
+        foreach (var (segment, index, count) in builder.Finish())
+        {
+            var (pathColour, segmentColours) = byDelay ? DelayColours(segment.Delays) : (colour, null);
+            paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", GraphLayer.Forecast, forecast.Train, forecast.Headcode, pathColour,
+                segment.Vertices, Direction: corridor.DirectionOf(segment.Locations), LiveUid: forecast.LiveUid, SegmentColours: segmentColours));
+        }
     }
 
     /// <summary>A booked or planned point: one vertex for a pass or a point with one time, two for a stop with a dwell.</summary>

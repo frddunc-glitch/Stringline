@@ -85,6 +85,9 @@ public sealed partial class LiveState
     public (LiveTrain Train, int Working)? FindByTrain(TrainId train) =>
         _matched.TryGetValue(train, out var at) ? (_trains[at.Uid], at.Working) : null;
 
+    /// <summary>The latest <c>train_delay</c> by headcode: the sim's expected entry delay of trains not yet entered, in seconds.</summary>
+    public IReadOnlyDictionary<Headcode, int> EntryDelays => _entryDelays;
+
     /// <summary>The latest <c>train_delay</c> for a headcode (seconds, negative = early): a hint for trains not yet in the sim.</summary>
     public int? EntryDelayHint(Headcode headcode) => _entryDelays.TryGetValue(headcode, out var delay) ? delay : null;
 

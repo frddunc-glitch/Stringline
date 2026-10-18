@@ -76,4 +76,32 @@ public sealed class MinRunTable
 
         return total;
     }
+
+    /// <summary>
+    /// <see cref="Along(IReadOnlyList{PlannedPoint}, int, int)"/>, lengthened by the speed restriction that lengthens it most among those in force at
+    /// <paramref name="depart"/> and covering the run. With no minimum known, <paramref name="fallback"/> is lengthened
+    /// instead; null if that is null too.
+    /// </summary>
+    public int? Along(IReadOnlyList<PlannedPoint> points, int from, int to, SimTime? depart, IEnumerable<Disruption> disruptions, int? fallback = null)
+    {
+        ArgumentNullException.ThrowIfNull(disruptions);
+        if ((Along(points, from, to) ?? fallback) is not { } min)
+        {
+            return null;
+        }
+
+        var result = min;
+        if (depart is { } time)
+        {
+            foreach (var disruption in disruptions)
+            {
+                if (disruption.Kind == DisruptionKind.SpeedRestriction && disruption.IsActiveAt(time) && disruption.Covers(points, from, to))
+                {
+                    result = Math.Max(result, disruption.Lengthen(min));
+                }
+            }
+        }
+
+        return result;
+    }
 }

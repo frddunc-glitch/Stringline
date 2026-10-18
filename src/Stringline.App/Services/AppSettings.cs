@@ -44,6 +44,9 @@ internal sealed record AppSettings
     /// <summary>Draw the graph with time running down (GR-1).</summary>
     public bool VerticalGraph { get; init; }
 
+    /// <summary>The forecast includes knock-on delay from other trains (the interaction pass). On unless turned off.</summary>
+    public bool ForecastKnockOn { get; init; } = true;
+
     /// <summary>The folder the last graph export went to.</summary>
     public string? LastExportFolder { get; init; }
 

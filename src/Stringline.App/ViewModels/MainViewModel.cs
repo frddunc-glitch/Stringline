@@ -89,10 +89,12 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _logger = loggerFactory.CreateLogger<MainViewModel>();
         _settings = settingsStore.Load();
         Snapshot = engine.Current;
-        // Read both first: setting either saves the view settings, which would overwrite the other.
-        var (byDelay, vertical) = (_settings.ColourByDelay, _settings.VerticalGraph);
+        // Read them all first: setting any saves the view settings, which would overwrite the others.
+        var (byDelay, vertical, knockOn) = (_settings.ColourByDelay, _settings.VerticalGraph, _settings.ForecastKnockOn);
         IsVertical = vertical;
         ColourMode = byDelay ? GraphColourMode.Delay : GraphColourMode.Category;
+        ForecastKnockOn = knockOn;
+        engine.SetForecast(options: new ForecastOptions { Interaction = knockOn });
         Trains.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(TrainListViewModel.Selected))
@@ -138,6 +140,14 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     [ObservableProperty]
     public partial bool ShowActual { get; set; } = true;
+
+    /// <summary>Show the forecast layer (dashed lines on from each running train). Not remembered, like the other layers.</summary>
+    [ObservableProperty]
+    public partial bool ShowForecast { get; set; } = true;
+
+    /// <summary>The forecast includes knock-on delay from other trains (headways, single lines). Remembered.</summary>
+    [ObservableProperty]
+    public partial bool ForecastKnockOn { get; set; } = true;
 
     public IReadOnlyList<GraphColourMode> ColourModes { get; } = Enum.GetValues<GraphColourMode>();
 
@@ -229,6 +239,14 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     partial void OnShowWttChanged(bool value) => RequestScene();
 
     partial void OnShowActualChanged(bool value) => RequestScene();
+
+    partial void OnShowForecastChanged(bool value) => RequestScene();
+
+    partial void OnForecastKnockOnChanged(bool value)
+    {
+        _engine.SetForecast(options: new ForecastOptions { Interaction = value });
+        SaveViewSettings();
+    }
 
     partial void OnColourModeChanged(GraphColourMode value)
     {
@@ -530,9 +548,9 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private void SaveViewSettings()
     {
         var byDelay = ColourMode == GraphColourMode.Delay;
-        if (_settings.ColourByDelay != byDelay || _settings.VerticalGraph != IsVertical)
+        if (_settings.ColourByDelay != byDelay || _settings.VerticalGraph != IsVertical || _settings.ForecastKnockOn != ForecastKnockOn)
         {
-            _settings = _settings with { ColourByDelay = byDelay, VerticalGraph = IsVertical };
+            _settings = _settings with { ColourByDelay = byDelay, VerticalGraph = IsVertical, ForecastKnockOn = ForecastKnockOn };
             _settingsStore.Save(_settings);
         }
     }
@@ -554,6 +572,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
         _timetable = loaded;
         _engine.SetTimetable(loaded.Timetable);
+        _engine.SetForecast(await Task.Run(() => ForecastNetwork.For(loaded.Profile, loaded.Timetable)));
         var area = loaded.Timetable.AreaId;
         if (area.Length > 0)
         {
@@ -787,6 +806,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             Timetable = _timetable?.Timetable,
             ShowWtt = ShowWtt,
             ShowActual = ShowActual,
+            ShowForecast = ShowForecast,
             ColourMode = ColourMode,
         };
         _building = true;

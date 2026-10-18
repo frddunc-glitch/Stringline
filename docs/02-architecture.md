@@ -100,7 +100,7 @@ WttReader            // .wtt (zip) or SavedTimetable.xml → WttImportResult(Wor
 // Stringline.Graph (S7) — portable; draws to any SKCanvas
 GraphViewport        // time range × axis range, surface size, margins, Orientation (S9: Horizontal, or Vertical = time down, Up end left); ToScreen/ToWorld, TimeToPixel/AxisToPixel, PanTimePixels, ZoomTime(anchor), Follow(now), Around(now, span, fraction), WithOrientation
 GraphScene           // per corridor, world coordinates (sim seconds, axis 0..1): GraphLocation[], GraphPath[] (layer, train, headcode, colour, vertices, S9: per-segment colours), Now
-GraphSceneBuilder    // pure: GraphSceneRequest(profile, corridor, timetable?, plan?, live trains, now, ColourMode) → GraphScene; WTT, plan (S10: modified trains and clones, not cancelled) and actual layers (forecast from S11)
+GraphSceneBuilder    // pure: GraphSceneRequest(profile, corridor, timetable?, plan?, live trains, forecast?, now, ColourMode) → GraphScene; WTT, plan (S10: modified trains and clones, not cancelled), actual and forecast (S11: Forecast.Drawn, on from the latest actual) layers
 DelayBands           // S9: GraphColourMode (Category | Delay); band of a delay (≤0 / 1–5 / 6–15 / >15 min) and its colour
 TimeGrid             // tick spacing from zoom (5 min / 30 min at a 3 h view), hour lines heaviest
 SkiaGraphRenderer    // Render(SKCanvas, scene, viewport, selection?), RenderPng(…, scale); pooled paints, culling by path bounds, headcode labels; GraphTheme, GraphFonts (embedded Noto Sans)
@@ -111,11 +111,13 @@ SkiaGraphRenderer.Render(…, GraphSelection?) // S8: the selected train (WTT tr
 GraphNavigator       // S8: pan/zoom/follow state for one surface, toolkit-free: Resize, Tick(now), Wheel (Ctrl = corridor, Shift = pan), drag, presets, CentreOn; S9: SetOrientation
 GraphHitTester       // S8: nearest projected segment within 5 px, actual preferred over WTT; linear scan → GraphHit(path, segment, nearest vertex, time)
 GraphHitIndex        // S9: the same answers from a 16 px grid over one scene × viewport; the app keeps one until the view or scene changes
-GraphHover           // S8: GraphHit + scene + PlanSnapshot → HoverInfo (location, WTT and actual times, delay, match, train)
+GraphHover           // S8: GraphHit + scene + PlanSnapshot → HoverInfo (location, WTT and actual times, delay, S11: forecast, knock-on, possibly stopped, match, train)
 
-// Stringline.Planning (S8, S10)
-PlanningEngine       // single writer: queue of GatewayEvents, SetTimetable/Clear and plan Execute/Undo/Redo (Tasks) → LiveState + WorkingPlan → PlanSnapshot at most every 100 ms (plan changes at once); keeps the session's events so a timetable loaded mid-session rebuilds the matches
-PlanSnapshot         // immutable: timetable, live trains, SimClockReading (interpolate on any thread), match summary, WorkingPlan, PlanHistory, PlanVersion; FindByTrain/FindByUid
+// Stringline.Planning (S8, S10, S11)
+PlanningEngine       // single writer: queue of GatewayEvents, SetTimetable/Clear, SetForecast(network, options) and plan Execute/Undo/Redo (Tasks) → LiveState + WorkingPlan → Forecaster → PlanSnapshot at most every 100 ms (plan changes at once); keeps the session's events so a timetable loaded mid-session rebuilds the matches
+PlanSnapshot         // immutable: timetable, live trains, SimClockReading (interpolate on any thread), match summary, WorkingPlan, PlanHistory, PlanVersion, EntryDelays, Forecast; FindByTrain/FindByUid
+Forecaster           // S11, pure: ForecastRequest(plan, live trains, now, session start, entry delays, ForecastNetwork, ForecastOptions) → Forecast; one event queue, independent and interaction passes (06-…md §2)
+ForecastNetwork      // S11: the profile's corridor sections as resources (headway, single line, tracks each way widened to what the WTT uses at once), category priorities; built once per timetable and profile
 WorkingPlan          // S10, immutable: WTT + commands (06-…md §1). TrainPlan(Id, Headcode, CategoryId, Origin Wtt|Clone, Source, Points, Cancelled, TerminatesAt, IsModified) of PlannedPoints; Disruptions; LiveLinks; MinRunTable; Apply/ApplyAll(commands), NewCloneId
 WorkingPlanBuilder   // S10: what commands change the plan through; clamps shortened runs to the minimum (× speed restriction) and departures to arrivals, with PlanWarnings; all-or-nothing per command
 IPlanCommand         // S10: ShiftTrain, SetDwell, ChangePlatform, ChangeLine, SkipStop, AddStop, TerminateAt, CancelTrain, ReinstateTrain, CloneTrain, Add/Edit/RemoveDisruption, Link/UnlinkLiveTrain, AcceptSuggestion; PlanCommandJson ("type" discriminator)

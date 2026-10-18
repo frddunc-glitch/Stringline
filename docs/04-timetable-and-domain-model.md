@@ -104,7 +104,13 @@ record PlannedPoint(int Index /*= WTT point index; never added or removed*/, Tip
 record TrainPlan(TrainId Id, Headcode Headcode, string? CategoryId, PlanOrigin Origin /*Wtt | Clone*/, TrainId Source,
                  IReadOnlyList<PlannedPoint> Points, bool Cancelled, int? TerminatesAt, bool IsModified);   // RunningPoints, LastIndex, FromWtt, SameAs
 record LiveLink(string SimUid, Headcode Headcode, TrainId? Train);   // a manual match, kept in the plan so it undoes
-record ForecastPoint(Tiploc Location, SimTime? Arrive, SimTime? Depart, ForecastBasis Basis);
+// S11: implemented as below (see 06-…md §2 for the rules).
+record ForecastPoint(int Index, Tiploc Location, SimTime? Arrive, SimTime? Depart, bool IsPass,
+                     ForecastBasis Basis /*None | Actual | Arrived | Forecast*/, int? DelaySeconds);
+record TrainForecast(TrainId Train, Headcode Headcode, TrainForecastStatus Status /*NotStarted | Running | Finished | Unavailable*/,
+                     IReadOnlyList<ForecastPoint> Points /*= RunningPoints*/, string? LiveUid, bool PossiblyStopped, int KnockOnSeconds);
+class Forecast(SimTime? Now, bool Interaction, IReadOnlyList<TrainForecast> Trains);   // Find, Drawn
+record ForecastSection(int Id, Tiploc From, Tiploc To, int HeadwaySeconds, bool SingleLine, int DownTracks, int UpTracks, …);  // in ForecastNetwork
 record Disruption(string Id, DisruptionKind Kind /*Block | SpeedRestriction*/, Tiploc From, Tiploc To, string? Track,
                   SimTime Start, SimTime End, double RunTimeFactor, int AddedSeconds, string Note);
 record Conflict(string Id, ConflictKind Kind, TrainId A, TrainId? B,

@@ -28,6 +28,8 @@ public static class GraphHover
     public const string Booked = "WTT";
     public const string Actual = "Actual";
     public const string Delay = "Delay";
+    public const string Forecast = "Forecast";
+    public const string Note = "Note";
     public const string Match = "Match";
     public const string Train = "Train";
 
@@ -70,6 +72,11 @@ public static class GraphHover
             }
         }
 
+        if (path.Train is { } trainId && snapshot.Forecast.Find(trainId) is { } forecast)
+        {
+            AddForecast(lines, forecast, location?.Tiploc, vertex.Time);
+        }
+
         if (live is not null && working is { } w)
         {
             lines.Add(new HoverLine(Match, FormatMatch(live.Workings[w])));
@@ -94,6 +101,30 @@ public static class GraphHover
             > 0 => $"{minutes} min late",
             _ => $"{-minutes} min early",
         };
+    }
+
+    /// <summary>The forecast times and delay at the hovered location, if forecast there; knock-on and a possible stop.</summary>
+    private static void AddForecast(List<HoverLine> lines, TrainForecast forecast, Tiploc? location, double time)
+    {
+        var point = location is null ? null : forecast.Points
+            .Where(p => p.Location == location && p.Basis is ForecastBasis.Forecast or ForecastBasis.Arrived && p.FirstTime is not null)
+            .MinBy(p => Math.Abs(p.FirstTime!.Value.Seconds - time));
+        if (point is not null)
+        {
+            var times = point.IsPass ? $"pass {Format(point.Depart!.Value, "H")}"
+                : string.Join("  ", new[] { point.Basis == ForecastBasis.Forecast && point.Arrive is { } a ? $"arr {Format(a, "H")}" : null, point.Depart is { } d ? $"dep {Format(d, "H")}" : null }.OfType<string>());
+            lines.Add(new HoverLine(Forecast, point.DelaySeconds is { } delay ? $"{times}  ({FormatDelay(delay).ToLowerInvariant()})" : times));
+        }
+
+        if (forecast.KnockOnSeconds >= SimTime.SecondsPerMinute)
+        {
+            lines.Add(new HoverLine(Note, $"{forecast.KnockOnSeconds / SimTime.SecondsPerMinute} min knock-on from other trains"));
+        }
+
+        if (forecast.PossiblyStopped)
+        {
+            lines.Add(new HoverLine(Note, "Possibly stopped: overdue at its next timing point"));
+        }
     }
 
     private static (LiveTrain? Live, int? Working) FindLive(GraphPath path, PlanSnapshot snapshot)

@@ -17,6 +17,8 @@ namespace Stringline.Planning;
 /// <param name="Plan">The working plan (the WTT as booked if there are no edits; empty with no timetable).</param>
 /// <param name="History">The plan's edit history, for undo and redo.</param>
 /// <param name="PlanVersion">Goes up whenever the plan changes (an edit, undo, redo or new timetable).</param>
+/// <param name="EntryDelays">The sim's expected entry delays by headcode (<c>train_delay</c>), for trains not yet entered.</param>
+/// <param name="Forecast">Every train's forecast as of this snapshot (S11).</param>
 public sealed class PlanSnapshot(
     long Sequence,
     WorkingTimetable? Timetable,
@@ -27,7 +29,9 @@ public sealed class PlanSnapshot(
     SimTime? SessionStart,
     WorkingPlan? Plan = null,
     PlanHistory? History = null,
-    long PlanVersion = 0)
+    long PlanVersion = 0,
+    IReadOnlyDictionary<Headcode, int>? EntryDelays = null,
+    Forecast? Forecast = null)
 {
     private Dictionary<TrainId, (LiveTrain Train, int Working)>? _byTrain;
     private Dictionary<string, LiveTrain>? _byUid;
@@ -51,6 +55,10 @@ public sealed class PlanSnapshot(
     public PlanHistory History { get; } = History ?? PlanHistory.Empty;
 
     public long PlanVersion { get; } = PlanVersion;
+
+    public IReadOnlyDictionary<Headcode, int> EntryDelays { get; } = EntryDelays ?? new Dictionary<Headcode, int>();
+
+    public Forecast Forecast { get; } = Forecast ?? Forecast.Empty;
 
     /// <summary>Before anything has happened.</summary>
     public static PlanSnapshot Empty { get; } = new(0, null, [], SimClockReading.None, new MatchSummary(0, 0, 0, 0, 0, new Dictionary<MatchMethod, int>()), 0, null);

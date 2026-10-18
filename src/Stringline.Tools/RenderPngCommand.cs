@@ -6,6 +6,7 @@ using Stringline.Gateway;
 using Stringline.Gateway.Recording;
 using Stringline.Graph;
 using Stringline.Network.Profiles;
+using Stringline.Planning;
 using Stringline.Timetable;
 using Stringline.Timetable.Live;
 
@@ -32,11 +33,13 @@ internal static class RenderPngCommand
         var noWtt = new Option<bool>("--no-wtt") { Description = "Leave out the WTT layer." };
         var vertical = new Option<bool>("--vertical") { Description = "Time runs down the image, the corridor across (Up end on the left)." };
         var colour = new Option<GraphColourMode>("--colour") { Description = "Colour actual lines by category or by delay band.", DefaultValueFactory = _ => GraphColourMode.Category };
+        var noForecast = new Option<bool>("--no-forecast") { Description = "Leave out the forecast layer (drawn with --log)." };
+        var noKnockOn = new Option<bool>("--no-knock-on") { Description = "Forecast each train on its own, without knock-on delay from the others." };
         var verbose = new Option<bool>("--verbose") { Description = "Debug logging." };
 
-        var command = new Command("render-png", "Draw a corridor's train graph (WTT and actuals) to a PNG.")
+        var command = new Command("render-png", "Draw a corridor's train graph (WTT, actuals and forecast) to a PNG.")
         {
-            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, vertical, colour, verbose,
+            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, vertical, colour, noForecast, noKnockOn, verbose,
         };
 
         command.SetAction((parse, cancellationToken) => RunAsync(
@@ -45,6 +48,8 @@ internal static class RenderPngCommand
             {
                 Vertical = parse.GetValue(vertical),
                 Colour = parse.GetValue(colour),
+                NoForecast = parse.GetValue(noForecast),
+                NoKnockOn = parse.GetValue(noKnockOn),
             },
             parse.InvocationConfiguration.Output,
             parse.InvocationConfiguration.Error,
@@ -70,6 +75,12 @@ internal static class RenderPngCommand
         public bool Vertical { get; init; }
 
         public GraphColourMode Colour { get; init; } = GraphColourMode.Category;
+
+        /// <summary>Leave out the forecast layer.</summary>
+        public bool NoForecast { get; init; }
+
+        /// <summary>Forecast without the interaction pass.</summary>
+        public bool NoKnockOn { get; init; }
     }
 
     /// <returns>0 on success, 2 on bad arguments or a file that cannot be read or written.</returns>
@@ -124,12 +135,25 @@ internal static class RenderPngCommand
         }
 
         IReadOnlyCollection<Core.Live.LiveTrain> live = [];
+        Forecast? forecast = null;
         var now = at;
         if (recording is not null)
         {
             var state = Play(recording, tt, at, loggerFactory, cancellationToken);
             live = state.Trains.ToList();
             now ??= state.Clock.HasTime ? state.Clock.LastReported : null;
+            if (!settings.NoForecast)
+            {
+                forecast = Forecaster.Run(new ForecastRequest(WorkingPlan.FromTimetable(tt))
+                {
+                    LiveTrains = live,
+                    Now = now,
+                    SessionStart = state.SessionStart,
+                    EntryDelays = state.EntryDelays,
+                    Network = ForecastNetwork.For(profile, tt),
+                    Options = new ForecastOptions { Interaction = !settings.NoKnockOn },
+                });
+            }
         }
 
         now ??= tt.Header.StartTime;
@@ -140,6 +164,7 @@ internal static class RenderPngCommand
             Now = recording is null && at is null ? null : now,
             ShowWtt = !settings.NoWtt,
             ColourMode = settings.Colour,
+            Forecast = forecast,
         });
         var viewport = GraphViewport.Around(now.Value, (int)Math.Round(settings.Hours * SimTime.SecondsPerHour), settings.Width, settings.Height, settings.NowAt,
             orientation: settings.Vertical ? GraphOrientation.Vertical : GraphOrientation.Horizontal);
@@ -163,7 +188,7 @@ internal static class RenderPngCommand
         var visible = scene.Paths.Count(p => viewport.Overlaps(p.TimeMin, p.TimeMax, p.AxisMin, p.AxisMax));
         await output.WriteLineAsync(
             $"Wrote {settings.Output.Name}: {corridor.Id} ({corridor.Name}), {viewport.TimeStart.ToSimTime()}–{viewport.TimeEnd.ToSimTime()}, " +
-            $"now {now}, {visible} paths in view ({scene.InLayer(GraphLayer.Actual).Count()} actual in all).").ConfigureAwait(false);
+            $"now {now}, {visible} paths in view ({scene.InLayer(GraphLayer.Actual).Count()} actual, {scene.InLayer(GraphLayer.Forecast).Count()} forecast in all).").ConfigureAwait(false);
         return 0;
     }
 

@@ -263,27 +263,8 @@ public sealed class WorkingPlanBuilder
     }
 
     /// <summary>The minimum run between two points, lengthened by the speed restriction in force when it departs that lengthens it most.</summary>
-    private int? MinRun(IReadOnlyList<PlannedPoint> points, int from, int to)
-    {
-        if (MinRuns.Along(points, from, to) is not { } min)
-        {
-            return null;
-        }
-
-        var result = min;
-        if (points[from].LastTime is { } depart)
-        {
-            foreach (var disruption in _disruptions)
-            {
-                if (disruption.Kind == DisruptionKind.SpeedRestriction && disruption.IsActiveAt(depart) && disruption.Covers(points, from, to))
-                {
-                    result = Math.Max(result, disruption.Lengthen(min));
-                }
-            }
-        }
-
-        return result;
-    }
+    private int? MinRun(IReadOnlyList<PlannedPoint> points, int from, int to) =>
+        MinRuns.Along(points, from, to, points[from].LastTime, _disruptions);
 
     private static void Set(ref PlannedPoint[]? points, IReadOnlyList<PlannedPoint> current, int index, PlannedPoint point)
     {
