@@ -117,6 +117,18 @@ public sealed class RecordCommandTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Reports_an_unwritable_output_path_without_crashing()
+    {
+        // A file where the folder should be fails on every OS, unlike '<' which only Windows rejects.
+        Directory.CreateDirectory(_dir);
+        var blocker = Path.Combine(_dir, "blocker");
+        await File.WriteAllTextAsync(blocker, "not a folder");
+
+        (await Run(_timeout.Token, "--out", Path.Combine(blocker, "rec.sslog"))).Should().Be(2);
+        _server.ReceivedFrames().Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Out_is_required()
     {
         var root = new RootCommand { RecordCommand.Create() };

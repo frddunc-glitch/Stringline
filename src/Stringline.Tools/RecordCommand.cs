@@ -80,14 +80,14 @@ internal static partial class RecordCommand
             return 2;
         }
 
-        settings.Output.Directory?.Create();
-        if (settings.Force)
+        var header = SslogWriter.LiveHeader(DateTimeOffset.UtcNow, options.Host, options.Port, options.Topics);
+        using var writer = TryCreateWriter(settings, header, out var error);
+        if (writer is null)
         {
-            settings.Output.Delete();
+            await Console.Error.WriteLineAsync($"Cannot write {settings.Output.FullName}: {error}").ConfigureAwait(false);
+            return 2;
         }
 
-        var header = SslogWriter.LiveHeader(DateTimeOffset.UtcNow, options.Host, options.Port, options.Topics);
-        using var writer = SslogWriter.Create(settings.Output.FullName, header);
         await using var client = new GatewayClient(options, loggerFactory.CreateLogger<GatewayClient>());
         var recorder = new GatewayRecorder(client, writer, new MessageParser(loggerFactory.CreateLogger<MessageParser>()));
 
@@ -123,6 +123,27 @@ internal static partial class RecordCommand
 
         await Console.Out.WriteAsync(Summary(recorder.Stats, writer.MessagesWritten, settings.Output.FullName)).ConfigureAwait(false);
         return 0;
+    }
+
+    /// <summary>Creates the output folder and file; a bad path (e.g. <c>&lt;</c> on Windows) gives a message, not a stack trace.</summary>
+    private static SslogWriter? TryCreateWriter(Settings settings, SslogHeader header, out string? error)
+    {
+        try
+        {
+            settings.Output.Directory?.Create();
+            if (settings.Force)
+            {
+                settings.Output.Delete();
+            }
+
+            error = null;
+            return SslogWriter.Create(settings.Output.FullName, header);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            error = ex.Message;
+            return null;
+        }
     }
 
     private static bool TryGetPassword(out string? password)
