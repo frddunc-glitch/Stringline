@@ -9,8 +9,7 @@
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     <views:NotNullToVisibilityConverter x:Key="NotNull" />
     <views:StatusLightBrushConverter x:Key="LightBrush" />
-    <views:InfoSeverityBrushConverter x:Key="InfoBrush" />
-    <Style TargetType="Button" x:Key="ToolButton">
+    <views:InfoSeverityBrushConverter x:Key="InfoBrush" />    <Style TargetType="Button" x:Key="ToolButton">
       <Setter Property="Padding" Value="8,2" />
       <Setter Property="Margin" Value="2,0" />
     </Style>
@@ -19,6 +18,7 @@
     <KeyBinding Key="F5" Command="{Binding ConnectCommand}" />
     <KeyBinding Key="O" Modifiers="Ctrl" Command="{Binding OpenReplayCommand}" />
     <KeyBinding Key="T" Modifiers="Ctrl" Command="{Binding LoadTimetableCommand}" />
+    <KeyBinding Key="E" Modifiers="Ctrl" Command="{Binding ExportPngCommand}" CommandParameter="1" />
   </Window.InputBindings>
 
   <DockPanel>
@@ -29,6 +29,9 @@
         <MenuItem Header="_Disconnect" Command="{Binding DisconnectCommand}" />
         <Separator />
         <MenuItem Header="_Record to file" IsCheckable="False" IsChecked="{Binding IsRecording, Mode=OneWay}" Command="{Binding ToggleRecordingCommand}" />
+        <Separator />
+        <MenuItem Header="_Export graph as PNG…" InputGestureText="Ctrl+E" Command="{Binding ExportPngCommand}" CommandParameter="1" />
+        <MenuItem Header="Export graph as PNG at _2× size…" Command="{Binding ExportPngCommand}" CommandParameter="2" />
         <Separator />
         <MenuItem Header="E_xit" Click="OnExit" />
       </MenuItem>
@@ -46,6 +49,8 @@
         <Separator />
         <MenuItem Header="Show _WTT" IsCheckable="True" IsChecked="{Binding ShowWtt}" />
         <MenuItem Header="Show _actual" IsCheckable="True" IsChecked="{Binding ShowActual}" />
+        <MenuItem Header="Colour by _delay" IsCheckable="True" IsChecked="{Binding ColourByDelay}" />
+        <MenuItem Header="_Vertical (time down)" IsCheckable="True" IsChecked="{Binding IsVertical}" />
         <Separator />
         <MenuItem Header="_Clear selection" Command="{Binding ClearSelectionCommand}" />
       </MenuItem>
@@ -74,6 +79,10 @@
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
           <CheckBox Content="WTT" IsChecked="{Binding ShowWtt}" Margin="6,0" VerticalAlignment="Center" />
           <CheckBox Content="Actual" IsChecked="{Binding ShowActual}" Margin="6,0" VerticalAlignment="Center" />
+          <TextBlock Text="Colour:" Margin="8,0,4,0" VerticalAlignment="Center" />
+          <ComboBox Width="84" ItemsSource="{Binding ColourModes}" SelectedItem="{Binding ColourMode}" VerticalAlignment="Center"
+                    ToolTip="Colour actual lines by train category, or by delay band (green right time, amber 1–5 min, orange 6–15, red over 15)" />
+          <ToggleButton Margin="6,0,2,0" Padding="8,2" Content="⇅ Vertical" IsChecked="{Binding IsVertical}" ToolTip="Time down the graph, the corridor across" />
           <Separator Margin="6,0" />
           <Button Style="{StaticResource ToolButton}" Content="1h" Command="{Binding ZoomCommand}" CommandParameter="1" />
           <Button Style="{StaticResource ToolButton}" Content="3h" Command="{Binding ZoomCommand}" CommandParameter="3" />

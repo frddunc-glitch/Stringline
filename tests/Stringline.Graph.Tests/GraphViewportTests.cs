@@ -76,12 +76,12 @@ public class GraphViewportTests
     {
         var v = View();
         var anchorX = 320.0;
-        var before = v.XToTime(anchorX);
+        var before = v.PixelToTime(anchorX);
 
         var zoomed = v.ZoomTime(2, anchorX);
 
         zoomed.TimeSpan.Should().BeApproximately(v.TimeSpan / 2, 1e-9);
-        zoomed.XToTime(anchorX).Should().BeApproximately(before, 1e-6);
+        zoomed.PixelToTime(anchorX).Should().BeApproximately(before, 1e-6);
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public class GraphViewportTests
     {
         var v = View();
 
-        var panned = v.PanPixels(88); // a tenth of the plot
+        var panned = v.PanTimePixels(88); // a tenth of the plot
 
         panned.TimeStart.Should().BeApproximately(v.TimeStart - 1080, 1e-9);
         panned.TimeSpan.Should().BeApproximately(v.TimeSpan, 1e-9);

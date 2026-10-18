@@ -35,6 +35,11 @@ public readonly record struct GraphVertex(double Time, double Axis);
 /// <param name="Direction">Down if the path runs away from the corridor's first location, Up towards it; null if neither.</param>
 /// <param name="LiveUid">For an actual path: the sim uid of the live train.</param>
 /// <param name="Working">For an actual path: the index of the working in <c>LiveTrain.Workings</c>.</param>
+/// <param name="SegmentColours">
+/// One colour per segment (vertex <c>i</c> to <c>i + 1</c>) when the line changes colour along its length, as an
+/// actual path does when coloured by delay band; null when the whole line is <paramref name="Colour"/>.
+/// </param>
+/// <remarks>The bounds are worked out once, when the path is made; do not copy a path <c>with</c> new vertices.</remarks>
 public sealed record GraphPath(
     string Key,
     GraphLayer Layer,
@@ -45,15 +50,28 @@ public sealed record GraphPath(
     bool IsUnmatched = false,
     TrackDirection? Direction = null,
     string? LiveUid = null,
-    int? Working = null)
+    int? Working = null,
+    IReadOnlyList<Colour>? SegmentColours = null)
 {
     public double TimeMin => Vertices[0].Time;
 
     public double TimeMax => Vertices[^1].Time;
 
-    public double AxisMin => Vertices.Min(v => v.Axis);
+    public double AxisMin { get; } = Vertices.Count == 0 ? 0 : Vertices.Min(v => v.Axis);
 
-    public double AxisMax => Vertices.Max(v => v.Axis);
+    public double AxisMax { get; } = Vertices.Count == 0 ? 0 : Vertices.Max(v => v.Axis);
+
+    /// <summary>The colour of segment <paramref name="index"/> (from vertex <c>index</c> to the next).</summary>
+    public Colour ColourOf(int index) => SegmentColours is { } colours ? colours[index] : Colour;
+
+    /// <summary>True if this path draws exactly as <paramref name="other"/> does: same key, colours and vertices.</summary>
+    public bool DrawsLike(GraphPath other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        return ReferenceEquals(this, other) || (Key == other.Key && Layer == other.Layer && Colour == other.Colour &&
+            Vertices.SequenceEqual(other.Vertices) &&
+            (SegmentColours is null ? other.SegmentColours is null : other.SegmentColours is not null && SegmentColours.SequenceEqual(other.SegmentColours)));
+    }
 }
 
 /// <summary>A location line across the graph.</summary>
@@ -64,7 +82,8 @@ public sealed record GraphLocation(Tiploc Tiploc, string Name, double Axis, bool
 /// Everything one corridor's graph shows, in world coordinates, independent of the viewport: build it once per data
 /// change and render it at any pan and zoom.
 /// </summary>
-/// <param name="Now">The sim time of the now line, if live.</param>
+/// <param name="Now">The sim time of the now line, if live. The host may copy the scene <c>with</c> a later now each
+/// frame; the renderer keeps its caches as long as <see cref="Paths"/> is the same list.</param>
 public sealed record GraphScene(
     string CorridorId,
     string Title,

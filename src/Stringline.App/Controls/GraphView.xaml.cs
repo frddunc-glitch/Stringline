@@ -33,8 +33,9 @@ public partial class GraphView : UserControl
     private Point? _pressedAt;
     private bool _dragged;
     private double? _now;
-    private double _nowX = double.NaN;
+    private double _nowAt = double.NaN;
     private (string Key, int Vertex)? _tipFor;
+    private GraphHitIndex? _hitIndex;
 
     public GraphView()
     {
@@ -76,8 +77,8 @@ public partial class GraphView : UserControl
             return;
         }
 
-        var x = nav.Viewport.TimeToX(seconds);
-        if (double.IsNaN(_nowX) || Math.Abs(x - _nowX) >= 0.5)
+        var at = nav.Viewport.TimeToPixel(seconds);
+        if (double.IsNaN(_nowAt) || Math.Abs(at - _nowAt) >= 0.5)
         {
             Surface.InvalidateVisual();
         }
@@ -126,7 +127,7 @@ public partial class GraphView : UserControl
         var now = _now is { } seconds ? new SimTime((int)Math.Floor(seconds)) : scene.Now;
         _renderer.Render(canvas, scene with { Now = now }, nav.Viewport, Selection);
         canvas.Restore();
-        _nowX = now is { } n ? nav.Viewport.TimeToX(n.Seconds) : double.NaN;
+        _nowAt = now is { } n ? nav.Viewport.TimeToPixel(n.Seconds) : double.NaN;
     }
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
@@ -206,8 +207,21 @@ public partial class GraphView : UserControl
         HideTip();
     }
 
-    private GraphHit? HitTest(Point p) =>
-        Scene is { } scene && Navigator is { } nav ? GraphHitTester.HitTest(scene, nav.Viewport, new ScreenPoint(p.X, p.Y)) : null;
+    /// <summary>The path under a point, from a hit-test grid kept until the scene or the view changes.</summary>
+    private GraphHit? HitTest(Point p)
+    {
+        if (Scene is not { } scene || Navigator is not { } nav)
+        {
+            return null;
+        }
+
+        if (_hitIndex?.IsFor(scene, nav.Viewport) != true)
+        {
+            _hitIndex = GraphHitIndex.Build(scene, nav.Viewport);
+        }
+
+        return _hitIndex.HitTest(new ScreenPoint(p.X, p.Y));
+    }
 
     private void UpdateTip(Point p)
     {

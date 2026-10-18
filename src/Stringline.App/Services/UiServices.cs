@@ -27,6 +27,10 @@ internal interface IDialogService
     /// <param name="filter">A file dialog filter, e.g. <c>SimSig timetables (*.wtt)|*.wtt</c>.</param>
     string? PickFile(string title, string filter, string? initialPath);
 
+    /// <summary>A file to save to, or null if cancelled. The user confirms overwriting an existing file.</summary>
+    /// <param name="initialPath">The folder and suggested file name.</param>
+    string? PickSaveFile(string title, string filter, string initialPath);
+
     void ShowError(string title, string message);
 
     void ShowList(string title, string heading, IReadOnlyList<string> lines);
@@ -58,6 +62,26 @@ internal sealed class WpfDialogService : IDialogService
             {
                 dialog.FileName = System.IO.Path.GetFileName(initialPath);
             }
+        }
+
+        return dialog.ShowDialog(Owner) == true ? dialog.FileName : null;
+    }
+
+    public string? PickSaveFile(string title, string filter, string initialPath)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = title,
+            Filter = filter,
+            OverwritePrompt = true,
+            AddExtension = true,
+            FileName = System.IO.Path.GetFileName(initialPath),
+        };
+        var folder = System.IO.Path.GetDirectoryName(initialPath);
+        if (!string.IsNullOrEmpty(folder))
+        {
+            System.IO.Directory.CreateDirectory(folder);
+            dialog.InitialDirectory = folder;
         }
 
         return dialog.ShowDialog(Owner) == true ? dialog.FileName : null;

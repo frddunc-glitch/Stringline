@@ -30,16 +30,22 @@ internal static class RenderPngCommand
         var width = new Option<int>("--width") { Description = "Image width in pixels.", DefaultValueFactory = _ => 1600 };
         var height = new Option<int>("--height") { Description = "Image height in pixels.", DefaultValueFactory = _ => 900 };
         var noWtt = new Option<bool>("--no-wtt") { Description = "Leave out the WTT layer." };
+        var vertical = new Option<bool>("--vertical") { Description = "Time runs down the image, the corridor across (Up end on the left)." };
+        var colour = new Option<GraphColourMode>("--colour") { Description = "Colour actual lines by category or by delay band.", DefaultValueFactory = _ => GraphColourMode.Category };
         var verbose = new Option<bool>("--verbose") { Description = "Debug logging." };
 
         var command = new Command("render-png", "Draw a corridor's train graph (WTT and actuals) to a PNG.")
         {
-            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, verbose,
+            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, vertical, colour, verbose,
         };
 
         command.SetAction((parse, cancellationToken) => RunAsync(
             new Settings(parse.GetValue(output)!, parse.GetValue(wtt)!, parse.GetValue(log), parse.GetValue(profile), parse.GetValue(corridor),
-                parse.GetValue(at), parse.GetValue(hours), parse.GetValue(nowAt), parse.GetValue(width), parse.GetValue(height), parse.GetValue(noWtt), parse.GetValue(verbose)),
+                parse.GetValue(at), parse.GetValue(hours), parse.GetValue(nowAt), parse.GetValue(width), parse.GetValue(height), parse.GetValue(noWtt), parse.GetValue(verbose))
+            {
+                Vertical = parse.GetValue(vertical),
+                Colour = parse.GetValue(colour),
+            },
             parse.InvocationConfiguration.Output,
             parse.InvocationConfiguration.Error,
             cancellationToken));
@@ -58,7 +64,13 @@ internal static class RenderPngCommand
         int Width,
         int Height,
         bool NoWtt,
-        bool Verbose);
+        bool Verbose)
+    {
+        /// <summary>Time down the image rather than across.</summary>
+        public bool Vertical { get; init; }
+
+        public GraphColourMode Colour { get; init; } = GraphColourMode.Category;
+    }
 
     /// <returns>0 on success, 2 on bad arguments or a file that cannot be read or written.</returns>
     internal static async Task<int> RunAsync(Settings settings, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -127,8 +139,10 @@ internal static class RenderPngCommand
             LiveTrains = live,
             Now = recording is null && at is null ? null : now,
             ShowWtt = !settings.NoWtt,
+            ColourMode = settings.Colour,
         });
-        var viewport = GraphViewport.Around(now.Value, (int)Math.Round(settings.Hours * SimTime.SecondsPerHour), settings.Width, settings.Height, settings.NowAt);
+        var viewport = GraphViewport.Around(now.Value, (int)Math.Round(settings.Hours * SimTime.SecondsPerHour), settings.Width, settings.Height, settings.NowAt,
+            orientation: settings.Vertical ? GraphOrientation.Vertical : GraphOrientation.Horizontal);
 
         byte[] png;
         using (var renderer = new SkiaGraphRenderer())

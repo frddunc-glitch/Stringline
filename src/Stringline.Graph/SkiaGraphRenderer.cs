@@ -5,17 +5,31 @@ namespace Stringline.Graph;
 
 /// <summary>
 /// Draws a <see cref="GraphScene"/> through a <see cref="GraphViewport"/> onto any <see cref="SKCanvas"/>: the WPF
-/// host's surface, or an off-screen bitmap for PNGs (<see cref="RenderPng"/>). Paints and fonts are kept between
-/// frames, so one renderer should be reused, from one thread at a time.
+/// host's surface, or an off-screen bitmap for PNGs (<see cref="RenderPng"/>). Either orientation (GR-1).
 /// </summary>
+/// <remarks>
+/// Paints, fonts and projected paths are kept between frames (<c>05-…md</c> §7): paths are projected once per zoom and
+/// drawn translated while the view pans, and a live update re-projects only the trains that changed. So one renderer
+/// should be reused per surface, from one thread at a time.
+/// </remarks>
 public sealed class SkiaGraphRenderer : IDisposable
 {
     /// <summary>Shortest a segment may be on screen, in pixels, for a headcode label to go on it.</summary>
     public const float MinLabelSegmentPixels = 24;
 
+    /// <summary>Height of the title band at the top of the surface.</summary>
+    private const float TitleBand = 24;
+
     private readonly Dictionary<(Colour Colour, GraphLayer Layer, bool Dim), SKPaint> _pathPaints = [];
     private readonly Dictionary<(Colour Colour, float Width), SKPaint> _strokes = [];
     private readonly Dictionary<Colour, SKPaint> _fills = [];
+    private readonly ProjectedPathCache _paths = new();
+    private readonly PathTileCache _tiles = new();
+    private readonly Action<SKCanvas, GraphPath, bool> _drawPath;
+    private readonly LabelGrid _labels = new();
+    private readonly List<GraphPath> _drawn = [];
+    private readonly List<GraphPath> _selected = [];
+    private readonly HashSet<Core.TrainId> _withActuals = [];
     private readonly SKFont _locationFont;
     private readonly SKFont _stationFont;
     private readonly SKFont _tiplocFont;
@@ -28,6 +42,7 @@ public sealed class SkiaGraphRenderer : IDisposable
     public SkiaGraphRenderer(GraphTheme? theme = null)
     {
         Theme = theme ?? GraphTheme.Light;
+        _drawPath = DrawPath;
         _locationFont = GraphFonts.Create(GraphFonts.Regular, Theme.LocationFontSize);
         _stationFont = GraphFonts.Create(GraphFonts.Bold, Theme.LocationFontSize);
         _tiplocFont = GraphFonts.Create(GraphFonts.Regular, Theme.TiplocFontSize);
@@ -39,20 +54,43 @@ public sealed class SkiaGraphRenderer : IDisposable
 
     public GraphTheme Theme { get; }
 
-    /// <summary>Renders to a new PNG of the viewport's size.</summary>
-    public byte[] RenderPng(GraphScene scene, GraphViewport viewport, GraphSelection? selection = null)
+    /// <summary>Paths projected since this renderer was made: grows on zoom and on changed trains, not on panning.</summary>
+    internal int PathsProjected => _paths.Projected;
+
+    /// <summary>Headcode labels placed in the last frame.</summary>
+    internal int LabelsPlaced => _labels.Count;
+
+    /// <summary>Path tiles drawn since this renderer was made: grows on zoom, on changed trains and as new ground comes into view.</summary>
+    internal int TilesRendered => _tiles.Rendered;
+
+    /// <summary>
+    /// Keep the train lines as bitmap tiles between frames, so panning does not stroke them again (the default, for
+    /// on-screen use). <see cref="RenderPng"/> always draws directly.
+    /// </summary>
+    public bool CacheTiles { get; init; } = true;
+
+    /// <summary>Renders to a new PNG of the viewport's size times <paramref name="scale"/> (2 for a sharper export).</summary>
+    public byte[] RenderPng(GraphScene scene, GraphViewport viewport, GraphSelection? selection = null, float scale = 1)
     {
         ArgumentNullException.ThrowIfNull(viewport);
-        var info = new SKImageInfo(viewport.Width, viewport.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
-        using var surface = SKSurface.Create(info) ?? throw new InvalidOperationException($"Cannot create a {viewport.Width}×{viewport.Height} surface.");
-        Render(surface.Canvas, scene, viewport, selection);
+        ArgumentOutOfRangeException.ThrowIfLessThan(scale, 0.25f);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(scale, 8f);
+        var width = (int)Math.Ceiling(viewport.Width * scale);
+        var height = (int)Math.Ceiling(viewport.Height * scale);
+        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var surface = SKSurface.Create(info) ?? throw new InvalidOperationException($"Cannot create a {width}×{height} surface.");
+        surface.Canvas.Scale(scale);
+        Render(surface.Canvas, scene, viewport, selection, tiles: false);
         using var image = surface.Snapshot();
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
     }
 
     /// <param name="selection">A selected train to draw heavier while the rest dims, if any.</param>
-    public void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection = null)
+    public void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection = null) =>
+        Render(canvas, scene, viewport, selection, CacheTiles);
+
+    internal void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection, bool tiles)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(scene);
@@ -68,15 +106,41 @@ public sealed class SkiaGraphRenderer : IDisposable
         DrawPast(canvas, scene, viewport, plot);
         DrawTimeGrid(canvas, ticks, viewport, plot);
         DrawLocationLines(canvas, scene, viewport, plot);
-        var drawn = DrawPaths(canvas, scene, viewport, selection);
+        DrawPaths(canvas, scene, viewport, selection, tiles);
         DrawNow(canvas, scene, viewport, plot);
-        DrawHeadcodes(canvas, drawn, viewport, plot);
+        DrawHeadcodes(canvas, viewport, plot);
         canvas.Restore();
 
         canvas.DrawRect(plot, Stroke(Theme.Border, 1));
         DrawTimeLabels(canvas, ticks, viewport, plot);
         DrawLocationLabels(canvas, scene, viewport, plot);
         DrawTitle(canvas, scene);
+    }
+
+    /// <summary>A line across the plot at a time pixel: vertical when time runs across, horizontal when it runs down.</summary>
+    private static void LineAtTime(SKCanvas canvas, GraphViewport viewport, SKRect plot, float at, SKPaint paint)
+    {
+        if (viewport.IsVertical)
+        {
+            canvas.DrawLine(plot.Left, at, plot.Right, at, paint);
+        }
+        else
+        {
+            canvas.DrawLine(at, plot.Top, at, plot.Bottom, paint);
+        }
+    }
+
+    /// <summary>A line across the plot at an axis pixel (a location line).</summary>
+    private static void LineAtAxis(SKCanvas canvas, GraphViewport viewport, SKRect plot, float at, SKPaint paint)
+    {
+        if (viewport.IsVertical)
+        {
+            canvas.DrawLine(at, plot.Top, at, plot.Bottom, paint);
+        }
+        else
+        {
+            canvas.DrawLine(plot.Left, at, plot.Right, at, paint);
+        }
     }
 
     private void DrawPast(SKCanvas canvas, GraphScene scene, GraphViewport viewport, SKRect plot)
@@ -86,10 +150,21 @@ public sealed class SkiaGraphRenderer : IDisposable
             return;
         }
 
-        var x = Math.Clamp((float)viewport.TimeToX(now.Seconds), plot.Left, plot.Right);
-        if (x > plot.Left)
+        if (viewport.IsVertical)
         {
-            canvas.DrawRect(new SKRect(plot.Left, plot.Top, x, plot.Bottom), Fill(Theme.PastShade));
+            var y = Math.Clamp((float)viewport.TimeToPixel(now.Seconds), plot.Top, plot.Bottom);
+            if (y > plot.Top)
+            {
+                canvas.DrawRect(new SKRect(plot.Left, plot.Top, plot.Right, y), Fill(Theme.PastShade));
+            }
+        }
+        else
+        {
+            var x = Math.Clamp((float)viewport.TimeToPixel(now.Seconds), plot.Left, plot.Right);
+            if (x > plot.Left)
+            {
+                canvas.DrawRect(new SKRect(plot.Left, plot.Top, x, plot.Bottom), Fill(Theme.PastShade));
+            }
         }
     }
 
@@ -97,14 +172,13 @@ public sealed class SkiaGraphRenderer : IDisposable
     {
         foreach (var tick in ticks)
         {
-            var x = Crisp(viewport.TimeToX(tick.Time));
             var paint = tick.Weight switch
             {
                 TickWeight.Hour => Stroke(Theme.HourGrid, 1),
                 TickWeight.Major => Stroke(Theme.MajorGrid, 1),
                 _ => Stroke(Theme.MinorGrid, 1),
             };
-            canvas.DrawLine(x, plot.Top, x, plot.Bottom, paint);
+            LineAtTime(canvas, viewport, plot, Crisp(viewport.TimeToPixel(tick.Time)), paint);
         }
     }
 
@@ -112,123 +186,152 @@ public sealed class SkiaGraphRenderer : IDisposable
     {
         foreach (var location in scene.Locations)
         {
-            var y = Crisp(viewport.AxisToY(location.Axis));
-            canvas.DrawLine(plot.Left, y, plot.Right, y, location.IsStation ? Stroke(Theme.StationLine, 1) : Stroke(Theme.LocationLine, 1));
+            var paint = location.IsStation ? Stroke(Theme.StationLine, 1) : Stroke(Theme.LocationLine, 1);
+            LineAtAxis(canvas, viewport, plot, Crisp(viewport.AxisToPixel(location.Axis)), paint);
         }
     }
 
-    /// <returns>The paths drawn (in view), for labelling; the selected ones first.</returns>
-    private List<GraphPath> DrawPaths(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection)
+    /// <summary>
+    /// Draws the paths in view, layer by layer, from tiles when <paramref name="tiles"/> allows, then the selected
+    /// train on top; leaves the paths in view in <see cref="_drawn"/> for labelling, the selected ones first.
+    /// </summary>
+    private void DrawPaths(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection, bool tiles)
     {
-        var drawn = new List<GraphPath>();
-        var selected = new List<GraphPath>();
-        using var builder = new SKPathBuilder();
-        foreach (var layer in Enum.GetValues<GraphLayer>())
+        _drawn.Clear();
+        _selected.Clear();
+        // A frame that changes the projection (a zoom step) draws directly: building tiles costs about two direct frames,
+        // so they are built on the next frame at the same zoom, when panning or following begins to reuse them.
+        var generation = _paths.Generation;
+        var offset = _paths.Begin(scene, viewport, canvas.TotalMatrix);
+        tiles &= _paths.Generation == generation;
+        foreach (var layer in Layers)
         {
-            foreach (var p in scene.InLayer(layer))
+            foreach (var p in scene.Paths)
             {
-                if (!viewport.Overlaps(p.TimeMin, p.TimeMax, p.AxisMin, p.AxisMax))
+                if (p.Layer == layer && viewport.Overlaps(p.TimeMin, p.TimeMax, p.AxisMin, p.AxisMax))
                 {
-                    continue;
+                    (selection?.Matches(p) == true ? _selected : _drawn).Add(p);
                 }
-
-                if (selection?.Matches(p) == true)
-                {
-                    selected.Add(p);
-                    continue;
-                }
-
-                using var path = Project(builder, p, viewport);
-                canvas.DrawPath(path, PathPaint(p.Colour, layer, dim: selection is not null));
-                drawn.Add(p);
             }
+        }
+
+        if (!tiles || !_tiles.Draw(canvas, scene, viewport, selection, _paths, offset, _drawPath))
+        {
+            _tiles.Invalidate(_paths);
+            canvas.Save();
+            canvas.Translate(offset);
+            foreach (var p in _drawn)
+            {
+                _drawPath(canvas, p, selection is not null);
+            }
+
+            canvas.Restore();
         }
 
         // The selected train on top: a halo, then a heavy opaque line (05-…md §2).
-        foreach (var p in selected)
+        canvas.Save();
+        canvas.Translate(offset);
+        foreach (var p in _selected)
         {
-            using var path = Project(builder, p, viewport);
             var width = Math.Max(Theme.StyleOf(p.Layer).Width, p.Layer == GraphLayer.Wtt ? Theme.SelectedWttWidth : Theme.SelectedWidth);
-            canvas.DrawPath(path, Stroke(Theme.Halo, width + (2 * Theme.HaloWidth)));
-            canvas.DrawPath(path, Stroke(p.Colour with { A = 0xFF }, width));
+            var runs = _paths.Get(p);
+            foreach (var run in runs)
+            {
+                canvas.DrawPath(run.Path, Stroke(Theme.Halo, width + (2 * Theme.HaloWidth)));
+            }
+
+            foreach (var run in runs)
+            {
+                canvas.DrawPath(run.Path, Stroke(run.Colour with { A = 0xFF }, width));
+            }
         }
 
-        drawn.InsertRange(0, selected);
-        return drawn;
+        canvas.Restore();
+        _drawn.InsertRange(0, _selected);
     }
 
-    private static SKPath Project(SKPathBuilder builder, GraphPath p, GraphViewport viewport)
-    {
-        builder.Reset();
-        for (var i = 0; i < p.Vertices.Count; i++)
-        {
-            var s = viewport.ToScreen(p.Vertices[i].Time, p.Vertices[i].Axis);
-            if (i == 0)
-            {
-                builder.MoveTo((float)s.X, (float)s.Y);
-            }
-            else
-            {
-                builder.LineTo((float)s.X, (float)s.Y);
-            }
-        }
+    /// <summary>The layers in drawing order.</summary>
+    internal static readonly GraphLayer[] Layers = Enum.GetValues<GraphLayer>();
 
-        return builder.Snapshot();
+    /// <summary>Strokes one path's runs, in cache coordinates (see <see cref="ProjectedPathCache"/>).</summary>
+    private void DrawPath(SKCanvas canvas, GraphPath path, bool dim)
+    {
+        foreach (var run in _paths.Get(path))
+        {
+            canvas.DrawPath(run.Path, PathPaint(run.Colour, path.Layer, dim));
+        }
     }
 
     private void DrawNow(SKCanvas canvas, GraphScene scene, GraphViewport viewport, SKRect plot)
     {
         if (scene.Now is { } now && now.Seconds >= viewport.TimeStart && now.Seconds <= viewport.TimeEnd)
         {
-            var x = (float)viewport.TimeToX(now.Seconds);
-            canvas.DrawLine(x, plot.Top, x, plot.Bottom, Stroke(Theme.NowLine, 1.5f));
+            LineAtTime(canvas, viewport, plot, (float)viewport.TimeToPixel(now.Seconds), Stroke(Theme.NowLine, 1.5f));
         }
     }
 
     /// <summary>
     /// One headcode per train, along its line at the first place that is long enough and does not overlap a label
-    /// already placed. A train's actual path is labelled in preference to its WTT path.
+    /// already placed (checked against <see cref="LabelGrid"/>). A train's actual path is labelled in preference to
+    /// its WTT path; a label takes the colour of the segment it sits on.
     /// </summary>
-    private void DrawHeadcodes(SKCanvas canvas, List<GraphPath> drawn, GraphViewport viewport, SKRect plot)
+    private void DrawHeadcodes(SKCanvas canvas, GraphViewport viewport, SKRect plot)
     {
-        var withActuals = drawn.Where(p => p.Layer == GraphLayer.Actual && p.Train is not null).Select(p => p.Train).ToHashSet();
-        var placed = new List<SKRect>();
-        // Stable sort: the selected train, which comes first, keeps its place within its layer.
-        foreach (var p in drawn.OrderByDescending(p => p.Layer))
+        _withActuals.Clear();
+        foreach (var p in _drawn)
         {
-            if (p.Layer is not (GraphLayer.Actual or GraphLayer.Wtt) || (p.Layer == GraphLayer.Wtt && withActuals.Contains(p.Train)))
+            if (p.Layer == GraphLayer.Actual && p.Train is { } train)
             {
-                continue;
+                _withActuals.Add(train);
             }
+        }
 
-            var text = p.Headcode.Value;
-            var width = _headcodeFont.MeasureText(text);
-            if (FindLabelPlace(p, width, viewport, plot, placed) is not { } place)
+        _labels.Reset(plot);
+
+        // Actual paths first, then WTT; within each, the selected train (which comes first) keeps its place.
+        foreach (var layer in (ReadOnlySpan<GraphLayer>)[GraphLayer.Actual, GraphLayer.Wtt])
+        {
+            foreach (var p in _drawn)
             {
-                continue;
-            }
+                if (p.Layer != layer || (layer == GraphLayer.Wtt && p.Train is { } t && _withActuals.Contains(t)))
+                {
+                    continue;
+                }
 
-            canvas.Save();
-            canvas.Translate(place.X, place.Y);
-            canvas.RotateDegrees(place.Degrees);
-            canvas.DrawText(text, 0, -3, SKTextAlign.Center, _headcodeFont, Fill(Darken(p.Colour)));
-            canvas.Restore();
-            placed.Add(place.Bounds);
+                var text = p.Headcode.Value;
+                var width = _headcodeFont.MeasureText(text);
+                if (FindLabelPlace(p, width, viewport, plot) is not { } place)
+                {
+                    continue;
+                }
+
+                canvas.Save();
+                canvas.Translate(place.X, place.Y);
+                canvas.RotateDegrees(place.Degrees);
+                canvas.DrawText(text, 0, -3, SKTextAlign.Center, _headcodeFont, Fill(Darken(p.ColourOf(place.Segment))));
+                canvas.Restore();
+                _labels.Add(place.Bounds);
+            }
         }
     }
 
-    private readonly record struct LabelPlace(float X, float Y, float Degrees, SKRect Bounds);
+    private readonly record struct LabelPlace(float X, float Y, float Degrees, SKRect Bounds, int Segment);
 
-    private LabelPlace? FindLabelPlace(GraphPath path, float textWidth, GraphViewport viewport, SKRect plot, List<SKRect> placed)
+    private LabelPlace? FindLabelPlace(GraphPath path, float textWidth, GraphViewport viewport, SKRect plot)
     {
         var height = _headcodeFont.Size;
         for (var i = 0; i + 1 < path.Vertices.Count; i++)
         {
-            var a = viewport.ToScreen(path.Vertices[i].Time, path.Vertices[i].Axis);
-            var b = viewport.ToScreen(path.Vertices[i + 1].Time, path.Vertices[i + 1].Axis);
-            if (a.Y == b.Y || ClipToRect(a, b, plot) is not var (c, d))
+            var v0 = path.Vertices[i];
+            var v1 = path.Vertices[i + 1];
+            if (v0.Axis == v1.Axis || !viewport.Overlaps(Math.Min(v0.Time, v1.Time), Math.Max(v0.Time, v1.Time), Math.Min(v0.Axis, v1.Axis), Math.Max(v0.Axis, v1.Axis)))
             {
                 continue; // a stop, or out of view
+            }
+
+            if (ClipToRect(viewport.ToScreen(v0.Time, v0.Axis), viewport.ToScreen(v1.Time, v1.Axis), plot) is not var (c, d))
+            {
+                continue;
             }
 
             var dx = (float)(d.X - c.X);
@@ -254,9 +357,9 @@ public sealed class SkiaGraphRenderer : IDisposable
                 var x = (float)c.X + (dx * share);
                 var y = (float)c.Y + (dy * share);
                 var bounds = RotatedBounds(x, y, degrees, textWidth, height);
-                if (plot.Contains(bounds) && !placed.Exists(r => r.IntersectsWith(bounds)))
+                if (plot.Contains(bounds) && !_labels.Intersects(bounds))
                 {
-                    return new LabelPlace(x, y, degrees, bounds);
+                    return new LabelPlace(x, y, degrees, bounds, i);
                 }
             }
         }
@@ -324,43 +427,91 @@ public sealed class SkiaGraphRenderer : IDisposable
                 continue;
             }
 
-            var x = Crisp(viewport.TimeToX(tick.Time));
-            var half = _timeFont.MeasureText(tick.Label) / 2;
-            canvas.DrawLine(x, plot.Top - 4, x, plot.Top, Stroke(Theme.Border, 1));
-            if (x - half >= plot.Left - 2 && x + half <= plot.Right + 2)
+            var at = Crisp(viewport.TimeToPixel(tick.Time));
+            var font = tick.Weight == TickWeight.Hour ? _hourFont : _timeFont;
+            if (viewport.IsVertical)
             {
-                canvas.DrawText(tick.Label, x, plot.Top - 8, SKTextAlign.Center, tick.Weight == TickWeight.Hour ? _hourFont : _timeFont, Fill(Theme.Text));
+                // Left of the plot, right-aligned, centred on the line.
+                canvas.DrawLine(plot.Left - 4, at, plot.Left, at, Stroke(Theme.Border, 1));
+                var half = font.Size / 2;
+                if (at - half >= plot.Top - 2 && at + half <= plot.Bottom + 2)
+                {
+                    canvas.DrawText(tick.Label, plot.Left - 7, at + 4, SKTextAlign.Right, font, Fill(Theme.Text));
+                }
+            }
+            else
+            {
+                var half = _timeFont.MeasureText(tick.Label) / 2;
+                canvas.DrawLine(at, plot.Top - 4, at, plot.Top, Stroke(Theme.Border, 1));
+                if (at - half >= plot.Left - 2 && at + half <= plot.Right + 2)
+                {
+                    canvas.DrawText(tick.Label, at, plot.Top - 8, SKTextAlign.Center, font, Fill(Theme.Text));
+                }
             }
         }
     }
 
+    /// <summary>
+    /// Location names beside the plot: on the left, reading across, when time runs across; along the top, reading up,
+    /// when it runs down. The TIPLOC goes under (or beside) a display name. A label too close to the previous one is
+    /// left out.
+    /// </summary>
     private void DrawLocationLabels(SKCanvas canvas, GraphScene scene, GraphViewport viewport, SKRect plot)
     {
-        var right = plot.Left - 6;
-        var lastBottom = float.NegativeInfinity;
+        var vertical = viewport.IsVertical;
+        var low = (float)viewport.AxisOrigin;
+        var high = (float)(viewport.AxisOrigin + viewport.AxisLength);
+        var lastEnd = float.NegativeInfinity;
+        if (vertical)
+        {
+            canvas.Save();
+            canvas.ClipRect(new SKRect(0, TitleBand, viewport.Width, plot.Top - 2));
+        }
+
         foreach (var location in scene.Locations.OrderBy(l => l.Axis))
         {
-            var y = (float)viewport.AxisToY(location.Axis);
-            if (y < plot.Top - 1 || y > plot.Bottom + 1)
+            var at = (float)viewport.AxisToPixel(location.Axis);
+            if (at < low - 1 || at > high + 1 || at - _locationFont.Size < lastEnd)
             {
-                continue;
+                continue; // out of view, or too close to the previous label
             }
 
             var hasTiploc = !string.Equals(location.Name, location.Tiploc.Code, StringComparison.Ordinal);
-            var top = y - _locationFont.Size;
-            if (top < lastBottom)
+            var font = location.IsStation ? _stationFont : _locationFont;
+            var tiplocOffset = 4 + _tiplocFont.Size + 1;
+            if (vertical)
             {
-                continue; // too close to the label above
+                var x = Crisp(at);
+                canvas.DrawLine(x, plot.Top - 4, x, plot.Top, Stroke(Theme.Border, 1));
+                canvas.Save();
+                canvas.Translate(at, plot.Top - 6);
+                canvas.RotateDegrees(-90);
+                canvas.DrawText(location.Name, 0, 4, SKTextAlign.Left, font, Fill(Theme.Text));
+                if (hasTiploc)
+                {
+                    canvas.DrawText(location.Tiploc.Code, 0, tiplocOffset, SKTextAlign.Left, _tiplocFont, Fill(Theme.MutedText));
+                }
+
+                canvas.Restore();
+            }
+            else
+            {
+                var right = plot.Left - 6;
+                var y = Crisp(at);
+                canvas.DrawLine(right + 2, y, plot.Left, y, Stroke(Theme.Border, 1));
+                canvas.DrawText(location.Name, right, at + 4, SKTextAlign.Right, font, Fill(Theme.Text));
+                if (hasTiploc)
+                {
+                    canvas.DrawText(location.Tiploc.Code, right, at + tiplocOffset, SKTextAlign.Right, _tiplocFont, Fill(Theme.MutedText));
+                }
             }
 
-            canvas.DrawLine(right + 2, Crisp(y), plot.Left, Crisp(y), Stroke(Theme.Border, 1));
-            canvas.DrawText(location.Name, right, y + 4, SKTextAlign.Right, location.IsStation ? _stationFont : _locationFont, Fill(Theme.Text));
-            lastBottom = y + 5;
-            if (hasTiploc)
-            {
-                canvas.DrawText(location.Tiploc.Code, right, y + 4 + _tiplocFont.Size + 1, SKTextAlign.Right, _tiplocFont, Fill(Theme.MutedText));
-                lastBottom += _tiplocFont.Size + 1;
-            }
+            lastEnd = at + 5 + (hasTiploc ? _tiplocFont.Size + 1 : 0);
+        }
+
+        if (vertical)
+        {
+            canvas.Restore();
         }
     }
 
@@ -432,6 +583,8 @@ public sealed class SkiaGraphRenderer : IDisposable
         _pathPaints.Clear();
         _strokes.Clear();
         _fills.Clear();
+        _paths.Dispose();
+        _tiles.Dispose();
         _locationFont.Dispose();
         _stationFont.Dispose();
         _tiplocFont.Dispose();

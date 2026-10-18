@@ -9,12 +9,12 @@ public sealed class GraphViewportAxisTests
     {
         var view = View();
         var y = 300;
-        var anchor = view.YToAxis(y);
+        var anchor = view.PixelToAxis(y);
 
         var zoomed = view.ZoomAxis(2, y);
 
         zoomed.AxisSpan.Should().BeApproximately(view.AxisSpan / 2, 1e-9);
-        zoomed.YToAxis(y).Should().BeApproximately(anchor, 1e-9);
+        zoomed.PixelToAxis(y).Should().BeApproximately(anchor, 1e-9);
         zoomed.TimeStart.Should().Be(view.TimeStart);
         zoomed.ShowsFullAxis.Should().BeFalse();
     }

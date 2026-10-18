@@ -89,6 +89,10 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _logger = loggerFactory.CreateLogger<MainViewModel>();
         _settings = settingsStore.Load();
         Snapshot = engine.Current;
+        // Read both first: setting either saves the view settings, which would overwrite the other.
+        var (byDelay, vertical) = (_settings.ColourByDelay, _settings.VerticalGraph);
+        IsVertical = vertical;
+        ColourMode = byDelay ? GraphColourMode.Delay : GraphColourMode.Category;
         Trains.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(TrainListViewModel.Selected))
@@ -134,6 +138,24 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     [ObservableProperty]
     public partial bool ShowActual { get; set; } = true;
+
+    public IReadOnlyList<GraphColourMode> ColourModes { get; } = Enum.GetValues<GraphColourMode>();
+
+    /// <summary>Colour actual lines (and the train list) by category or by delay band (GR-7). Remembered.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ColourByDelay))]
+    public partial GraphColourMode ColourMode { get; set; }
+
+    /// <summary><see cref="ColourMode"/> as a check box.</summary>
+    public bool ColourByDelay
+    {
+        get => ColourMode == GraphColourMode.Delay;
+        set => ColourMode = value ? GraphColourMode.Delay : GraphColourMode.Category;
+    }
+
+    /// <summary>Time runs down the graph rather than across (GR-1). Remembered.</summary>
+    [ObservableProperty]
+    public partial bool IsVertical { get; set; }
 
     [ObservableProperty]
     public partial TransportViewModel? Transport { get; private set; }
@@ -207,6 +229,20 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     partial void OnShowWttChanged(bool value) => RequestScene();
 
     partial void OnShowActualChanged(bool value) => RequestScene();
+
+    partial void OnColourModeChanged(GraphColourMode value)
+    {
+        Trains.ColourMode = value;
+        Trains.Update(Snapshot, Profile);
+        SaveViewSettings();
+        RequestScene();
+    }
+
+    partial void OnIsVerticalChanged(bool value)
+    {
+        Navigator.SetOrientation(value ? GraphOrientation.Vertical : GraphOrientation.Horizontal);
+        SaveViewSettings();
+    }
 
     /// <summary>
     /// Called a few times a second on the UI thread: moves the clock, the now line, follow mode and the replay bar on.
@@ -433,6 +469,73 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     [RelayCommand]
     private void ClearSelection() => SetSelection(null, null);
+
+    /// <summary>
+    /// Save the graph as shown (GR-10, Fred: the current view) to a PNG the user picks: the same time and corridor
+    /// range, orientation, colours and selection, at the graph's size times the parameter (1 or 2).
+    /// </summary>
+    [RelayCommand]
+    private void ExportPng(string? scale)
+    {
+        if (Scene is not { } scene)
+        {
+            ShowInfo(InfoSeverity.Warning, "There is no graph to export yet.");
+            return;
+        }
+
+        var factor = double.TryParse(scale, NumberStyles.Float, CultureInfo.InvariantCulture, out var s) ? Math.Clamp(s, 1, 4) : 1;
+        var now = NowSeconds is { } seconds ? new SimTime((int)Math.Floor(seconds)) : scene.Now;
+        var folder = _settings.LastExportFolder is { Length: > 0 } last && Directory.Exists(last) ? last : _paths.Exports;
+        if (_dialogs.PickSaveFile("Export the graph as PNG", FileFilters.Png, Path.Combine(folder, ExportName(scene, now))) is not { } path)
+        {
+            return;
+        }
+
+        try
+        {
+            byte[] png;
+            using (var renderer = new SkiaGraphRenderer())
+            {
+                png = renderer.RenderPng(scene with { Now = now }, Navigator.Viewport, Selection, (float)factor);
+            }
+
+            File.WriteAllBytes(path, png);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowInfo(InfoSeverity.Error, $"Cannot export the graph: {ex.Message}");
+            return;
+        }
+
+        _settings = _settings with { LastExportFolder = Path.GetDirectoryName(path) };
+        _settingsStore.Save(_settings);
+        ShowInfo(InfoSeverity.Info, $"Exported the graph to {path}.");
+    }
+
+    /// <summary>A file name for an export, e.g. <c>waterloo-main-0700.png</c>.</summary>
+    private string ExportName(GraphScene scene, SimTime? now)
+    {
+        var area = Profile?.AreaId is { Length: > 0 } a ? a : "graph";
+        var invalid = Path.GetInvalidFileNameChars();
+        var safe = new string([.. $"{area}-{scene.CorridorId}".Select(c => invalid.Contains(c) || c == ' ' ? '_' : c)]);
+        if (now is not { } t)
+        {
+            return safe + ".png";
+        }
+
+        var day = ((t.Seconds % SimTime.SecondsPerDay) + SimTime.SecondsPerDay) % SimTime.SecondsPerDay;
+        return string.Create(CultureInfo.InvariantCulture, $"{safe}-{day / SimTime.SecondsPerHour:00}{day % SimTime.SecondsPerHour / SimTime.SecondsPerMinute:00}.png");
+    }
+
+    private void SaveViewSettings()
+    {
+        var byDelay = ColourMode == GraphColourMode.Delay;
+        if (_settings.ColourByDelay != byDelay || _settings.VerticalGraph != IsVertical)
+        {
+            _settings = _settings with { ColourByDelay = byDelay, VerticalGraph = IsVertical };
+            _settingsStore.Save(_settings);
+        }
+    }
 
     /// <summary>Load a timetable (and its profile) and use it from now on.</summary>
     public async Task LoadTimetableAsync(string path)
@@ -684,6 +787,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             Timetable = _timetable?.Timetable,
             ShowWtt = ShowWtt,
             ShowActual = ShowActual,
+            ColourMode = ColourMode,
         };
         _building = true;
         _sceneDirty = false;

@@ -12,7 +12,8 @@ public sealed record GraphHit(GraphPath Path, int Segment, double Distance, int 
 
 /// <summary>
 /// Finds the path under a pixel (<c>05-…md</c> §7): the nearest projected segment within a tolerance, preferring the
-/// actual layer over the WTT when they are about as near. A linear scan over the paths in view; S9 adds a grid.
+/// actual layer over the WTT when they are about as near. This is a linear scan over every path, fine for a one-off
+/// test; for repeated hover tests over the same view use <see cref="GraphHitIndex"/>, which gives the same answers.
 /// </summary>
 public static class GraphHitTester
 {
@@ -20,7 +21,7 @@ public static class GraphHitTester
     public const double DefaultTolerance = 5;
 
     /// <summary>An actual or plan line wins over a WTT line up to this many pixels further away.</summary>
-    private const double LayerPreferencePixels = 2;
+    internal const double LayerPreferencePixels = 2;
 
     public static GraphHit? HitTest(GraphScene scene, GraphViewport viewport, ScreenPoint point, double tolerance = DefaultTolerance)
     {
@@ -33,8 +34,8 @@ public static class GraphHitTester
 
         // A world-space box around the cursor, to skip paths nowhere near it cheaply.
         var (time, axis) = viewport.ToWorld(point);
-        var dt = tolerance / viewport.PlotWidth * viewport.TimeSpan;
-        var da = tolerance / viewport.PlotHeight * viewport.AxisSpan;
+        var dt = tolerance / viewport.TimeLength * viewport.TimeSpan;
+        var da = tolerance / viewport.AxisLength * viewport.AxisSpan;
 
         GraphHit? best = null;
         var bestScore = double.PositiveInfinity;

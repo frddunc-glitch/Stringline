@@ -40,6 +40,24 @@ public sealed class RenderPngCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Draws_vertically_and_by_delay_band()
+    {
+        var (exit, output, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo4x), "--at", "07:00", "--hours", "2",
+            "--vertical", "--colour", "delay", "--width", "700", "--height", "1000", Out());
+
+        exit.Should().Be(0, error);
+        output.Should().StartWith("Wrote graph.png: main (WLOO – WIMB), 06:20:00–08:20:00, now 07:00:00, ");
+        using var bitmap = SKBitmap.Decode(Out());
+        (bitmap.Width, bitmap.Height).Should().Be((700, 1000));
+
+        // The now line runs across, ⅓ of the way down the plot.
+        var view = Graph.GraphViewport.Around(SimTime.FromClock(7, 0), 7200, 700, 1000, orientation: Graph.GraphOrientation.Vertical);
+        var y = (int)Math.Floor(view.TimeToPixel(SimTime.FromClock(7, 0).Seconds));
+        var reds = Enumerable.Range((int)view.PlotLeft + 5, (int)view.PlotWidth - 10).Count(x => bitmap.GetPixel(x, y) is { Red: > 180, Green: < 120 });
+        reds.Should().BeGreaterThan((int)(view.PlotWidth * 0.8));
+    }
+
+    [Fact]
     public async Task Without_a_log_or_time_starts_at_the_timetable_start()
     {
         var (exit, output, _) = await Run("--wtt", Fixtures.Path("llangollen 2012 B.WTT"), "--width", "800", "--height", "400", "--now-at", "0", Out());

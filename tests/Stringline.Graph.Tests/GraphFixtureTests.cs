@@ -67,6 +67,53 @@ public class GraphFixtureTests
     }
 
     [Fact]
+    public Task Waterloo_main_vertical_by_delay_snapshot()
+    {
+        var tt = Waterloo.Value.Timetable;
+        var profile = StringlineProfile.Create(tt);
+        var now = SimTime.FromClock(7, 0);
+        var state = PlayWaterloo4xTo(now);
+        var scene = GraphSceneBuilder.Build(new GraphSceneRequest(profile, profile.FindCorridor("main")!)
+        {
+            Timetable = tt,
+            LiveTrains = state.Trains,
+            Now = now,
+            ColourMode = GraphColourMode.Delay,
+        });
+
+        scene.InLayer(GraphLayer.Actual).Should().Contain(p => p.SegmentColours != null, "some trains change band along the way");
+        return SkiaGraphRendererTests.VerifyPng(scene, GraphViewport.Around(now, 2 * 3600, 900, 1200, orientation: GraphOrientation.Vertical));
+    }
+
+    [Theory]
+    [InlineData(GraphOrientation.Horizontal)]
+    [InlineData(GraphOrientation.Vertical)]
+    public void Waterloo_hit_index_answers_as_the_linear_scan(GraphOrientation orientation)
+    {
+        var tt = Waterloo.Value.Timetable;
+        var profile = StringlineProfile.Create(tt);
+        var now = SimTime.FromClock(7, 0);
+        var state = PlayWaterloo4xTo(now);
+        var scene = GraphSceneBuilder.Build(new GraphSceneRequest(profile, profile.FindCorridor("main")!) { Timetable = tt, LiveTrains = state.Trains, Now = now });
+        var view = GraphViewport.Around(now, 3 * 3600, 1400, 800, orientation: orientation);
+        var index = GraphHitIndex.Build(scene, view);
+
+        var hits = 0;
+        for (var y = 0.0; y < view.Height; y += 3.7)
+        {
+            for (var x = 0.0; x < view.Width; x += 3.7)
+            {
+                var p = new ScreenPoint(x, y);
+                var expected = GraphHitTester.HitTest(scene, view, p);
+                index.HitTest(p).Should().Be(expected);
+                hits += expected is null ? 0 : 1;
+            }
+        }
+
+        hits.Should().BeGreaterThan(10_000, "a busy corridor is mostly lines");
+    }
+
+    [Fact]
     public Task Llangollen_single_line_snapshot()
     {
         var tt = Llangollen.Value.Timetable;

@@ -55,14 +55,14 @@ public class SkiaGraphRendererTests
         var view = View();
         using var bitmap = Render(Scene(now), view);
 
-        var x = (int)Math.Floor(view.TimeToX(now.Seconds));
-        var y = (int)view.AxisToY(0.9); // between C and D, clear of other lines at 07:15
+        var x = (int)Math.Floor(view.TimeToPixel(now.Seconds));
+        var y = (int)view.AxisToPixel(0.9); // between C and D, clear of other lines at 07:15
         var pixel = bitmap.GetPixel(x, y);
         pixel.Red.Should().BeGreaterThan(180);
         pixel.Green.Should().BeLessThan(120);
 
-        var past = bitmap.GetPixel((int)view.TimeToX(SimTime.FromClock(7, 13).Seconds), y);
-        var future = bitmap.GetPixel((int)view.TimeToX(SimTime.FromClock(7, 25).Seconds), y);
+        var past = bitmap.GetPixel((int)view.TimeToPixel(SimTime.FromClock(7, 13).Seconds), y);
+        var future = bitmap.GetPixel((int)view.TimeToPixel(SimTime.FromClock(7, 25).Seconds), y);
         past.Red.Should().BeLessThan(future.Red, "the past is shaded");
     }
 

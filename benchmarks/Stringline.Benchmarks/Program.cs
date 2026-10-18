@@ -1,0 +1,49 @@
+using System.Diagnostics;
+using System.Globalization;
+using BenchmarkDotNet.Running;
+using Stringline.Benchmarks;
+
+// dotnet run -c Release --project benchmarks/Stringline.Benchmarks -- [BenchmarkDotNet args, e.g. --filter * --job short]
+// dotnet run -c Release --project benchmarks/Stringline.Benchmarks -- --quick   (a few seconds, Stopwatch timings only)
+
+if (args.Contains("--quick"))
+{
+    Quick();
+    return;
+}
+
+BenchmarkSwitcher.FromAssembly(typeof(GraphRenderBenchmarks).Assembly).Run(args);
+
+static void Quick()
+{
+    foreach (var orientation in Enum.GetValues<Stringline.Graph.GraphOrientation>())
+    {
+        using var bench = new GraphRenderBenchmarks { Trains = 500, Orientation = orientation };
+        bench.Setup();
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"500 trains / 6 h, 1920×1080, {orientation}:"));
+        Time("pan frame", 100, bench.PanFrame);
+        Time("zoom frame", 20, bench.ZoomFrame);
+        Time("pan frame, no tiles", 30, bench.DirectPanFrame);
+        Time("zoom frame, no tiles", 30, bench.DirectZoomFrame);
+        Time("update frame", 20, bench.UpdateFrame);
+        Time("hit index build", 20, () => bench.BuildHitIndex());
+        Time("100 hover tests (grid)", 50, () => bench.HoverHitTest());
+        Time("100 hover tests (linear)", 10, () => bench.LinearHitTest());
+    }
+
+    static void Time(string what, int runs, Action action)
+    {
+        for (var i = 0; i < Math.Max(5, runs / 2); i++)
+        {
+            action();
+        }
+
+        var watch = Stopwatch.StartNew();
+        for (var i = 0; i < runs; i++)
+        {
+            action();
+        }
+
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  {what,-26} {watch.Elapsed.TotalMilliseconds / runs,8:F2} ms"));
+    }
+}

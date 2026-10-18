@@ -38,6 +38,15 @@ internal sealed record AppSettings
     /// <summary>Where to look for timetables to suggest; SimSig's own folder when null.</summary>
     public string? TimetableFolder { get; init; }
 
+    /// <summary>Colour actual lines by delay band rather than by category (GR-7).</summary>
+    public bool ColourByDelay { get; init; }
+
+    /// <summary>Draw the graph with time running down (GR-1).</summary>
+    public bool VerticalGraph { get; init; }
+
+    /// <summary>The folder the last graph export went to.</summary>
+    public string? LastExportFolder { get; init; }
+
     public string? TimetableFor(string? areaId) =>
         areaId is not null && TimetableByArea.TryGetValue(areaId.Trim().ToLowerInvariant(), out var path) ? path : null;
 

@@ -24,6 +24,9 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
 
     public bool ShowActual { get; init; } = true;
 
+    /// <summary>Colour actual lines by category (the default) or by delay band.</summary>
+    public GraphColourMode ColourMode { get; init; } = GraphColourMode.Category;
+
     /// <summary>A request for the timetable and live trains of a <see cref="LiveSnapshot"/>, with the now line at its last reported clock.</summary>
     public static GraphSceneRequest For(StringlineProfile profile, Corridor corridor, LiveSnapshot snapshot)
     {
@@ -77,7 +80,7 @@ public static class GraphSceneBuilder
             {
                 for (var w = 0; w < live.Workings.Count; w++)
                 {
-                    AddActual(paths, corridor, live, w, ColourOf(live.Workings[w], request));
+                    AddActual(paths, corridor, live, w, request);
                 }
             }
         }
@@ -120,27 +123,58 @@ public static class GraphSceneBuilder
         }
     }
 
-    private static void AddActual(List<GraphPath> paths, Corridor corridor, LiveTrain live, int working, Colour colour)
+    private static void AddActual(List<GraphPath> paths, Corridor corridor, LiveTrain live, int working, GraphSceneRequest request)
     {
+        var w = live.Workings[working];
+        var wtt = w is { IsMatched: true, Train: { } id } ? request.Timetable?.Find(id) : null;
+        var byDelay = request.ColourMode == GraphColourMode.Delay && w.IsMatched;
+
         var builder = new PathAccumulator(corridor);
         foreach (var actual in live.ActualsOf(working))
         {
             if (actual.AtTimingPoint)
             {
-                builder.Add(actual.Location, actual.Time);
+                builder.Add(actual.Location, actual.Time, byDelay && wtt is not null ? TrainDelays.At(actual, wtt)?.Seconds : null);
             }
         }
 
-        var w = live.Workings[working];
+        var colour = ColourOf(w, request);
         var key = $"act:{live.SimUid}/{working}";
         foreach (var (segment, index, count) in builder.Finish())
         {
-            paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", GraphLayer.Actual, w.Train, w.Headcode, colour,
-                segment.Vertices, IsUnmatched: !w.IsMatched, Direction: corridor.DirectionOf(segment.Locations), LiveUid: live.SimUid, Working: working));
+            var (pathColour, segmentColours) = byDelay ? DelayColours(segment.Delays) : (colour, null);
+            paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", GraphLayer.Actual, w.Train, w.Headcode, pathColour,
+                segment.Vertices, IsUnmatched: !w.IsMatched, Direction: corridor.DirectionOf(segment.Locations), LiveUid: live.SimUid, Working: working,
+                SegmentColours: segmentColours));
         }
     }
 
-    private sealed record Segment(List<GraphVertex> Vertices, List<Tiploc> Locations);
+    /// <summary>
+    /// Delay-band colours for each segment of an actual path (Fred, S9): a segment takes the band of the delay at the
+    /// timing point it arrives at. Where that point is not booked, the latest known delay carries on; segments before
+    /// the first booked point take the first known delay; a path with none is <see cref="DelayBands.Unknown"/>. The
+    /// path's own colour is its last segment's (the train's latest delay). Segment colours are null if all agree.
+    /// </summary>
+    internal static (Colour Colour, IReadOnlyList<Colour>? Segments) DelayColours(IReadOnlyList<int?> delays)
+    {
+        var first = delays.FirstOrDefault(d => d is not null);
+        var colours = new Colour[Math.Max(0, delays.Count - 1)];
+        var known = delays.Count > 0 ? delays[0] : null;
+        for (var i = 0; i < colours.Length; i++)
+        {
+            known = delays[i + 1] ?? known;
+            colours[i] = DelayBands.ColourOfSeconds(known ?? first);
+        }
+
+        if (colours.Length == 0)
+        {
+            return (DelayBands.ColourOfSeconds(first), null);
+        }
+
+        return colours.All(c => c == colours[0]) ? (colours[0], null) : (colours[^1], colours);
+    }
+
+    private sealed record Segment(List<GraphVertex> Vertices, List<Tiploc> Locations, List<int?> Delays);
 
     /// <summary>Collects timed locations in running order into one or more corridor visits.</summary>
     private sealed class PathAccumulator(Corridor corridor)
@@ -150,7 +184,8 @@ public static class GraphSceneBuilder
         private int _lastIndex = -1;
         private bool _away;
 
-        public void Add(Tiploc location, SimTime time)
+        /// <param name="delay">Seconds late at this point, if known (delay colouring only).</param>
+        public void Add(Tiploc location, SimTime time, int? delay = null)
         {
             var index = corridor.IndexOf(location);
             if (index < 0)
@@ -161,7 +196,7 @@ public static class GraphSceneBuilder
 
             if (_current is null || (_away && index == _lastIndex))
             {
-                _current = new Segment([], []);
+                _current = new Segment([], [], []);
                 _segments.Add(_current);
             }
 
@@ -171,6 +206,11 @@ public static class GraphSceneBuilder
             {
                 _current.Vertices.Add(vertex);
                 _current.Locations.Add(location);
+                _current.Delays.Add(delay);
+            }
+            else if (delay is not null)
+            {
+                _current.Delays[^1] ??= delay;
             }
 
             _lastIndex = index;

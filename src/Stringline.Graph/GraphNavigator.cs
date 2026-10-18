@@ -90,7 +90,8 @@ public sealed class GraphNavigator
     }
 
     /// <summary>
-    /// A wheel turn at (x, y): zoom time about the cursor, Ctrl zooms along the corridor, Shift pans time.
+    /// A wheel turn at (x, y): zoom time about the cursor, Ctrl zooms along the corridor, Shift pans time (in either
+    /// orientation).
     /// <paramref name="delta"/> is in wheel units (120 per notch; positive away from the user zooms in).
     /// </summary>
     public void Wheel(double delta, double x, double y, GraphModifiers modifiers = GraphModifiers.None)
@@ -104,20 +105,23 @@ public sealed class GraphNavigator
         if (modifiers.HasFlag(GraphModifiers.Shift))
         {
             IsFollowing = false;
-            Set(Viewport.PanPixels(notches * WheelPanPixels), force: true);
+            Set(Viewport.PanTimePixels(notches * WheelPanPixels), force: true);
         }
         else if (modifiers.HasFlag(GraphModifiers.Control))
         {
-            Set(Viewport.ZoomAxis(Math.Pow(WheelZoomStep, notches), y));
+            Set(Viewport.ZoomAxis(Math.Pow(WheelZoomStep, notches), Viewport.AxisPixelOf(new ScreenPoint(x, y))));
         }
         else
         {
-            ZoomTime(Math.Pow(WheelZoomStep, notches), x);
+            ZoomTime(Math.Pow(WheelZoomStep, notches), Viewport.TimePixelOf(new ScreenPoint(x, y)));
         }
     }
 
-    /// <summary>Zoom time by <paramref name="factor"/> (above 1 zooms in) about pixel column <paramref name="x"/>, or about now when following.</summary>
-    public void ZoomTime(double factor, double x)
+    /// <summary>
+    /// Zoom time by <paramref name="factor"/> (above 1 zooms in) about the time pixel <paramref name="timePixel"/> (X, or
+    /// Y when vertical), or about now when following.
+    /// </summary>
+    public void ZoomTime(double factor, double timePixel)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(factor);
         if (IsFollowing && Now is not null)
@@ -126,7 +130,7 @@ public sealed class GraphNavigator
         }
         else
         {
-            Set(Viewport.ZoomTime(factor, x));
+            Set(Viewport.ZoomTime(factor, timePixel));
         }
     }
 
@@ -178,8 +182,8 @@ public sealed class GraphNavigator
     public void BeginDrag(ScreenPoint at) => _dragFrom = at;
 
     /// <summary>
-    /// The drag moved. Panning in time turns follow off; moving only along the corridor while zoomed in pans the
-    /// corridor and keeps following.
+    /// The drag moved. Panning in time (across, or down when vertical) turns follow off; moving only along the
+    /// corridor while zoomed in pans the corridor and keeps following.
     /// </summary>
     public void DragTo(ScreenPoint at)
     {
@@ -188,22 +192,31 @@ public sealed class GraphNavigator
             return;
         }
 
-        var dx = at.X - from.X;
-        var dy = at.Y - from.Y;
+        var dt = Viewport.TimePixelOf(at) - Viewport.TimePixelOf(from);
+        var da = Viewport.AxisPixelOf(at) - Viewport.AxisPixelOf(from);
         var next = Viewport;
-        if (dx != 0)
+        if (dt != 0)
         {
             IsFollowing = false;
-            next = next.PanPixels(dx);
+            next = next.PanTimePixels(dt);
         }
 
-        if (dy != 0)
+        if (da != 0)
         {
-            next = next.PanAxisPixels(dy);
+            next = next.PanAxisPixels(da);
         }
 
         _dragFrom = at;
-        Set(next, force: dx != 0);
+        Set(next, force: dt != 0);
+    }
+
+    /// <summary>Turn the graph (GR-1): the same time and corridor ranges, time across or down.</summary>
+    public void SetOrientation(GraphOrientation orientation)
+    {
+        if (orientation != Viewport.Orientation)
+        {
+            Set(Viewport.WithOrientation(orientation));
+        }
     }
 
     public void EndDrag() => _dragFrom = null;

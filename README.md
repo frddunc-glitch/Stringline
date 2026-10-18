@@ -50,12 +50,24 @@ Playback starts when the first client connects. Press Space to pause or resume, 
 dotnet run --project src/Stringline.Tools -- render-png --wtt "tests/fixtures/waterloo 2010.WTT" --log tests/fixtures/waterloo-4x.sslog --corridor main --at 07:00 --hours 3 waterloo.png
 ```
 
-Without `--profile`, corridors come from the WTT (`corridors` lists them). `--now-at`, `--width`, `--height` and `--no-wtt` change the view.
+Without `--profile`, corridors come from the WTT (`corridors` lists them). `--now-at`, `--width`, `--height` and `--no-wtt` change the view; `--vertical` runs time down the image, and `--colour delay` colours the actual running by delay band (green right time, amber 1–5 min late, orange 6–15, red over 15).
+
+In the app, **Session ▸ Export graph as PNG…** (Ctrl+E) saves the graph exactly as shown, at its size or at twice it.
+
+## Benchmarks
+
+`benchmarks/Stringline.Benchmarks` times graph frames against the budget of 500 trains over 6 hours in under 33 ms (30 fps) while panning:
+
+```sh
+dotnet run -c Release --project benchmarks/Stringline.Benchmarks -- --quick                     # a few seconds, rough timings
+dotnet run -c Release --project benchmarks/Stringline.Benchmarks -- --filter "*" --job short    # BenchmarkDotNet
+```
 
 ## Layout
 
 - `src/` — `Stringline.Core` (sim time, identifiers, lenient JSON), `Gateway`, `Timetable`, `Network`, `Planning`, `Persistence`, `Graph`, `Tools` (the `stringline` CLI) and `App` (WPF, Windows only).
 - `tests/` — xUnit test projects; `tests/fixtures/` holds free-sim data only. Recordings and timetables from payware sims go in the git-ignored `local-fixtures/`.
+- `benchmarks/` — BenchmarkDotNet frame timings for the graph.
 - `docs/` — design documents and the session-by-session plan.
 
 ## Licence

@@ -95,6 +95,12 @@ internal sealed partial class TrainListViewModel : ObservableObject
 
     public TrainRowViewModel? Find(string uid) => _rows.GetValueOrDefault(uid);
 
+    /// <summary>
+    /// Colour each row's swatch as the graph colours the train: by category, or by the band of its current delay.
+    /// Takes effect at the next <see cref="Update"/>.
+    /// </summary>
+    public Graph.GraphColourMode ColourMode { get; set; }
+
     /// <summary>Take a new snapshot (and the profile for names and colours).</summary>
     public void Update(LiveSnapshot snapshot, StringlineProfile? profile)
     {
@@ -147,7 +153,9 @@ internal sealed partial class TrainListViewModel : ObservableObject
             _ => $"−{-delay.Minutes}",
         };
         var colour = working is { IsMatched: true, Train: { } id } && _snapshot.Timetable?.Find(id) is { } train
-            ? (_profile?.StyleFor(train.CategoryId).Colour ?? CategoryStyle.Fallback.Colour)
+            ? ColourMode == Graph.GraphColourMode.Delay
+                ? Graph.DelayBands.ColourOfSeconds(delay?.Seconds)
+                : _profile?.StyleFor(train.CategoryId).Colour ?? CategoryStyle.Fallback.Colour
             : Graph.GraphSceneBuilder.UnmatchedColour;
         row.Colour = colour.ToString();
     }

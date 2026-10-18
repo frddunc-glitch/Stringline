@@ -22,7 +22,7 @@
 Panels are dockable later; v1 uses a fixed three-column layout with a splitter.
 
 ## 2. Graph conventions (train control diagram style)
-- Time on the horizontal axis by default (ViziRail/TCD style); a toggle swaps axes (S9).
+- Time on the horizontal axis by default (ViziRail/TCD style); a toggle swaps axes (S9). **Vertical** (Fred, S9): time runs down, the corridor across with its Up end on the left; times are labelled down the left and location names, rotated to read upwards, along the top.
 - The corridor's Up end (its first location) is at the top, so Down trains slope down to the right (Fred, S7). The axis is padded 4% above the first and below the last location.
 - Location axis labels: display name + TIPLOC; stations with platforms bold; loops shown as a double tick.
 - Minor grid every 5 min, major every 30 min with labels; hour lines heavier.
@@ -46,6 +46,8 @@ Panels are dockable later; v1 uses a fixed three-column layout with a splitter.
 
 ### Delay bands (optional colouring)
 ≤ 0 min early/right time green · 1–5 amber · 6–15 orange · > 15 red.
+
+Built in S9 (Fred: per segment). Each segment of an actual line takes the band of the delay at the timing point it arrives at, in whole minutes rounded towards zero, as the train list shows. Where that point is not booked, the last known delay carries on; segments before the first booked point take the first known delay; a matched train with no booked point yet is grey, as unmatched trains are. WTT lines keep their category colours, and labels take the colour of the segment they sit on. The train list's colour swatch follows the same mode (the current delay's band). The choice is remembered.
 
 ## 3. Interaction
 
@@ -77,7 +79,15 @@ Per location, ordered list of upcoming movements in the working-plan order, high
 
 ## 7. Rendering design (Stringline.Graph)
 
-Built in S7 as below, except: the scene builder takes a `GraphSceneRequest` (profile, corridor, WTT, live trains, now) until S10 provides `PlanSnapshot`; paths are not cached between frames yet, and labels are placed against a simple list of rectangles (both S9).
+Built in S7 and S9 as below, except that the scene builder takes a `GraphSceneRequest` (profile, corridor, WTT, live trains, now, colour mode) until S10 provides `PlanSnapshot`.
+
+- **Performance (S9, GR-9).** Anti-aliased stroking is most of a frame's cost, so the renderer avoids doing it again:
+  - **Projected paths** (`ProjectedPathCache`). Each path is projected to an `SKPath` once per zoom, relative to a reference time, and drawn with the canvas translated. Panning, following and scrolling along the corridor are therefore translations. A new scene keeps the paths whose key, colours and vertices are unchanged, and reports the world rectangles that draw differently (for a train that moved on, only its last stretch).
+  - **Tiles** (`PathTileCache`). The unselected lines are kept as 256 px tiles at device resolution. A pan blits them, drawing only tiles new to the view. A live update redraws only the tiles under the changed stretches. A zoom, resize, turn, DPI change or new selection drops them all. The frame that changes the zoom draws directly, and the next frame builds the tiles in one pass over the box around the missing ones, so a zoom gesture costs no more than drawing directly.
+  - **Pixel alignment.** The projection is aligned so tiles land on whole device pixels, exactly where a direct draw puts the lines; a later pan by a fraction of a pixel places them on the nearest whole pixel. The selected train is drawn over the tiles each frame.
+  - **Other parts.** `RenderPng` (tests, CLI, export) draws directly. Tiles use the platform's native pixel format: RGBA tiles on Windows (BGRA) took Skia's slow blitter path and cost three times as much. Labels are checked for overlap against a `LabelGrid` of 48 px cells. Hit testing uses a `GraphHitIndex`, a 16 px grid built per scene and viewport, which gives exactly the linear scan's answers.
+  - **Measured** (`benchmarks/`, 500 trains / 6 h, 1920×1080, CPU): a pan frame takes 7–14 ms, against 32–36 ms drawing directly (at 1 000 trains, 8–10 ms against 58 ms); a zoom frame costs a direct draw (37–40 ms); 100 hover tests take about 0.1 ms with the grid, against about 4 ms by linear scan. See `progress.md` S9 for the BenchmarkDotNet table.
+- **Vertical orientation (S9).** `GraphViewport.Orientation`: the transforms work in "time pixels" and "axis pixels" (X and Y, or Y and X), so scene, cache, tiles, hit testing and navigation are orientation-free. The renderer swaps only the grid, past shading, now line and the margins' labels.
 
 - **Scene rules.** Only timed points on the corridor become vertices; a pass is one vertex, a stop with both times two (a level segment). A train that leaves the corridor and comes back to the *same* location starts a new path, so time on a branch does not draw as a stop; rejoining elsewhere draws straight across. A path needs two vertices, so a train that only crosses the corridor at one point draws nothing. Each working of a live uid is its own actual path; only `AtTimingPoint` actuals are used (signals have no axis position). Matched actuals take the WTT train's category colour; pending and unmatched ones are grey (`#8A8A8A`).
 - **Labels.** One headcode per train, preferring its actual path over its WTT path, rotated along the first visible sloping segment long enough for it, at ½, ¼ or ¾ of the way along, skipped if it would overlap a label already placed. Labels are the line colour, opaque and 25% darker.
@@ -104,3 +114,5 @@ Built as §1 describes, with these specifics:
 - **Mouse and keys.** Wheel zooms time about the cursor (about the now line while following), Ctrl+wheel zooms along the corridor, Shift+wheel pans time. Dragging pans; dragging across in time stops following. A click selects the train under the cursor (both its WTT and live paths), and a click on the background clears it. Space toggles follow and Esc clears the selection, when the graph has focus. Hovering shows a tooltip for the timing point nearest the cursor.
 - **Train list.** One row per live train (its current working): colour, headcode, delay in minutes at the latest booked point, last timing point and time, and the WTT train or match state. It can be sorted by delay (the default), headcode or last report, filtered by text, and limited to "not matched". Rows are updated in place, so the selection and scroll position survive updates. Selecting a row selects the train on the graph, and double-clicking it centres the graph on its last report.
 - **Command line.** `Stringline.exe [--wtt t.wtt] [--replay x.sslog [--speed 8|max] [--start 07:30]]`.
+- **View options (S9).** The toolbar's Colour box (Category or Delay) and ⇅ Vertical toggle, also in the View menu, are remembered in the settings. Turning the graph keeps the time and corridor ranges and follow mode.
+- **Export (S9, GR-10; Fred: the current view).** Session ▸ Export graph as PNG… (Ctrl+E), or at 2× size. It saves the graph as shown: the same time and corridor range, orientation, colours, selection and now line, at the graph's size in device-independent pixels times 1 or 2. A save dialog offers `Documents\Stringline\exports\{area}-{corridor}-{HHmm}.png` at first, then the folder last used. PDF export (GR-10) is not built.

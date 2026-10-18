@@ -121,6 +121,18 @@ internal sealed class ScriptedDialogs : IDialogService
 
     public string? PickFile(string title, string filter, string? initialPath) => Files.Count > 0 ? Files.Dequeue() : null;
 
+    /// <summary>Answers to save dialogs, in order; none left means cancelled.</summary>
+    public Queue<string?> SaveFiles { get; } = new();
+
+    /// <summary>The path each save dialog suggested.</summary>
+    public List<string> SaveSuggestions { get; } = [];
+
+    public string? PickSaveFile(string title, string filter, string initialPath)
+    {
+        SaveSuggestions.Add(initialPath);
+        return SaveFiles.Count > 0 ? SaveFiles.Dequeue() : null;
+    }
+
     public void ShowError(string title, string message) => Errors.Add(message);
 
     public void ShowList(string title, string heading, IReadOnlyList<string> lines) => Lists.Add((title, lines));

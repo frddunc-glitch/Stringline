@@ -5,21 +5,46 @@ namespace Stringline.Graph;
 /// <summary>A point in pixels, origin top left.</summary>
 public readonly record struct ScreenPoint(double X, double Y);
 
-/// <summary>Space around the plot area, in pixels: location labels on the left, time labels on top.</summary>
-public readonly record struct GraphMargins(double Left, double Top, double Right, double Bottom)
+/// <summary>Which way time runs (GR-1). The corridor runs the other way, its Up end first.</summary>
+public enum GraphOrientation
 {
-    public static GraphMargins Default { get; } = new(150, 44, 12, 12);
+    /// <summary>Time left to right, the Up end at the top: the usual train control diagram.</summary>
+    Horizontal,
+
+    /// <summary>Time top to bottom, the Up end on the left (Fred, S9).</summary>
+    Vertical,
 }
 
 /// <summary>
-/// What part of the graph is shown and at what size: a time range across, an axis range down. Time runs left to
-/// right; axis position 0 (the corridor's Up end) is at the top. World coordinates are sim seconds and corridor
-/// axis positions (0..1), so panning and zooming change only the viewport, never the scene.
+/// Space around the plot area, in pixels. A horizontal graph has location labels on the left and time labels on top;
+/// a vertical one has time labels on the left and location labels (rotated) on top.
 /// </summary>
-/// <param name="TimeStart">Sim seconds at the left edge of the plot area.</param>
-/// <param name="TimeEnd">Sim seconds at the right edge; greater than <paramref name="TimeStart"/>.</param>
-/// <param name="AxisStart">Axis position at the top edge of the plot area (slightly below 0 leaves room above the first location).</param>
-/// <param name="AxisEnd">Axis position at the bottom edge; greater than <paramref name="AxisStart"/>.</param>
+public readonly record struct GraphMargins(double Left, double Top, double Right, double Bottom)
+{
+    public static GraphMargins Default { get; } = new(150, 44, 12, 12);
+
+    /// <summary>The default for a vertical graph: room for <c>00:00+1</c> on the left and rotated names on top.</summary>
+    public static GraphMargins DefaultVertical { get; } = new(60, 170, 12, 12);
+
+    public static GraphMargins DefaultFor(GraphOrientation orientation) =>
+        orientation == GraphOrientation.Vertical ? DefaultVertical : Default;
+}
+
+/// <summary>
+/// What part of the graph is shown and at what size: a time range and an axis range. In the default
+/// <see cref="GraphOrientation.Horizontal"/> orientation time runs left to right and axis position 0 (the corridor's
+/// Up end) is at the top; <see cref="GraphOrientation.Vertical"/> turns it, time running down and the Up end on the
+/// left. World coordinates are sim seconds and corridor axis positions (0..1), so panning, zooming and turning the
+/// graph change only the viewport, never the scene.
+/// </summary>
+/// <remarks>
+/// "Time pixels" and "axis pixels" are screen coordinates along the time and axis directions: X and Y when
+/// horizontal, Y and X when vertical. Code written in those terms works in both orientations.
+/// </remarks>
+/// <param name="TimeStart">Sim seconds at the near edge of the plot area (left, or top when vertical).</param>
+/// <param name="TimeEnd">Sim seconds at the far edge; greater than <paramref name="TimeStart"/>.</param>
+/// <param name="AxisStart">Axis position at the near edge (top, or left when vertical); slightly below 0 leaves room before the first location.</param>
+/// <param name="AxisEnd">Axis position at the far edge; greater than <paramref name="AxisStart"/>.</param>
 /// <param name="Width">Whole surface width in pixels, margins included.</param>
 /// <param name="Height">Whole surface height in pixels, margins included.</param>
 public sealed record GraphViewport(double TimeStart, double TimeEnd, double AxisStart, double AxisEnd, int Width, int Height, GraphMargins Margins)
@@ -36,11 +61,16 @@ public sealed record GraphViewport(double TimeStart, double TimeEnd, double Axis
     /// <summary>Narrowest share of the corridor a distance zoom may reach.</summary>
     public const double MinAxisSpan = 0.05;
 
-    /// <summary>The top of the whole padded corridor.</summary>
+    /// <summary>The near end of the whole padded corridor.</summary>
     public const double FullAxisStart = -DefaultAxisPadding;
 
-    /// <summary>The bottom of the whole padded corridor.</summary>
+    /// <summary>The far end of the whole padded corridor.</summary>
     public const double FullAxisEnd = 1 + DefaultAxisPadding;
+
+    /// <summary>Which way time runs. Change it with <see cref="WithOrientation"/>, which also swaps the margins.</summary>
+    public GraphOrientation Orientation { get; init; } = GraphOrientation.Horizontal;
+
+    public bool IsVertical => Orientation == GraphOrientation.Vertical;
 
     public double TimeSpan => TimeEnd - TimeStart;
 
@@ -58,43 +88,80 @@ public sealed record GraphViewport(double TimeStart, double TimeEnd, double Axis
 
     public double PlotHeight => PlotBottom - PlotTop;
 
-    /// <summary>Pixels per sim minute across.</summary>
-    public double PixelsPerMinute => PlotWidth * SimTime.SecondsPerMinute / TimeSpan;
+    /// <summary>Length of the plot area along the time direction, in pixels.</summary>
+    public double TimeLength => IsVertical ? PlotHeight : PlotWidth;
+
+    /// <summary>Length of the plot area along the corridor, in pixels.</summary>
+    public double AxisLength => IsVertical ? PlotWidth : PlotHeight;
+
+    /// <summary>Where the time direction starts on screen: the plot's left edge, or its top when vertical.</summary>
+    public double TimeOrigin => IsVertical ? PlotTop : PlotLeft;
+
+    /// <summary>Where the axis direction starts on screen: the plot's top edge, or its left when vertical.</summary>
+    public double AxisOrigin => IsVertical ? PlotLeft : PlotTop;
+
+    /// <summary>Pixels per sim second along the time direction.</summary>
+    public double PixelsPerSecond => TimeLength / TimeSpan;
+
+    /// <summary>Pixels per unit of axis position (the whole corridor) along the axis direction.</summary>
+    public double PixelsPerAxis => AxisLength / AxisSpan;
+
+    /// <summary>Pixels per sim minute along the time direction.</summary>
+    public double PixelsPerMinute => TimeLength * SimTime.SecondsPerMinute / TimeSpan;
 
     /// <summary>
     /// A viewport of <paramref name="seconds"/> with <paramref name="now"/> at <paramref name="nowFraction"/> of the
-    /// way across (⅓ shows an hour of history in a 3 hour view), showing the whole corridor.
+    /// way along (⅓ shows an hour of history in a 3 hour view), showing the whole corridor.
     /// </summary>
-    public static GraphViewport Around(SimTime now, int seconds, int width, int height, double nowFraction = 1.0 / 3, GraphMargins? margins = null)
+    public static GraphViewport Around(SimTime now, int seconds, int width, int height, double nowFraction = 1.0 / 3, GraphMargins? margins = null, GraphOrientation orientation = GraphOrientation.Horizontal)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(seconds);
         ArgumentOutOfRangeException.ThrowIfLessThan(nowFraction, 0);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(nowFraction, 1);
         var start = now.Seconds - (seconds * nowFraction);
-        return Create(start, start + seconds, width, height, margins);
+        return Create(start, start + seconds, width, height, margins, orientation);
     }
 
     /// <summary>A viewport from <paramref name="timeStart"/> to <paramref name="timeEnd"/> showing the whole corridor.</summary>
-    public static GraphViewport Create(double timeStart, double timeEnd, int width, int height, GraphMargins? margins = null)
+    /// <param name="margins">Default: <see cref="GraphMargins.DefaultFor"/> the orientation.</param>
+    public static GraphViewport Create(double timeStart, double timeEnd, int width, int height, GraphMargins? margins = null, GraphOrientation orientation = GraphOrientation.Horizontal)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeEnd, timeStart);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
-        return new GraphViewport(timeStart, timeEnd, -DefaultAxisPadding, 1 + DefaultAxisPadding, width, height, margins ?? GraphMargins.Default);
+        return new GraphViewport(timeStart, timeEnd, -DefaultAxisPadding, 1 + DefaultAxisPadding, width, height, margins ?? GraphMargins.DefaultFor(orientation))
+        {
+            Orientation = orientation,
+        };
     }
 
-    public double TimeToX(double time) => PlotLeft + ((time - TimeStart) / TimeSpan * PlotWidth);
+    /// <summary>The same time and axis ranges turned the other way, with that orientation's default margins unless given.</summary>
+    public GraphViewport WithOrientation(GraphOrientation orientation, GraphMargins? margins = null) =>
+        this with { Orientation = orientation, Margins = margins ?? GraphMargins.DefaultFor(orientation) };
 
-    public double AxisToY(double axis) => PlotTop + ((axis - AxisStart) / AxisSpan * PlotHeight);
+    /// <summary>The screen coordinate along the time direction (X, or Y when vertical) of a sim time.</summary>
+    public double TimeToPixel(double time) => TimeOrigin + ((time - TimeStart) / TimeSpan * TimeLength);
 
-    public ScreenPoint ToScreen(double time, double axis) => new(TimeToX(time), AxisToY(axis));
+    /// <summary>The screen coordinate along the axis direction (Y, or X when vertical) of an axis position.</summary>
+    public double AxisToPixel(double axis) => AxisOrigin + ((axis - AxisStart) / AxisSpan * AxisLength);
 
-    public double XToTime(double x) => TimeStart + ((x - PlotLeft) / PlotWidth * TimeSpan);
+    public ScreenPoint ToScreen(double time, double axis) =>
+        IsVertical ? new(AxisToPixel(axis), TimeToPixel(time)) : new(TimeToPixel(time), AxisToPixel(axis));
 
-    public double YToAxis(double y) => AxisStart + ((y - PlotTop) / PlotHeight * AxisSpan);
+    /// <summary>The sim time at a screen coordinate along the time direction.</summary>
+    public double PixelToTime(double pixel) => TimeStart + ((pixel - TimeOrigin) / TimeLength * TimeSpan);
+
+    /// <summary>The axis position at a screen coordinate along the axis direction.</summary>
+    public double PixelToAxis(double pixel) => AxisStart + ((pixel - AxisOrigin) / AxisLength * AxisSpan);
+
+    /// <summary>A point's coordinate along the time direction: its X, or its Y when vertical.</summary>
+    public double TimePixelOf(ScreenPoint point) => IsVertical ? point.Y : point.X;
+
+    /// <summary>A point's coordinate along the axis direction: its Y, or its X when vertical.</summary>
+    public double AxisPixelOf(ScreenPoint point) => IsVertical ? point.X : point.Y;
 
     /// <summary>The world point (sim seconds, axis position) under a pixel.</summary>
-    public (double Time, double Axis) ToWorld(ScreenPoint point) => (XToTime(point.X), YToAxis(point.Y));
+    public (double Time, double Axis) ToWorld(ScreenPoint point) => (PixelToTime(TimePixelOf(point)), PixelToAxis(AxisPixelOf(point)));
 
     public bool IsInPlot(ScreenPoint point) =>
         point.X >= PlotLeft && point.X <= PlotRight && point.Y >= PlotTop && point.Y <= PlotBottom;
@@ -106,24 +173,27 @@ public sealed record GraphViewport(double TimeStart, double TimeEnd, double Axis
     /// <summary>Moved by this many sim seconds (positive moves the view later).</summary>
     public GraphViewport PanTime(double seconds) => this with { TimeStart = TimeStart + seconds, TimeEnd = TimeEnd + seconds };
 
-    /// <summary>Moved by this many pixels across, as a drag would (dragging right shows earlier times).</summary>
-    public GraphViewport PanPixels(double dx) => PanTime(-dx / PlotWidth * TimeSpan);
+    /// <summary>
+    /// Moved by this many pixels along the time direction, as a drag would: dragging right (down when vertical)
+    /// shows earlier times.
+    /// </summary>
+    public GraphViewport PanTimePixels(double pixels) => PanTime(-pixels / TimeLength * TimeSpan);
 
     /// <summary>
-    /// Zoomed in time about the pixel column <paramref name="anchorX"/>, which keeps its time. A factor above 1 zooms
+    /// Zoomed in time about the time pixel <paramref name="anchorPixel"/>, which keeps its time. A factor above 1 zooms
     /// in. The span is held between <see cref="MinTimeSpan"/> and <see cref="MaxTimeSpan"/>.
     /// </summary>
-    public GraphViewport ZoomTime(double factor, double anchorX)
+    public GraphViewport ZoomTime(double factor, double anchorPixel)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(factor);
-        var anchor = XToTime(anchorX);
+        var anchor = PixelToTime(anchorPixel);
         var span = Math.Clamp(TimeSpan / factor, MinTimeSpan, MaxTimeSpan);
         var share = (anchor - TimeStart) / TimeSpan;
         var start = anchor - (share * span);
         return this with { TimeStart = start, TimeEnd = start + span };
     }
 
-    /// <summary>The same view, re-centred so <paramref name="now"/> sits <paramref name="nowFraction"/> of the way across (follow mode).</summary>
+    /// <summary>The same view, re-centred so <paramref name="now"/> sits <paramref name="nowFraction"/> of the way along (follow mode).</summary>
     public GraphViewport Follow(double now, double nowFraction = 1.0 / 3)
     {
         var start = now - (TimeSpan * nowFraction);
@@ -131,21 +201,21 @@ public sealed record GraphViewport(double TimeStart, double TimeEnd, double Axis
     }
 
     /// <summary>
-    /// Zoomed along the corridor about the pixel row <paramref name="anchorY"/>, which keeps its axis position. A
+    /// Zoomed along the corridor about the axis pixel <paramref name="anchorPixel"/>, which keeps its axis position. A
     /// factor above 1 zooms in. The view never shows more than the whole padded corridor, nor less than
     /// <see cref="MinAxisSpan"/> of it.
     /// </summary>
-    public GraphViewport ZoomAxis(double factor, double anchorY)
+    public GraphViewport ZoomAxis(double factor, double anchorPixel)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(factor);
-        var anchor = YToAxis(anchorY);
+        var anchor = PixelToAxis(anchorPixel);
         var span = Math.Clamp(AxisSpan / factor, MinAxisSpan, FullAxisEnd - FullAxisStart);
         var share = (anchor - AxisStart) / AxisSpan;
         return WithAxis(anchor - (share * span), span);
     }
 
-    /// <summary>Moved along the corridor by this many pixels, as a drag would, but never past either padded end.</summary>
-    public GraphViewport PanAxisPixels(double dy) => WithAxis(AxisStart - (dy / PlotHeight * AxisSpan), AxisSpan);
+    /// <summary>Moved along the corridor by this many axis pixels, as a drag would, but never past either padded end.</summary>
+    public GraphViewport PanAxisPixels(double pixels) => WithAxis(AxisStart - (pixels / AxisLength * AxisSpan), AxisSpan);
 
     /// <summary>The same time range, showing the whole corridor.</summary>
     public GraphViewport WithFullAxis() => this with { AxisStart = FullAxisStart, AxisEnd = FullAxisEnd };

@@ -99,12 +99,12 @@ public sealed class GraphNavigatorTests
     {
         var nav = Navigator();
         nav.SetFollowing(false);
-        var cursor = nav.Viewport.XToTime(700);
+        var cursor = nav.Viewport.PixelToTime(700);
 
         nav.Wheel(-240, 700, 200);
 
         nav.Viewport.TimeSpan.Should().BeApproximately(3 * 3600 * GraphNavigator.WheelZoomStep * GraphNavigator.WheelZoomStep, 1e-6);
-        nav.Viewport.XToTime(700).Should().BeApproximately(cursor, 1e-6);
+        nav.Viewport.PixelToTime(700).Should().BeApproximately(cursor, 1e-6);
     }
 
     [Fact]

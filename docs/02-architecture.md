@@ -18,6 +18,8 @@ Stringline.sln
 │  ├─ Stringline.*.Tests/       xUnit + FluentAssertions 7.x (+ Verify for snapshot tests)
 │  ├─ Stringline.Architecture.Tests/  guards the WPF/portability rule below
 │  └─ fixtures/                 sample .wtt, .sslog recordings, profiles
+├─ benchmarks/
+│  └─ Stringline.Benchmarks/    net10.0   BenchmarkDotNet: graph frame times against the GR-9 budget (S9)
 └─ docs/
 ```
 
@@ -96,14 +98,19 @@ LiveState            // reducer: Apply(GatewayEvent) → clock, live trains + ma
 WttReader            // .wtt (zip) or SavedTimetable.xml → WttImportResult(WorkingTimetable, Warnings, UnknownElements, SkippedTrains); tolerant, see 04-…md §1
 
 // Stringline.Graph (S7) — portable; draws to any SKCanvas
-GraphViewport        // time range across × axis range down, surface size, margins; ToScreen/ToWorld, PanPixels, ZoomTime(anchor), Follow(now), Around(now, span, fraction)
-GraphScene           // per corridor, world coordinates (sim seconds, axis 0..1): GraphLocation[], GraphPath[] (layer, train, headcode, colour, vertices), Now
-GraphSceneBuilder    // pure: GraphSceneRequest(profile, corridor, timetable?, live trains, now) → GraphScene; WTT + actual layers (plan/forecast from S10/S11)
+GraphViewport        // time range × axis range, surface size, margins, Orientation (S9: Horizontal, or Vertical = time down, Up end left); ToScreen/ToWorld, TimeToPixel/AxisToPixel, PanTimePixels, ZoomTime(anchor), Follow(now), Around(now, span, fraction), WithOrientation
+GraphScene           // per corridor, world coordinates (sim seconds, axis 0..1): GraphLocation[], GraphPath[] (layer, train, headcode, colour, vertices, S9: per-segment colours), Now
+GraphSceneBuilder    // pure: GraphSceneRequest(profile, corridor, timetable?, live trains, now, ColourMode) → GraphScene; WTT + actual layers (plan/forecast from S10/S11)
+DelayBands           // S9: GraphColourMode (Category | Delay); band of a delay (≤0 / 1–5 / 6–15 / >15 min) and its colour
 TimeGrid             // tick spacing from zoom (5 min / 30 min at a 3 h view), hour lines heaviest
-SkiaGraphRenderer    // Render(SKCanvas, scene, viewport), RenderPng; pooled paints, culling by path bounds, greedy headcode labels; GraphTheme, GraphFonts (embedded Noto Sans)
+SkiaGraphRenderer    // Render(SKCanvas, scene, viewport, selection?), RenderPng(…, scale); pooled paints, culling by path bounds, headcode labels; GraphTheme, GraphFonts (embedded Noto Sans)
+  ProjectedPathCache //   S9: SKPaths projected once per zoom, drawn translated while panning; a new scene re-projects only changed paths and reports where drawing changed
+  PathTileCache      //   S9: the unselected lines as 256 px device tiles; panning blits, a live update redraws the tiles under changed trains (05-…md §7)
+  LabelGrid          //   S9: uniform grid of placed label rectangles for the overlap check
 SkiaGraphRenderer.Render(…, GraphSelection?) // S8: the selected train (WTT train and/or live uid) heavy with a halo, the rest dimmed
-GraphNavigator       // S8: pan/zoom/follow state for one surface, toolkit-free: Resize, Tick(now), Wheel (Ctrl = corridor, Shift = pan), drag, presets, CentreOn
-GraphHitTester       // S8: nearest projected segment within 5 px, actual preferred over WTT; linear scan (grid in S9) → GraphHit(path, segment, nearest vertex, time)
+GraphNavigator       // S8: pan/zoom/follow state for one surface, toolkit-free: Resize, Tick(now), Wheel (Ctrl = corridor, Shift = pan), drag, presets, CentreOn; S9: SetOrientation
+GraphHitTester       // S8: nearest projected segment within 5 px, actual preferred over WTT; linear scan → GraphHit(path, segment, nearest vertex, time)
+GraphHitIndex        // S9: the same answers from a 16 px grid over one scene × viewport; the app keeps one until the view or scene changes
 GraphHover           // S8: GraphHit + scene + LiveSnapshot → HoverInfo (location, WTT and actual times, delay, match, train)
 
 // Stringline.Planning (S8)

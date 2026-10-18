@@ -355,6 +355,76 @@
 - Hit testing scans every path in view; that is fine for Waterloo, and S9 adds the grid.
 - The UI language is the WPF default (en-US) for number and date formatting in controls. Everything we format ourselves is invariant `HH:mm:ss`.
 
+## 2026-10-19 — S9: Graph performance and polish
+
+### Done
+- **Performance (GR-9), in `Stringline.Graph`:**
+  - **`ProjectedPathCache`.** Paths are projected to `SKPath`s once per zoom and drawn translated, so panning, following and scrolling along the corridor never re-project. A new scene keeps every path whose key, colours and vertices are unchanged, and reports where drawing changed (for a train that moved on, only its last stretch).
+  - **`PathTileCache`.** The unselected lines are kept as 256 px tiles at device resolution.
+    - A pan blits the tiles, drawing only those new to the view. A live update redraws only the tiles under the changed stretches. A zoom, resize, turn, DPI change or new selection drops them all.
+    - The frame that changes the zoom draws directly; the next frame builds the tiles in one pass. The projection is aligned so tiles land on whole device pixels.
+    - `RenderPng` draws directly. `SkiaGraphRenderer.CacheTiles` can turn the tiles off.
+  - **`LabelGrid`.** Labels are checked for overlap against a grid of 48 px cells, not a list.
+  - **`GraphHitIndex`.** A 16 px grid over one scene and viewport, with the same answers as `GraphHitTester`'s linear scan (checked point by point on Waterloo in both orientations). The app's graph keeps one until the scene or view changes.
+  - `GraphPath` bounds are worked out once, not with LINQ every frame.
+- **Benchmark:** new `benchmarks/Stringline.Benchmarks` (BenchmarkDotNet 0.15.8, MIT). It uses a synthetic corridor of 30 locations with 500 (or 1 000) trains over 06:00–12:00, now at 08:00, and actuals coloured by delay band per segment (the most runs per path), drawn at 1920×1080 on a CPU surface. `--quick` gives rough timings in seconds. Results are below.
+- **Vertical orientation (GR-1).**
+  - `GraphViewport.Orientation`: time down, with the Up end on the left (Fred). The transforms work in time and axis pixels (`TimeToPixel`, `AxisToPixel`, `PanTimePixels`, `TimePixelOf`…), replacing the X/Y-named members. So the scene, caches, hit testing and navigator gestures work in either orientation.
+  - The renderer swaps the grid, past shading and now line. Times are labelled down the left, and location names along the top, rotated to read upwards, with the TIPLOC beside them. `GraphNavigator.SetOrientation` keeps the ranges.
+- **Delay-band colouring (GR-7).**
+  - `GraphColourMode` and `DelayBands` (≤ 0 / 1–5 / 6–15 / > 15 min, rounded towards zero).
+  - `GraphSceneBuilder` colours each actual segment by the band at the point it arrives at (Fred: per segment). An unbooked point carries the last delay; the start takes the first known delay. Matched trains with none are grey.
+  - `GraphPath.SegmentColours` is drawn as single-colour runs, and labels take their segment's colour.
+- **PNG export (GR-10).** `RenderPng(…, scale)`. In the app, Session ▸ Export graph as PNG… (Ctrl+E), or at 2×, saves the current view (Fred). That is the time and corridor range, orientation, colours, selection and now line, through a save dialog that starts at `Documents\Stringline\exports\{area}-{corridor}-{HHmm}.png`, then at the folder last used.
+- **App.** A toolbar Colour box (Category/Delay) and ⇅ Vertical toggle, also in the View menu, remembered in the settings (`ColourByDelay`, `VerticalGraph`, `LastExportFolder`). The train list's swatch follows the colour mode. `AppPaths.Exports` and `IDialogService.PickSaveFile` are added.
+- **CLI.** `render-png --vertical --colour category|delay`.
+- **Tests:**
+  - Graph +46 (143):
+    - orientation: transforms, round trips, turning, navigator gestures, hit testing, rendering, and a vertical snapshot;
+    - delay bands: thresholds, the carry rules, scene colours and drawn segment colours;
+    - caches: no re-projection while panning, re-projection on zoom, only changed paths re-projected, cached frames matching fresh renders, PNG scale, label grid, the hit index against the linear scan;
+    - tiles: matching direct drawing at 1×, 1.25× and 1.5× with a selection, reuse while panning, redraws only under moved trains, and no stale tiles after a direct render;
+    - Waterloo: a vertical, delay-coloured snapshot, and the hit index against the linear scan in both orientations.
+  - Tools +1 (vertical and delay render), App +4 (options remembered, recolouring, export, failed export).
+  - Totals: 987 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 103, Planning 22, Graph 143, Tools 56, App 37). Green on Windows (Release; the Debug build could not copy into the App's `bin` while a running Stringline held it) and on Linux (`sdk:10.0` container, portable filter, Release: 950).
+
+### Benchmark (500 trains / 6 h, 1920×1080, CPU raster, this PC)
+BenchmarkDotNet 0.15.8, short job, i7-9750H, .NET 10.0.11. Mean frame times in ms:
+
+| | 500 trains, horizontal | 500, vertical | 1 000, horizontal | 1 000, vertical |
+|---|---:|---:|---:|---:|
+| **Pan frame (tiles)** | **13.7** (median 13.6) | **9.5** (median 7.1) | **9.8** | **7.8** |
+| Pan frame, drawn directly (as S8 did) | 36.2 | 34.0 | 58.3 | 57.7 |
+| Zoom frame (draws directly) | 39.7 | 37.4 | 62.1 | 69.1 |
+| Live update, unchanged scene | 7.4 | 6.6 | 10.0 | 10.7 |
+| Hit index build | 8.2 | 10.6 | 25.9 | 30.1 |
+| 100 hover tests, grid | 0.08 | 0.12 | 0.17 | 0.28 |
+| 100 hover tests, linear scan | 3.7 | 4.1 | 7.0 | 8.5 |
+
+So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. Short-job errors are large on a laptop. `--quick` gives pan frames of 5–9 ms on the same machine.
+
+### Decisions
+- **Fred's choices:** vertical has time down and the Up end on the left; delay bands are per segment; export saves the current view through a save dialog, at 1× or 2×.
+- **Tiles, not only path caching.** Measured, anti-aliased rasterisation is nearly all of a direct frame: pre-stroked outlines fill as slowly as stroking, and lines drawn one segment at a time are no faster. Projection caching alone saved about 3 ms of 30–37 ms. Panning from tiles takes about 5–7 ms.
+- **Tiles use the platform's pixel format** (`SKImageInfo.PlatformColorType`). RGBA tiles on Windows (BGRA) took Skia's slow blitter path and cost three times as much.
+- **A zoom frame draws directly,** because building tiles costs about two direct frames. The next frame at that zoom builds them. So continuous zooming runs at direct speed (about 30–35 ms at this size), and a pan or follow tick after it pays once.
+- **Pixel snapping.** The projection is aligned so tiles sit on whole device pixels. After a pan by a fraction of a pixel, tiled lines can be up to half a pixel from the exact position. The grid, now line, labels and selected train are not snapped.
+- **The hit index is built lazily** on the first hover after the scene or view changes: about 8–12 ms for 500 trains, then 0.003 ms a test.
+- **View settings are booleans in `settings.json`** (`ColourByDelay`, `VerticalGraph`), so the JSON stays readable without an enum converter.
+- **`render-png` keeps its default look;** `--vertical` and `--colour delay` are opt-in.
+- **The benchmark project is in the portable filter**, so the Linux build compiles it. It is not a test project.
+
+### Next
+- S10: `PlanningEngine` with commands and undo, publishing a `PlanSnapshot`; the plan layer draws through the same caches.
+- S11/S12: forecast lines (dashed) are drawn by the same renderer; the dash pattern is phase-stable under translation.
+
+### Known issues
+- **Not yet tried in the app by hand this session for feel** (it builds and the view models are tested). 👤 Fred: please try panning, the Vertical toggle, Colour → Delay and Export on a live or replayed sim, especially on a high-DPI screen.
+- Tile memory: up to 1.5× the tiles in view (at least 64), 256 KB each; about 20 MB at 1080p and about 50 MB at 4K at 200%.
+- In the vertical view, long location names are cut off at the top margin (170 px).
+- A zoom frame still costs a direct draw (about 37–40 ms for 500 trains at 1920×1080 here, 60–70 ms for 1 000); only panning, following and live updates are well within the budget.
+- PDF export (GR-10) is not built; PNG only.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

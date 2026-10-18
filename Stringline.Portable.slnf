@@ -10,6 +10,7 @@
       "src\\Stringline.Persistence\\Stringline.Persistence.csproj",
       "src\\Stringline.Graph\\Stringline.Graph.csproj",
       "src\\Stringline.Tools\\Stringline.Tools.csproj",
+      "benchmarks\\Stringline.Benchmarks\\Stringline.Benchmarks.csproj",
       "tests\\Stringline.Core.Tests\\Stringline.Core.Tests.csproj",
       "tests\\Stringline.Gateway.Tests\\Stringline.Gateway.Tests.csproj",
       "tests\\Stringline.Timetable.Tests\\Stringline.Timetable.Tests.csproj",
