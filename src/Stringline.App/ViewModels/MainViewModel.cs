@@ -40,7 +40,7 @@ internal enum InfoSeverity
 /// </summary>
 internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 {
-    private readonly LiveEngine _engine;
+    private readonly PlanningEngine _engine;
     private readonly SessionRecorder _recorder;
     private readonly TimetableLoader _loader;
     private readonly AppSettingsStore _settingsStore;
@@ -57,7 +57,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private string? _recordingName;
     private ReplayOptions? _replayOptions;
     private LoadedTimetable? _timetable;
-    private LiveSnapshot? _latestSnapshot;
+    private PlanSnapshot? _latestSnapshot;
     private int _snapshotQueued;
     private bool _building;
     private bool _sceneDirty;
@@ -67,7 +67,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private bool _syncingSelection;
 
     public MainViewModel(
-        LiveEngine engine,
+        PlanningEngine engine,
         SessionRecorder recorder,
         TimetableLoader loader,
         AppSettingsStore settingsStore,
@@ -122,7 +122,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public SimSession? Session => _session;
 
     [ObservableProperty]
-    public partial LiveSnapshot Snapshot { get; private set; }
+    public partial PlanSnapshot Snapshot { get; private set; }
 
     [ObservableProperty]
     public partial GraphScene? Scene { get; private set; }
@@ -681,7 +681,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         UpdateConnection();
     });
 
-    private void OnSnapshotPublished(object? sender, LiveSnapshot snapshot)
+    private void OnSnapshotPublished(object? sender, PlanSnapshot snapshot)
     {
         Volatile.Write(ref _latestSnapshot, snapshot);
         if (Interlocked.Exchange(ref _snapshotQueued, 1) == 0)

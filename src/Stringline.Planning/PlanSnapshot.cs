@@ -6,22 +6,28 @@ using Stringline.Timetable.Live;
 namespace Stringline.Planning;
 
 /// <summary>
-/// An immutable picture of the live sim, published by <see cref="LiveEngine"/> for the UI to read without locks: the
-/// timetable in use, every live train, the clock and the match counts. S10 grows this into the <c>PlanSnapshot</c>.
+/// An immutable picture published by <see cref="PlanningEngine"/> for the UI to read without locks: the timetable in
+/// use, every live train, the clock and match counts, and the working plan with its edit history.
 /// </summary>
 /// <param name="Sequence">Goes up by one with every snapshot published.</param>
 /// <param name="Timetable">The WTT in use, or null if none is loaded yet (every working is then unmatched).</param>
 /// <param name="Trains">Live trains in the order first seen.</param>
 /// <param name="StateVersion"><see cref="LiveState.Version"/> when taken; a reader can skip work if it has not changed.</param>
 /// <param name="SessionStart">The sim time of the first clock or movement this session.</param>
-public sealed class LiveSnapshot(
+/// <param name="Plan">The working plan (the WTT as booked if there are no edits; empty with no timetable).</param>
+/// <param name="History">The plan's edit history, for undo and redo.</param>
+/// <param name="PlanVersion">Goes up whenever the plan changes (an edit, undo, redo or new timetable).</param>
+public sealed class PlanSnapshot(
     long Sequence,
     WorkingTimetable? Timetable,
     IReadOnlyList<LiveTrain> Trains,
     SimClockReading Clock,
     MatchSummary Matches,
     long StateVersion,
-    SimTime? SessionStart)
+    SimTime? SessionStart,
+    WorkingPlan? Plan = null,
+    PlanHistory? History = null,
+    long PlanVersion = 0)
 {
     private Dictionary<TrainId, (LiveTrain Train, int Working)>? _byTrain;
     private Dictionary<string, LiveTrain>? _byUid;
@@ -40,8 +46,14 @@ public sealed class LiveSnapshot(
 
     public SimTime? SessionStart { get; } = SessionStart;
 
+    public WorkingPlan Plan { get; } = Plan ?? WorkingPlan.Empty;
+
+    public PlanHistory History { get; } = History ?? PlanHistory.Empty;
+
+    public long PlanVersion { get; } = PlanVersion;
+
     /// <summary>Before anything has happened.</summary>
-    public static LiveSnapshot Empty { get; } = new(0, null, [], SimClockReading.None, new MatchSummary(0, 0, 0, 0, 0, new Dictionary<MatchMethod, int>()), 0, null);
+    public static PlanSnapshot Empty { get; } = new(0, null, [], SimClockReading.None, new MatchSummary(0, 0, 0, 0, 0, new Dictionary<MatchMethod, int>()), 0, null);
 
     /// <summary>The sim's area ID from the clock, if one has been seen.</summary>
     public string? AreaId => Clock.AreaId;

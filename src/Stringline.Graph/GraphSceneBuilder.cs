@@ -22,19 +22,25 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
 
     public bool ShowWtt { get; init; } = true;
 
+    /// <summary>The working plan: trains whose plan differs from the WTT (and clones) draw on the plan layer, except cancelled ones.</summary>
+    public WorkingPlan? Plan { get; init; }
+
+    public bool ShowPlan { get; init; } = true;
+
     public bool ShowActual { get; init; } = true;
 
     /// <summary>Colour actual lines by category (the default) or by delay band.</summary>
     public GraphColourMode ColourMode { get; init; } = GraphColourMode.Category;
 
-    /// <summary>A request for the timetable and live trains of a <see cref="LiveSnapshot"/>, with the now line at its last reported clock.</summary>
-    public static GraphSceneRequest For(StringlineProfile profile, Corridor corridor, LiveSnapshot snapshot)
+    /// <summary>A request for the timetable and live trains of a <see cref="PlanSnapshot"/>, with the now line at its last reported clock.</summary>
+    public static GraphSceneRequest For(StringlineProfile profile, Corridor corridor, PlanSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         return new GraphSceneRequest(profile, corridor)
         {
             Timetable = snapshot.Timetable,
             LiveTrains = snapshot.Trains,
+            Plan = snapshot.Plan,
             Now = snapshot.Clock.HasTime ? snapshot.Clock.LastReported : null,
         };
     }
@@ -74,6 +80,17 @@ public static class GraphSceneBuilder
             }
         }
 
+        if (request.ShowPlan && request.Plan is { } plan)
+        {
+            foreach (var train in plan.Modified)
+            {
+                if (!train.Cancelled)
+                {
+                    AddPlan(paths, corridor, train, profile.StyleFor(train.CategoryId).Colour);
+                }
+            }
+        }
+
         if (request.ShowActual)
         {
             foreach (var live in request.LiveTrains)
@@ -99,26 +116,47 @@ public static class GraphSceneBuilder
         var builder = new PathAccumulator(corridor);
         foreach (var point in train.Points)
         {
-            if (!point.IsTimed)
-            {
-                continue;
-            }
-
-            if (point.IsPass || point.Arrive is null || point.Depart is null || point.Depart <= point.Arrive)
-            {
-                builder.Add(point.Location, point.FirstTime!.Value);
-            }
-            else
-            {
-                builder.Add(point.Location, point.Arrive.Value);
-                builder.Add(point.Location, point.Depart.Value);
-            }
+            AddBooked(builder, point.Location, point.Arrive, point.Depart, point.IsPass);
         }
 
-        var key = $"wtt:{train.Id}";
+        AddPaths(paths, corridor, builder, $"wtt:{train.Id}", GraphLayer.Wtt, train.Id, train.Headcode, colour);
+    }
+
+    private static void AddPlan(List<GraphPath> paths, Corridor corridor, TrainPlan train, Colour colour)
+    {
+        var builder = new PathAccumulator(corridor);
+        foreach (var point in train.RunningPoints)
+        {
+            AddBooked(builder, point.Location, point.Arrive, point.Depart, point.IsPass);
+        }
+
+        AddPaths(paths, corridor, builder, $"plan:{train.Id}", GraphLayer.Plan, train.Id, train.Headcode, colour);
+    }
+
+    /// <summary>A booked or planned point: one vertex for a pass or a point with one time, two for a stop with a dwell.</summary>
+    private static void AddBooked(PathAccumulator builder, Tiploc location, SimTime? arrive, SimTime? depart, bool isPass)
+    {
+        if (arrive is null && depart is null)
+        {
+            return;
+        }
+
+        if (isPass || arrive is null || depart is null || depart <= arrive)
+        {
+            builder.Add(location, (arrive ?? depart)!.Value);
+        }
+        else
+        {
+            builder.Add(location, arrive.Value);
+            builder.Add(location, depart.Value);
+        }
+    }
+
+    private static void AddPaths(List<GraphPath> paths, Corridor corridor, PathAccumulator builder, string key, GraphLayer layer, TrainId train, Headcode headcode, Colour colour)
+    {
         foreach (var (segment, index, count) in builder.Finish())
         {
-            paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", GraphLayer.Wtt, train.Id, train.Headcode, colour,
+            paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", layer, train, headcode, colour,
                 segment.Vertices, Direction: corridor.DirectionOf(segment.Locations)));
         }
     }

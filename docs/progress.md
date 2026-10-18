@@ -425,6 +425,61 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - A zoom frame still costs a direct draw (about 37–40 ms for 500 trains at 1920×1080 here, 60–70 ms for 1 000); only panning, following and live updates are well within the budget.
 - PDF export (GR-10) is not built; PNG only.
 
+## 2026-10-19 — S10: Working plan, commands, undo/redo
+
+### Done
+- **Working plan (`Stringline.Planning`).** The rules are written up in `06-…md` §1.
+  - `WorkingPlan` is immutable: the WTT with commands applied in order. It holds `TrainPlan`s made of `PlannedPoint`s (WTT trains in file order, then clones), disruptions and manual live links. It offers `Apply`/`ApplyAll`, `Modified`, `NewCloneId` and `FromTimetable`.
+  - `WorkingPlanBuilder` is the mutable side that commands work through. It clamps a change that shortens a run below the minimum, or moves a departure before the arrival. Each clamp gives a `PlanWarning` with the message shown to the user. A command that fails or throws is rolled back.
+  - `MinRunTable` holds the fastest booked run per location pair (either way, less allowances).
+  - `Disruption` (Block / SpeedRestriction) covers runs between calls at its two ends. A speed restriction lengthens the minimum while it is in force.
+- **Commands:** every one in `06-…md` §1 — `ShiftTrain`, `SetDwell`, `ChangePlatform`, `ChangeLine`, `SkipStop`, `AddStop`, `TerminateAt`, `CancelTrain`, `ReinstateTrain`, `CloneTrain`, `AddDisruption`/`EditDisruption`/`RemoveDisruption`, `LinkLiveTrain` and `AcceptSuggestion` (all-or-nothing) — plus `UnlinkLiveTrain`.
+  - `IPlanCommand.Describe(plan)` gives the history text, e.g. "Shift 1A01 by +5 min from B".
+  - `PlanCommandJson` serialises commands with a `type` discriminator, ready for S16's session store.
+- **`PlanningEngine`** replaces `LiveEngine`, and `PlanSnapshot` replaces `LiveSnapshot`; the files were renamed and the App now uses the new names.
+  - `Execute(command)` returns a task with the `PlanCommandResult`. `Undo()`/`Redo()` return whether anything changed.
+  - A plan change publishes straight away. The snapshot carries `Plan`, `History` (`Done`/`Undone`, `UndoDescription`…) and `PlanVersion`.
+  - Undo replays the remaining history over the WTT. Reloading the same timetable keeps the history; a different one, or `Clear`, starts a new one.
+  - Links: the live state is rebuilt with the plan's links when they change, so a manual link undoes.
+- **Graph:** `GraphSceneRequest.Plan` and `ShowPlan`. Trains whose plan differs from the WTT, and clones, draw on the plan layer (1.5 px solid). Cancelled trains are not drawn there. A train terminated short draws to its new end.
+- **Tests:**
+  - Planning +71 (93):
+    - every command, with its errors and clamps (cascade, dwell, origin, speed restrictions in and out of force, blocks);
+    - descriptions;
+    - the minimum run table;
+    - disruption coverage;
+    - JSON round trips of every command;
+    - determinism: incremental equals all-at-once, and JSON-replayed equals direct;
+    - the engine: execute, refuse, a throwing command, warnings, undo/redo, redo cleared, reload kept or dropped, a different timetable, clear, links that rematch and undo;
+    - a Waterloo fixture that re-plans every train, is deterministic, takes under 2 s (it is milliseconds) and never leaves a shortened run below the minimum.
+  - Graph +2: the plan layer, and termination.
+  - Totals: 1 060 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 103, Planning 93, Graph 145, Tools 56, App 37). Green on Windows (Debug) and on Linux (`sdk:10.0` container, portable filter, Release: 1 023; the tree is streamed in with tar, skipping `.vs`, `bin` and `obj`).
+
+### Decisions
+- **Fred's choices:**
+  - The minimum run time is the **fastest WTT run per location pair**.
+  - The **disruption model and its commands are in S10**, and speed restrictions affect clamping.
+  - **`LinkLiveTrain` is undoable**: it goes through the plan history.
+- **Edits never add or remove points.** Indices are WTT point indices. Skip/add stop convert between stop and pass, and termination keeps the points it no longer runs to, so commands stay valid and plans compare point by point.
+- **Only runs and dwells that a command shortens are clamped**, so tight WTT bookings elsewhere are not "fixed" as a side effect. A clamped point pushes the next only if that run is then too short too, so a late train uses up its slack.
+- **A pair with no direct booked run has no minimum** (only order is kept), rather than a 60 s default as for corridor sections. That pair is only reachable across untimed points, where the steps are summed.
+- **Disruptions do not re-plan existing trains** when added or edited. Their effect on running belongs to the forecaster (S11/S13). They only lengthen the minimum for later edits.
+- **`IPlanCommand.Describe` takes the plan**, so the history names trains by headcode (a change to `02-…md`'s sketch).
+- **A no-op is refused** ("This makes no change to the plan."), so it never enters the history.
+- **Clone IDs** are `{headcode}#c{n}`, chosen by the caller and kept in the command for replay.
+- **`LiveEngine.Rebuild` used to carry links over from the live state; the plan now owns them.** `LiveState.Link` is only called by the engine.
+
+### Next
+- S11: the forecaster reads `PlanSnapshot.Plan` (`RunningPoints`, `Disruptions`, `MinRuns`) and adds the forecast layer.
+- S12: the detail panel and drag edits build commands for `PlanningEngine.Execute`. Show `PlanCommandResult.Warnings`/`Error` in the info bar. Bind Ctrl+Z/Ctrl+Y to `Undo`/`Redo`, and list `History` as the edit history. Give cancelled trains their style (thin grey with crosses).
+- S16: store `PlanCommandJson` per history entry, and restore it by replaying.
+
+### Known issues
+- **No UI for editing yet** (S12). The App only renames to the new engine; nothing in the shell sends commands.
+- Clones are never matched to live trains: the matcher only knows the WTT, and `LinkLiveTrain` accepts only WTT trains.
+- The hover tooltip still shows WTT times only; it does not show the plan's.
+- An undo replays the whole history over the WTT. For Waterloo with a command per train this takes milliseconds, so there is no caching.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

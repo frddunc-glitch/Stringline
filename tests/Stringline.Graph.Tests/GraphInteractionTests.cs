@@ -20,7 +20,7 @@ public sealed class GraphInteractionTests
     private static readonly LiveTrain Unknown = Live("902", "9Z99", MatchStatus.Unmatched, null,
         ("D", TrainLocationAction.Depart, "06:50"), ("C", TrainLocationAction.Arrive, "06:58"));
 
-    private static readonly LiveSnapshot Snapshot = new(1, Timetable, [Express, Unknown], SimClockReading.None,
+    private static readonly PlanSnapshot Snapshot = new(1, Timetable, [Express, Unknown], SimClockReading.None,
         new MatchSummary(2, 2, 1, 0, 1, new Dictionary<MatchMethod, int>()), 1, null);
 
     private static readonly GraphScene Scene = GraphSceneBuilder.Build(GraphSceneRequest.For(Profile, TestCorridor, Snapshot));
@@ -162,7 +162,7 @@ public sealed class GraphInteractionTests
     {
         var live = Live("903", "2B02", MatchStatus.Matched, "2B02",
             ("D", TrainLocationAction.Depart, "07:06"), ("C", TrainLocationAction.Arrive, "07:11"), ("C", TrainLocationAction.Depart, "07:13:20"));
-        var snapshot = new LiveSnapshot(1, Timetable, [live], SimClockReading.None, Snapshot.Matches, 1, null);
+        var snapshot = new PlanSnapshot(1, Timetable, [live], SimClockReading.None, Snapshot.Matches, 1, null);
         var scene = GraphSceneBuilder.Build(GraphSceneRequest.For(Profile, TestCorridor, snapshot));
         var path = scene.InLayer(GraphLayer.Actual).Single();
         var hit = new GraphHit(path, 1, 0, 2, path.Vertices[2].Time);

@@ -39,7 +39,7 @@ internal sealed record SessionStatus(SessionState State, string? Detail = null, 
 }
 
 /// <summary>
-/// One source of gateway events feeding the <see cref="LiveEngine"/>: a live SimSig connection (optionally recorded)
+/// One source of gateway events feeding the <see cref="PlanningEngine"/>: a live SimSig connection (optionally recorded)
 /// or a replayed <c>.sslog</c>. Status changes are raised from background threads.
 /// </summary>
 internal sealed partial class SimSession : IAsyncDisposable
@@ -92,7 +92,7 @@ internal sealed partial class SimSession : IAsyncDisposable
     public Task Completion => _pump;
 
     /// <summary>Connect to SimSig and feed the engine. A recorder, if given, sees every frame and connection change.</summary>
-    public static SimSession StartLive(GatewayClientOptions options, LiveEngine engine, SessionRecorder? recorder, ILoggerFactory loggerFactory)
+    public static SimSession StartLive(GatewayClientOptions options, PlanningEngine engine, SessionRecorder? recorder, ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(engine);
@@ -110,7 +110,7 @@ internal sealed partial class SimSession : IAsyncDisposable
     }
 
     /// <summary>Replay a recording into the engine.</summary>
-    public static SimSession StartReplay(SslogRecording recording, string fileName, ReplayOptions options, LiveEngine engine, ILoggerFactory loggerFactory)
+    public static SimSession StartReplay(SslogRecording recording, string fileName, ReplayOptions options, PlanningEngine engine, ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(recording);
         ArgumentNullException.ThrowIfNull(engine);
@@ -188,13 +188,13 @@ internal sealed partial class SimSession : IAsyncDisposable
         _stop.Dispose();
     }
 
-    private void Start(LiveEngine engine, ISimEventSource source)
+    private void Start(PlanningEngine engine, ISimEventSource source)
     {
         engine.Clear();
         _pump = Task.Run(() => PumpAsync(engine, source));
     }
 
-    private async Task PumpAsync(LiveEngine engine, ISimEventSource source)
+    private async Task PumpAsync(PlanningEngine engine, ISimEventSource source)
     {
         try
         {

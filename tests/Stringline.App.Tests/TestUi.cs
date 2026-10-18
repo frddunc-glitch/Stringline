@@ -154,7 +154,7 @@ internal sealed class TestApp : IAsyncDisposable
             Settings.Save(settings(new AppSettings()));
         }
 
-        Engine = new LiveEngine(new LiveEngineOptions { PublishInterval = TimeSpan.FromMilliseconds(20) });
+        Engine = new PlanningEngine(new PlanningEngineOptions { PublishInterval = TimeSpan.FromMilliseconds(20) });
         _engineLoop = Engine.RunAsync(_stop.Token);
         Recorder = new SessionRecorder();
         ViewModel = Ui.Run(() => new MainViewModel(
@@ -177,7 +177,7 @@ internal sealed class TestApp : IAsyncDisposable
 
     public AppSettingsStore Settings { get; }
 
-    public LiveEngine Engine { get; }
+    public PlanningEngine Engine { get; }
 
     public SessionRecorder Recorder { get; }
 

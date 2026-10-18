@@ -79,7 +79,7 @@ Per location, ordered list of upcoming movements in the working-plan order, high
 
 ## 7. Rendering design (Stringline.Graph)
 
-Built in S7 and S9 as below, except that the scene builder takes a `GraphSceneRequest` (profile, corridor, WTT, live trains, now, colour mode) until S10 provides `PlanSnapshot`.
+Built in S7 and S9 as below, except that the scene builder takes a `GraphSceneRequest` (profile, corridor, WTT, live trains, now, colour mode) built from a `PlanSnapshot` by `GraphSceneRequest.For`. S10 adds the plan layer: every train whose working plan differs from the WTT, and every clone, as the "working plan" style below; cancelled trains are not drawn there yet (S12 adds their style), and the WTT layer still shows the booking.
 
 - **Performance (S9, GR-9).** Anti-aliased stroking is most of a frame's cost, so the renderer avoids doing it again:
   - **Projected paths** (`ProjectedPathCache`). Each path is projected to an `SKPath` once per zoom, relative to a reference time, and drawn with the canvas translated. Panning, following and scrolling along the corridor are therefore translations. A new scene keeps the paths whose key, colours and vertices are unchanged, and reports the world rectangles that draw differently (for a train that moved on, only its last stretch).

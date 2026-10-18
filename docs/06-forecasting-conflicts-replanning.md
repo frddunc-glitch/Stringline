@@ -14,6 +14,16 @@
   - `AcceptSuggestion(suggestionId, commands[])` — a composite
 - Validation on apply: times monotonic; run time between points ≥ min run time (× disruption factor); depart ≥ arrive. Violations clamp and return a warning shown to the user.
 
+*Implemented in S10 (`Stringline.Planning`):* `WorkingPlan` (immutable: `TrainPlan`s, disruptions, live links), `WorkingPlanBuilder` (validation), the commands above plus `UnlinkLiveTrain`, `PlanCommandJson`, and `PlanningEngine` with undo/redo publishing `PlanSnapshot`s. The rules:
+- **Points are never added or removed.** A command's index is the WTT point index. `SkipStop` turns an intermediate stop into a pass at its arrival time; `AddStop` turns a pass into a stop arriving at the pass time. `TerminateAt` keeps the points it no longer runs to (`RunningPoints` ends with a terminating stop), so `ReinstateTrain` (which clears a cancellation and a short termination) brings them back.
+- **Minimum run time** (Fred): the fastest booked run between two locations by any WTT train, either way, less the allowances booked between them (`MinRunTable`). Across untimed points, the steps are summed (or the direct pair is used). A pair no train runs directly has no minimum, so only order is kept.
+- **Clamping:** only a run or dwell that the command *shortens* is checked, so a WTT that is already tighter than the table elsewhere is left as booked. A run below the minimum moves the point (and its dwell) later; a departure before the arrival moves to the arrival. Each clamp is a `PlanWarning`. A moved point shortens the next run, which is then checked in turn, so a later departure pushes the train on only as far as it must (it uses its slack).
+- **Disruptions** (S10 model, S13 UI): a speed restriction lengthens the minimum (`× factor + added`) for runs between calls at its two ends that depart while it is in force. A block never clamps (it becomes a conflict, S14). Adding or editing a disruption does not re-plan trains already in the plan.
+- **Clones** take the source's current plan, with the new headcode, moved by the delta, not cancelled. The new `TrainId` is in the command (`WorkingPlan.NewCloneId` gives `{headcode}#c1`, `#c2`…), so a replay gives the same train.
+- **Live links are commands** (Fred), so they undo. The engine rebuilds the live state with the plan's links whenever they change. Only WTT trains can be linked.
+- **A command that fails changes nothing**, and is not added to the history. A suggestion is all-or-nothing.
+- **History:** undo drops the last command and replays the rest over the WTT; a new command clears redo. Reloading the same timetable (same area and name) replays the history and drops commands that no longer apply; a different timetable, or `Clear`, starts a new history.
+
 ## 2. Forecaster (per corridor network, not per graph)
 
 Inputs: working plan, live actuals, clock, section min run times, disruptions, headways.

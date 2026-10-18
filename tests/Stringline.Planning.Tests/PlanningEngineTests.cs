@@ -7,7 +7,7 @@ using static Stringline.Timetable.Tests.Live.TestTimetable;
 
 namespace Stringline.Planning.Tests;
 
-public sealed class LiveEngineTests
+public sealed class PlanningEngineTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
@@ -24,14 +24,14 @@ public sealed class LiveEngineTests
         Location("11", "2X01", "VAUX", "07:05"),
     ];
 
-    private static LiveEngine Engine(TimeProvider? time = null, TimeSpan? interval = null) =>
-        new(new LiveEngineOptions { PublishInterval = interval ?? TimeSpan.Zero }, time);
+    private static PlanningEngine Engine(TimeProvider? time = null, TimeSpan? interval = null) =>
+        new(new PlanningEngineOptions { PublishInterval = interval ?? TimeSpan.Zero }, time);
 
     /// <summary>Runs the engine while <paramref name="act"/> posts, and returns the first snapshot that satisfies <paramref name="until"/>.</summary>
-    private static async Task<LiveSnapshot> RunUntil(LiveEngine engine, Func<LiveSnapshot, bool> until, Action act)
+    private static async Task<PlanSnapshot> RunUntil(PlanningEngine engine, Func<PlanSnapshot, bool> until, Action act)
     {
-        var found = new TaskCompletionSource<LiveSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
-        void OnPublished(object? sender, LiveSnapshot s)
+        var found = new TaskCompletionSource<PlanSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnPublished(object? sender, PlanSnapshot s)
         {
             if (until(s))
             {
@@ -60,7 +60,7 @@ public sealed class LiveEngineTests
     {
         var engine = Engine();
 
-        engine.Current.Should().BeSameAs(LiveSnapshot.Empty);
+        engine.Current.Should().BeSameAs(PlanSnapshot.Empty);
         engine.Current.Trains.Should().BeEmpty();
         engine.Current.Timetable.Should().BeNull();
         engine.Current.AreaId.Should().BeNull();
@@ -153,7 +153,7 @@ public sealed class LiveEngineTests
     {
         var time = new FakeTimeProvider(T0);
         var engine = Engine(time, TimeSpan.FromMilliseconds(100));
-        var snapshots = new List<LiveSnapshot>();
+        var snapshots = new List<PlanSnapshot>();
         var published = new SemaphoreSlim(0);
         engine.SnapshotPublished += (_, s) =>
         {

@@ -43,7 +43,7 @@ public partial class App : Application
         builder.Services.AddSingleton<AppSettingsStore>();
         builder.Services.AddSingleton(new ProfileStore(paths.Profiles));
         builder.Services.AddSingleton<TimetableLoader>();
-        builder.Services.AddSingleton(sp => new LiveEngine(timeProvider: sp.GetRequiredService<TimeProvider>(), loggerFactory: sp.GetRequiredService<ILoggerFactory>()));
+        builder.Services.AddSingleton(sp => new PlanningEngine(timeProvider: sp.GetRequiredService<TimeProvider>(), loggerFactory: sp.GetRequiredService<ILoggerFactory>()));
         builder.Services.AddSingleton(sp => new SessionRecorder(sp.GetRequiredService<TimeProvider>()));
         builder.Services.AddSingleton<IUiDispatcher>(new WpfUiDispatcher(Dispatcher));
         builder.Services.AddSingleton<IDialogService, WpfDialogService>();
@@ -114,7 +114,7 @@ public partial class App : Application
     }
 
     /// <summary>Runs the live engine's single-writer loop for the app's lifetime.</summary>
-    private sealed class EngineService(LiveEngine engine) : BackgroundService
+    private sealed class EngineService(PlanningEngine engine) : BackgroundService
     {
         protected override Task ExecuteAsync(CancellationToken stoppingToken) => engine.RunAsync(stoppingToken);
     }

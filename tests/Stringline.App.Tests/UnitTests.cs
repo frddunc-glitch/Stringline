@@ -162,7 +162,7 @@ public sealed class TrainListViewModelTests
         [new ActualEvent(new Tiploc("WLOO"), TrainLocationAction.Depart, SimTime.Parse(departed), "", true, 0)],
         false);
 
-    private static LiveSnapshot Snapshot(params LiveTrain[] trains) =>
+    private static PlanSnapshot Snapshot(params LiveTrain[] trains) =>
         new(1, Tt, trains, SimClockReading.None, new MatchSummary(trains.Length, trains.Length, 0, 0, 0, new Dictionary<MatchMethod, int>()), 1, null);
 
     [Fact]
@@ -308,7 +308,7 @@ public sealed class TransportViewModelTests
     [Fact]
     public async Task Plays_pauses_changes_speed_and_seeks()
     {
-        var engine = new LiveEngine();
+        var engine = new PlanningEngine();
         var recording = SslogRecording.Load(Fixtures.Path(Fixtures.Waterloo1x));
         await using var session = SimSession.StartReplay(recording, "w.sslog", new ReplayOptions { StartPaused = true }, engine, NullLoggerFactory.Instance);
         SimTime? restartedAt = null;
@@ -348,7 +348,7 @@ public sealed class TransportViewModelTests
     [Fact]
     public async Task Seeking_a_finished_replay_restarts_it()
     {
-        var engine = new LiveEngine();
+        var engine = new PlanningEngine();
         using var cts = new CancellationTokenSource();
         var loop = engine.RunAsync(cts.Token);
         var recording = SslogRecording.Load(Fixtures.Path(Fixtures.Waterloo1x));

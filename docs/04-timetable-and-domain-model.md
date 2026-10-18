@@ -99,10 +99,13 @@ record TrackDef(string Name, TrackDirection Direction);         // Up, Down, BiD
 // Display names are not on CorridorLocation: they live once per TIPLOC in StringlineProfile.LocationNames.
 
 // Planning
-record PlannedPoint(Tiploc Location, SimTime? Arrive, SimTime? Depart, string? Platform, string? Line);
-record TrainPlan(TrainId Id, IReadOnlyList<PlannedPoint> Points, bool Cancelled, PlanOrigin Origin);
+// S10: implemented as below (see 06-…md §1 for the rules).
+record PlannedPoint(int Index /*= WTT point index; never added or removed*/, Tiploc Location, SimTime? Arrive, SimTime? Depart, bool IsPass, string? Platform, string? Line);
+record TrainPlan(TrainId Id, Headcode Headcode, string? CategoryId, PlanOrigin Origin /*Wtt | Clone*/, TrainId Source,
+                 IReadOnlyList<PlannedPoint> Points, bool Cancelled, int? TerminatesAt, bool IsModified);   // RunningPoints, LastIndex, FromWtt, SameAs
+record LiveLink(string SimUid, Headcode Headcode, TrainId? Train);   // a manual match, kept in the plan so it undoes
 record ForecastPoint(Tiploc Location, SimTime? Arrive, SimTime? Depart, ForecastBasis Basis);
-record Disruption(string Id, DisruptionKind Kind, Tiploc From, Tiploc To, string? Track,
+record Disruption(string Id, DisruptionKind Kind /*Block | SpeedRestriction*/, Tiploc From, Tiploc To, string? Track,
                   SimTime Start, SimTime End, double RunTimeFactor, int AddedSeconds, string Note);
 record Conflict(string Id, ConflictKind Kind, TrainId A, TrainId? B,
                 Tiploc Where, SimTime When, int SeveritySeconds);

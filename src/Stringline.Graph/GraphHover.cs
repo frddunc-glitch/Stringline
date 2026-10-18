@@ -20,7 +20,7 @@ public sealed record HoverInfo(string Heading, IReadOnlyList<HoverLine> Lines)
 
 /// <summary>
 /// Describes the path under the cursor at the timing point nearest it: headcode and description, the location, the
-/// booked (WTT) and actual times there, and the delay. Pure; the live data comes from a <see cref="LiveSnapshot"/>.
+/// booked (WTT) and actual times there, and the delay. Pure; the live data comes from a <see cref="PlanSnapshot"/>.
 /// </summary>
 public static class GraphHover
 {
@@ -31,7 +31,7 @@ public static class GraphHover
     public const string Match = "Match";
     public const string Train = "Train";
 
-    public static HoverInfo Describe(GraphHit hit, GraphScene scene, LiveSnapshot snapshot)
+    public static HoverInfo Describe(GraphHit hit, GraphScene scene, PlanSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(hit);
         ArgumentNullException.ThrowIfNull(scene);
@@ -96,7 +96,7 @@ public static class GraphHover
         };
     }
 
-    private static (LiveTrain? Live, int? Working) FindLive(GraphPath path, LiveSnapshot snapshot)
+    private static (LiveTrain? Live, int? Working) FindLive(GraphPath path, PlanSnapshot snapshot)
     {
         if (path.LiveUid is { } uid && snapshot.FindByUid(uid) is { } live)
         {

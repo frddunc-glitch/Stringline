@@ -64,7 +64,7 @@ internal sealed partial class TrainRowViewModel(string uid) : ObservableObject
 internal sealed partial class TrainListViewModel : ObservableObject
 {
     private readonly Dictionary<string, TrainRowViewModel> _rows = new(StringComparer.Ordinal);
-    private LiveSnapshot _snapshot = LiveSnapshot.Empty;
+    private PlanSnapshot _snapshot = PlanSnapshot.Empty;
     private StringlineProfile? _profile;
 
     /// <summary>The rows shown, in order.</summary>
@@ -102,7 +102,7 @@ internal sealed partial class TrainListViewModel : ObservableObject
     public Graph.GraphColourMode ColourMode { get; set; }
 
     /// <summary>Take a new snapshot (and the profile for names and colours).</summary>
-    public void Update(LiveSnapshot snapshot, StringlineProfile? profile)
+    public void Update(PlanSnapshot snapshot, StringlineProfile? profile)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         _snapshot = snapshot;
