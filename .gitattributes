@@ -2,4 +2,5 @@
 *.sln text eol=crlf
 *.png binary
 *.wtt binary
+*.WTT binary
 *.zip binary

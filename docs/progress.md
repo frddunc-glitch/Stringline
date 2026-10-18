@@ -123,6 +123,51 @@
 - Frame, crossing and AHB `SG_MSG` objects are still unverified (Waterloo has none).
 - The replay server answers `idrequest` with nothing until the recording's first `clock_msg` (like a sim not yet started, but SimSig would send its placeholder clock).
 
+## 2026-10-19 — S4: WTT import
+
+### Done
+- **Format studied first:** Waterloo (free, in git), Penrith (payware, local), and then Fred's whole timetable folder `C:\Users\Public\Documents\SimSig\Timetables`: 284 `.wtt` files from 100+ sims, SimSig 3.247–5.36, 188 901 trains. What was verified is now in `04-…md` §1.
+- **New fixture:** `tests/fixtures/llangollen 2012 B.WTT` (Llangollen is a free sim; Fred confirmed). Single line with crossing loops, 24 trains, with joins, engine detaches and next workings. That answers question 4 below for S6/S11.
+- **`Stringline.Core.Timetables`:** `WorkingTimetable` (header, categories, trains, rules; `Find`/`Get` by `TrainId`, `WithHeadcode`, `FindCategory`), `TimetableHeader`, `TrainCategory`, `DwellTimes` (`Or` fallback), `Train` (start kind, entry/seed point, performance, origin/destination, dwell, points, `FormedFrom`; derived `Origin`, `Destination`, `FirstTime`, `LastTime`, `NextWorking`), `TimingPoint` (times, pass, platform, line, path, direction, three allowances in seconds, dwell, request stop, set-down, new category, activities), `TrainActivity` + `ActivityKind` (codes 0–10), `TimetableRule` + `RuleKind` (codes 0–14).
+- **`Stringline.Timetable.WttReader`:** reads a `.wtt` zip or bare `SavedTimetable.xml`, streamed one train at a time. Tolerant throughout:
+  - A bad value, timing point or train becomes an `ImportWarning` (Info/Warning/Error), and the rest of the file is still read.
+  - Damaged XML keeps the trains before the damage.
+  - Only a non-timetable throws `WttFormatException`.
+  - Unknown elements are counted by path; known-but-ignored ones are listed in `Known`.
+  - Also handles both boolean styles, half-minute allowances, `$template` descriptions, category fallbacks, duplicate category IDs, and Latin-1 fallback.
+- **`TrainLinker`:** assigns `TrainId`s and resolves activities and rules to trains. Several candidates → same location first, then nearest in time. Sets `FormedFrom`.
+- **`stringline wtt-dump file.wtt [--summary] [--train X …] [--warnings] [--verbose]`:**
+  - Summary: sim, version, times, start kinds, counts, activities, rules, unknown elements, warnings.
+  - A per-train table, and the timing points of the chosen trains.
+  - Exit 1 if the file is damaged, 2 if unreadable.
+- **Tests:**
+  - `Stringline.Timetable.Tests` (86): synthetic XML for every tolerant path, the linker, and description templates.
+  - Fixture tests with exact counts for Waterloo and Llangollen in CI; Penrith when `local-fixtures/` has it.
+  - A **corpus test** that imports every `.wtt` under `STRINGLINE_WTT_CORPUS` (default Fred's folder; skipped when absent). It requires no skipped trains, no unknown elements and no errors: all 284 pass, in about 12 s.
+  - Also `TimetableModelTests` (Core, 16) and `WttDumpCommandTests` (Tools, 4).
+  - Totals: 550 (Core 226, Architecture 9, Gateway 202, Timetable 86, Tools 27). Green on Windows (Debug and Release) and on Linux (`sdk:10.0` container, portable filter, Release). Timetable coverage is 92% line, 90% branch.
+
+### Decisions
+- **`TrainId`** = WTT UID if present, else headcode; repeats get `#2`, `#3`… in file order (Fred's choice). Stable across re-imports of the same file; it changes only if trains with the same UID/headcode are reordered.
+- **Allowances are half minutes**, taken in the section after the point. Fred first chose "minutes", based on SimsigTtTools, but the corpus settles it: run times with allowance N are N × 30 s longer in thousands of sections, for N = 1…8. Stored as seconds on `TimingPoint`.
+- **Headcode suffixes are real:** `2O03` and `2O03-1` are separate WTT workings (160 suffixed headcodes at Waterloo). This corrects the S3 note: **S5 must match headcodes exactly**, not strip `-1`. `03-…md` §6.4 is updated.
+- **UIDs are not unique** (195 of 284 files reuse them for alternative paths), so links resolve by location and time, and S5's matcher must expect several candidates per UID.
+- **Domain model lives in Core** (`Stringline.Core.Timetables`), as `04-…md` §2 says, so Network/Planning/Graph can use it without referencing the reader. Category colour and priority are not in the WTT. They become a profile `CategoryStyle` in S6, so `TrainCategory` holds only WTT data.
+- WTT booleans accept `-1` (Delphi `True`) with their own parser. The gateway's lenient JSON booleans still reject `-1`, as decided in S1.
+- An entry without `DepartTime` is normal (SimSig works it out) and is not warned about. Crew-change activities often name a crew number, so an unresolved one is not a warning either.
+- The ignored elements are listed in `WttReader.Known` with reasons. Saved-game state (`Delay`, `Entry…`, `Shunt…`), decisions and caution speeds are ignored for now.
+- A pass ignores any `ArrTime` (as SimSig does).
+
+### Next
+- S5 — `LiveState` and `TrainMatcher`. Use exact headcodes; follow `FormedFrom`/`NextWorking` for new workings (same live uid) and divided portions (new uid starting with `depart`). Expect several WTT trains per headcode/UID.
+- S6 — corridors from `WorkingTimetable` (Waterloo, plus Llangollen for single line with loops). Allowances matter for min run times: subtract `AllowanceSeconds` of the point before when deriving section minimums.
+- `wtt-dump` is the quickest way to inspect a timetable when writing S5/S6 fixtures.
+
+### Known issues
+- 99 activity links across the corpus name trains that are not in their WTT, so the link is lost. These look like genuine timetable errors (trains deleted in the editor); `wtt-dump --warnings` lists them per file.
+- The description template fields (`$originTime`, `$originName`, `$destName`, `$destTime`, `$operator`, `$stock`) are inferred from the templates in the corpus, not from SimSig documentation. Unknown fields are kept as written.
+- Rule `Time` is assumed to be seconds (Penrith 480–600, Waterloo 1500). That's plausible but unverified; S11 can check it against a recording.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
@@ -132,4 +177,7 @@ New from S2:
 
 New from S3:
 3. When convenient: a short **multiplayer** recording (§6.9), and a recording from a sim with **level crossings or AHBs** (to verify those `SG_MSG` fields).
-4. A **single-line sim with crossing loops** (free if possible) would help S6/S11 golden scenarios. Do you have one in mind?
+4. ~~A single-line sim with crossing loops?~~ Resolved in S4: Llangollen (`tests/fixtures/llangollen 2012 B.WTT`).
+
+New from S4:
+5. Rule `Time` is taken as seconds. If you know otherwise (e.g. from the timetable editor), say so; otherwise S11 will check it against a recording.

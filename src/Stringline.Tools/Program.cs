@@ -9,8 +9,9 @@ internal static class Program
         var root = new RootCommand("Stringline developer tools: record, replay and inspect SimSig gateway data.");
         root.Subcommands.Add(RecordCommand.Create());
         root.Subcommands.Add(ReplayServerCommand.Create());
+        root.Subcommands.Add(WttDumpCommand.Create());
 
-        // Subcommands still to come: wtt-dump (S4), corridors (S6), render-png (S7).
+        // Subcommands still to come: corridors (S6), render-png (S7).
         return root.Parse(args).InvokeAsync();
     }
 }

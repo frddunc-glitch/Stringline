@@ -86,6 +86,10 @@ Replay.ReplayTimeline // paces recorded frames by their wall-clock gaps × Speed
 Replay.ReplaySource   // ISimEventSource = ReplayTimeline + MessageParser; ReplayRewoundEvent after a backward seek
 Replay.ReplayServer   // fake SimSig STOMP server for `stringline replay-server`; answers idrequest/snapshot/ttsummary from replayed state
 
+// Stringline.Core.Timetables — the WTT domain model: WorkingTimetable(Header, Categories, Trains, Rules), Train, TimingPoint, TrainActivity, TimetableRule
+// Stringline.Timetable
+WttReader            // .wtt (zip) or SavedTimetable.xml → WttImportResult(WorkingTimetable, Warnings, UnknownElements, SkippedTrains); tolerant, see 04-…md §1
+
 public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); string Describe(); }
 ```
 

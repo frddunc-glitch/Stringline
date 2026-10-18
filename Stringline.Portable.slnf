@@ -12,6 +12,7 @@
       "src\\Stringline.Tools\\Stringline.Tools.csproj",
       "tests\\Stringline.Core.Tests\\Stringline.Core.Tests.csproj",
       "tests\\Stringline.Gateway.Tests\\Stringline.Gateway.Tests.csproj",
+      "tests\\Stringline.Timetable.Tests\\Stringline.Timetable.Tests.csproj",
       "tests\\Stringline.Tools.Tests\\Stringline.Tools.Tests.csproj",
       "tests\\Stringline.Architecture.Tests\\Stringline.Architecture.Tests.csproj"
     ]
