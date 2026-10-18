@@ -63,15 +63,23 @@ public readonly record struct TrainId(string Value);           // opaque, case-s
 // SimTime text: "HH:mm:ss" / "HH:mm" / "HH:mm½" plus "+N"/"-N" day marker; parse also accepts HHmm, HHmm½/H, hours ≥ 24.
 // Stringline.Core.Json: LenientJson (Utf8JsonReader helpers) + lenient bool/int/long/string/SimTime/ID converters.
 
+// Stringline.Core.Events — in Core so Timetable/Planning can consume events without referencing Gateway.
 public interface ISimEventSource { IAsyncEnumerable<GatewayEvent> ReadAllAsync(CancellationToken ct); }
 
 public abstract record GatewayEvent(DateTimeOffset ReceivedAt);
-public sealed record ClockEvent(...)          : GatewayEvent;
-public sealed record TrainLocationEvent(...)  : GatewayEvent;
-public sealed record TrainDelayEvent(...)     : GatewayEvent;
-public sealed record TdStepEvent(...)         : GatewayEvent;   // CA/CB/CC
-public sealed record SignallingStateEvent(...) : GatewayEvent;  // SG_MSG, obj_type discriminated
-public sealed record UnknownEvent(string Raw) : GatewayEvent;
+public sealed record ClockEvent(AreaId, Clock, IntervalMs, Paused) : GatewayEvent;   // SpeedRatio = 500 / IntervalMs
+public sealed record TrainLocationEvent(Headcode, Uid, Action, Location, Platform, Time, AspectPassed?, AspectApproach?) : GatewayEvent;
+public sealed record TrainDelayEvent(Headcode, Uid, DelaySeconds) : GatewayEvent;
+public sealed record TdStepEvent(Kind, AreaId, From, To, Description, Time?) : GatewayEvent;   // CA/CB/CC
+public sealed record SignallingStateEvent(AreaId, ObjectType, ObjectTypeText, ObjectId, Time?, Fields) : GatewayEvent;  // SG_MSG; object-specific fields as text + lenient getters
+public sealed record UnknownEvent(Topic, MessageType, Raw, Reason) : GatewayEvent;
+
+// Stringline.Gateway
+GatewayClient        // STOMP 1.1 client: ReadAllAsync() yields GatewayMessage(ReceivedAt, Topic, Body bytes); SendAsync(GatewayCommand); ConnectionChanged event
+MessageParser        // GatewayMessage → IReadOnlyList<GatewayEvent>, Utf8JsonReader streaming, never throws
+GatewayCommands      // the only way to build outbound bodies (Utf8JsonWriter)
+LiveGatewaySource    // ISimEventSource = GatewayClient + MessageParser
+Recording.SslogWriter / SslogReader / GatewayRecorder
 
 public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); string Describe(); }
 ```
@@ -85,7 +93,11 @@ public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); s
 ## 5. Persistence
 - **Profile** `%APPDATA%\Stringline\profiles\{area_id}.json` — corridors, location names, distances, categories, priorities.
 - **Session** `Documents\Stringline\sessions\{area_id}-{yyyyMMdd-HHmm}.stringline` (SQLite): tables `events`, `plan_commands`, `disruptions`, `notes`, `train_links`, `meta`. Working plan is rebuilt by replaying commands over the WTT.
-- **Recordings** `.sslog` — JSON Lines: `{"t":"2026-10-18T09:12:03.123Z","topic":"/topic/TRAIN_MVT_ALL_TOC","body":"..."}`; first line a header with app version and sim info.
+- **Recordings** `.sslog` — JSON Lines, format version 1:
+  - line 1, header: `{"sslog":1,"app":"Stringline 0.1.0","created":"…Z","host":"localhost","port":51515,"topics":[…]}`. The sim's identity is not known yet when the header is written; it is in the first `clock_msg`.
+  - frames: `{"t":"2026-10-18T09:12:03.123Z","topic":"/topic/TRAIN_MVT_ALL_TOC","sim":15720,"body":"…"}`. `t` is wall-clock UTC to the millisecond; `sim` is the latest `clock_msg` clock seen so far (absent before the first one), for seeking; `body` is the exact body text, or `body64` (base64) if it is not valid UTF-8.
+  - connection changes: `{"t":"…","conn":"connecting|connected|disconnected","detail":"…","headers":{…}}` (CONNECTED headers on `connected`).
+  - Readers skip malformed lines (e.g. a truncated last line) and count them; unknown properties are ignored.
 
 ## 6. Packages
 | Purpose | Package |
@@ -93,7 +105,7 @@ public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); s
 | MVVM | CommunityToolkit.Mvvm |
 | Rendering | SkiaSharp, SkiaSharp.Views.WPF |
 | DI / hosting | Microsoft.Extensions.Hosting |
-| Logging | Serilog (+ File sink) |
+| Logging | Microsoft.Extensions.Logging.Abstractions in libraries (`ILogger<T>`, `[LoggerMessage]`); Serilog (+ Console/File sinks, Serilog.Extensions.Logging) as the provider in Tools and App |
 | SQLite | Microsoft.Data.Sqlite |
 | Tests | xUnit, FluentAssertions, Verify.Xunit |
 | CLI | System.CommandLine |

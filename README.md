@@ -19,6 +19,18 @@ dotnet build Stringline.Portable.slnf -warnaserror   # Linux/macOS: everything e
 dotnet test Stringline.Portable.slnf
 ```
 
+## Recording a SimSig session
+
+Enable the Interface Gateway in SimSig's options before starting the sim, then:
+
+```sh
+dotnet run --project src/Stringline.Tools -- record --out my-sim.sslog          # movements and clock
+dotnet run --project src/Stringline.Tools -- record --td --out my-sim.sslog     # also TD and signalling (much busier)
+dotnet run --project src/Stringline.Tools -- record --user <forum name> --out my-sim.sslog   # payware sims
+```
+
+For `--user`, the password comes from the `STRINGLINE_PASSWORD` environment variable, or you are prompted for it. It is never written to the recording or the log. Press Ctrl+C to stop; the command prints message counts and rates per message type. If SimSig is not running yet, the recorder keeps retrying (1 s back-off rising to 30 s).
+
 ## Layout
 
 - `src/` — `Stringline.Core` (sim time, identifiers, lenient JSON), `Gateway`, `Timetable`, `Network`, `Planning`, `Persistence`, `Graph`, `Tools` (the `stringline` CLI) and `App` (WPF, Windows only).

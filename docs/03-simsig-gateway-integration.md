@@ -85,7 +85,9 @@ Malformed JSON makes SimSig show an error dialog to the host (once). All outboun
 - Integer seconds after midnight on the sim's start day; runs past 86 400 for overnight sims → `SimTime` is an unbounded int, formatted modulo 24 h with a day marker.
 - WTT times are on the same basis.
 
-## 6. Things to verify in Session 2 (record answers here)
+## 6. Things to verify from Fred's recordings (record answers here)
+Session 2 built the client and recorder but had no live SimSig to test against, so these are still open. The recorder captures what is needed to answer each one: CONNECTED headers and every connection change go into the `.sslog`, and `record` prints counts and rates per message type when it stops.
+
 1. Exact CONNECT/CONNECTED headers SimSig accepts/returns; heart-beat support.
 2. Does `train_location` fire for every WTT timing point, including passes with no platform?
 3. Is `location` ever a TIPLOC not in the WTT (e.g. entry/exit points)?
@@ -95,3 +97,19 @@ Malformed JSON makes SimSig show an error dialog to the host (once). All outboun
 7. Message rates on a busy sim at 4× and 16× speed.
 8. Payware authentication failure behaviour (ERROR frame? disconnect?).
 9. Multiplayer: does each client see all areas' trains?
+
+## 7. How Stringline implements this (S2)
+- **Handshake.** `CONNECT` with `accept-version:1.1` and `host:<host>`, plus `login`/`passcode` only when a username is given. No `heart-beat` header, so neither side sends heart-beats (STOMP default 0,0); the frame reader still skips bare EOLs between frames in case SimSig sends them. We wait up to 60 s for CONNECTED, because payware sims authenticate online.
+- **After CONNECTED:** `SUBSCRIBE` (ids 0, 1, …, `ack:auto`) to each topic; then `{"idrequest":{}}` to `/topic/SimSig` so the clock arrives straight away; then `{"snapshot":{}}` if the TD topic is subscribed.
+- **ERROR in reply to CONNECT** is treated as a credential problem: `GatewayConnectException`, **no retry**, so a wrong password doesn't hammer the forum login. An ERROR after connecting, a dropped connection, a refused connection or a CONNECT timeout all trigger a reconnect, with back-off 1 s → 2 → 4 … → 30 s, reset after each successful CONNECTED.
+- **Stop:** `DISCONNECT` (no receipt requested), then close.
+- **Frames:** `content-length` honoured (bodies may contain NUL), otherwise read to NUL; CR LF tolerated; header escapes decoded except on CONNECT/CONNECTED; 64 MiB frame limit for big snapshots.
+- **Parsing:** each top-level property of a body becomes one event, so duplicate `SG_MSG` keys work. Message type names match case-insensitively. Inner objects are read as a flat field map (last duplicate wins, nested values skipped), then typed leniently. Required fields: `train_location` uid + location + time (headcode optional, unknown `action` → `Unknown`); `train_delay` delay; `clock_msg` clock + interval; `CA_MSG` from + to, `CB_MSG` from, `CC_MSG` to; `SG_MSG` obj_id (`obj_type` inferred from the ID prefix letter if absent). Anything else becomes an `UnknownEvent` with the raw JSON and is logged.
+- **`ttsummary`:** `record --ttsummary` subscribes to `/topic/TRAIN_MVT_SUMMARY` and sends `{"ttsummary":{}}` to `/topic/SimSig` after each connect. Whatever comes back is recorded as raw frames for S3 to examine.
+
+### Recording checklist (👤 Fred, before S3)
+1. Free sim, normal speed, 30–60 min: `stringline record --td --ttsummary --out tests/fixtures/<sim>-1x.sslog`. Save the `.wtt` you loaded next to it.
+2. Same or another sim at 4× or faster, 30–60 min, without `--td` (movement rates only): `--out …-4x.sslog`.
+3. A session with an in-game failure (track circuit, points or signal), with `--td`, and if possible a split/join or a new working (headcode change).
+4. A payware sim with `--user <forum name>` → `local-fixtures/`. Also try a wrong password once and note what SimSig does (question 8).
+5. Note answers to the questions in §6 in a short notes file next to the recordings. The summary that `record` prints at the end answers question 7.

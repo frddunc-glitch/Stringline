@@ -8,8 +8,8 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- CS1591: missing XML comments. Docs are encouraged on public API but not enforced. -->
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- CS1591/CS1573: missing XML comments or param tags. Docs are encouraged on public API but not enforced. -->
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
     <Deterministic>true</Deterministic>
     <InvariantGlobalization>true</InvariantGlobalization>
     <Authors>Fred</Authors>
