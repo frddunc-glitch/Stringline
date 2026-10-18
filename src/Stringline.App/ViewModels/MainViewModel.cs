@@ -87,6 +87,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _time = time;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<MainViewModel>();
+        InitEditing();
         _settings = settingsStore.Load();
         Snapshot = engine.Current;
         // Read them all first: setting any saves the view settings, which would overwrite the others.
@@ -598,6 +599,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         CheckTimetableMatchesSim();
         UpdateTitle();
         UpdatePlaceholder();
+        UpdateEditing();
         RequestScene();
     }
 
@@ -718,6 +720,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
 
         Snapshot = snapshot;
+        UpdateEditing();
         Trains.Update(snapshot, Profile);
         TrainsText = snapshot.Trains.Count == 0 ? string.Empty : StatusText.Trains(snapshot.Matches);
         if (snapshot.AreaId is { Length: > 0 } area)
@@ -811,6 +814,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         };
         _building = true;
         _sceneDirty = false;
+        var planVersion = Snapshot.PlanVersion;
         _ = Task.Run(() => GraphSceneBuilder.Build(request)).ContinueWith(
             t => _ui.Post(() =>
             {
@@ -818,6 +822,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 if (t.IsCompletedSuccessfully)
                 {
                     Scene = t.Result;
+                    SceneBuiltFor(planVersion);
                 }
                 else if (t.Exception is { } ex)
                 {
@@ -848,6 +853,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private void SetSelection(TrainId? train, string? uid)
     {
         Selection = train is null && uid is null ? null : new GraphSelection(train, uid);
+        UpdateEditing();
         _syncingSelection = true;
         try
         {

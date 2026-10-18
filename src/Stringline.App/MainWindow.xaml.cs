@@ -22,7 +22,15 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         DataContext = viewModel;
         Graph.Describer = viewModel.Describe;
+        Graph.Editor = viewModel;
         Graph.PathClicked += (_, hit) => viewModel.SelectPath(hit);
+        viewModel.History.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(EditHistoryViewModel.Latest) && viewModel.History.Latest is { } latest)
+            {
+                HistoryList.ScrollIntoView(latest);
+            }
+        };
         _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Render, (_, _) => Graph.SetNow(viewModel.Tick()), Dispatcher);
         Loaded += (_, _) =>
         {

@@ -100,6 +100,7 @@ public sealed class PlanModelTests
         new TerminateAt(Slow, 2),
         new CancelTrain(Slow),
         new ReinstateTrain(Slow),
+        new ResetTrain(Slow),
         new CloneTrain(Fast, new Headcode("1A51"), 3600, new TrainId("1A51#c1")),
         new AddDisruption(new Disruption("SR1", DisruptionKind.SpeedRestriction, new Tiploc("A"), new Tiploc("B"), "Down", SimTime.Parse("06:00"), SimTime.Parse("26:00"), 1.25, 30, "Track defect")),
         new EditDisruption(new Disruption("SR1", DisruptionKind.Block, new Tiploc("A"), new Tiploc("B"), null, SimTime.Parse("06:00"), SimTime.Parse("26:00"))),

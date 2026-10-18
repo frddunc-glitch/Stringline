@@ -539,6 +539,94 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - In a Debug build, Waterloo takes 80–110 ms with both passes, and the engine logs forecasts over 100 ms. Release is about 23 ms.
 - The train list does not show forecast delays or "possibly stopped" yet.
 
+## 2026-10-19 — S12: Interactive re-planning UI
+
+### Done
+- **Portable parts (tested on Linux):**
+  - Planning:
+    - **`ResetTrain`** ("Reset to WTT"): puts a WTT train back as booked. It is in `PlanCommandJson` as `resetTrain`. A clone, or a train already as booked, is refused.
+    - **`TrainSchedule`** builds the detail panel's rows (`ScheduleRow`) from a snapshot: WTT, plan, actual, forecast and delay per timed point, with edits marked and points not run after a short termination.
+  - Graph:
+    - **`PlanDrag`**: drag edits of one train (`05-…md` §3). The body retimes the rest of the run from the next unreached point. Alt+drag retimes from a vertex. The right end of a stop changes the dwell.
+      - Time snaps to 15 s (1 s fine). Nothing is planned before now or the latest report, and a retime earlier stops at the minimum run into the first point moved. Each limit is explained in the status text.
+      - Each move previews the command on the snapshot's plan (`PlanDragPreview`).
+    - `GraphPath.Points` gives each vertex's plan point index; `IsDwellEnd` and `PointAt` use it.
+    - **Cancelled trains** are drawn on the plan layer, 1 px grey with crosses at both ends (`IsCancelled`).
+    - `GraphSceneBuilder.PlanPaths` builds plan paths for a ghost. `SkiaGraphRenderer.Render(…, ghosts)` draws ghost paths over everything, uncached.
+- **App:**
+  - **Right-hand column:** the train detail panel (`TrainDetailViewModel`) on top and the edit history (`EditHistoryViewModel`) below, with a splitter between them.
+  - **Detail panel:**
+    - The heading gives the state, route and description.
+    - The schedule grid has editable Plan arr, Plan dep, Plat and Line cells. A stop's arrival is shown over its departure, and passes are italic.
+    - Buttons: Reset to WTT, Cancel train/Reinstate, Clone…, Link….
+  - **Graph:**
+    - Drag edits show a ghost; Esc cancels a drag.
+    - The right-click menu offers Hold here…, Add stop…, Skip stop, Change platform…, Change line…, Terminate here, Cancel/Reinstate, Reset to WTT, Clone as ad-hoc…, Link to WTT train… and Match automatically.
+    - Releasing Alt after an Alt+drag is swallowed, so the window menu does not open.
+  - **Undo and redo:**
+    - Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z.
+    - A Plan menu that names the edit to undo or redo, plus the selected-train actions.
+    - Undo and Redo buttons on the history panel.
+  - **Results:**
+    - A refused edit is shown in the info bar as an error.
+    - Clamp warnings are shown in the info bar as a warning.
+    - The status bar shows what a drag does, and the last edit made.
+  - **Dialogs:** a generic `PromptDialog`/`PromptViewModel` (fields with optional choices, validated on OK), behind `IDialogService.Prompt`.
+  - **Input:** `PlanInput` reads times on the nearest day and minutes. It also formats times compactly: `07:30`, `07:30½` or `07:30:15`.
+  - `TrainListViewModel.FormatDelay` is shared with the detail panel.
+  - The visibility converter understands booleans.
+  - The window now opens at 1600×860.
+- **Tests:**
+  - Planning +6 (146): reset, its refusals, its JSON and description, and the schedule (as booked, edits and termination, running with actuals and forecast, clones).
+  - Graph +17 (170, since one S10 test changed to expect cancellations drawn): point indices, cancelled style and crosses, ghosts drawn without changing the scene, and drags. The drag tests cover the body, snapping, a view panning under the drag, now, a running train's next point and minimum run, Alt from a vertex, a point already passed, dwell and its clamps, a dwell before the arrival, the middle of a stop, actual lines, and cancelled and finished trains.
+  - App +21 (59), on Waterloo:
+    - the schedule;
+    - a cell edit, then undo, redo and reset;
+    - a bad time and a refused edit;
+    - a drag with its ghost, then commit, then Esc;
+    - the menu: cancel, reinstate, hold and clone;
+    - a cancelled or invalid prompt;
+    - linking a live train from a replay;
+    - time and minute parsing.
+  - Totals: 1 161 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 103, Planning 146, Graph 170, Tools 57, App 59). Green on Windows (Debug). On Linux (`sdk:10.0` container, portable filter, Release: 1 102) one run had a single failure in S10's `PlanningEnginePlanTests.Clear_starts_a_new_session_with_the_booked_plan`, which this session did not touch; five reruns of the Planning tests there were green (see Known issues).
+- **Checked in the running app** (replaying `waterloo-4x.sslog` with its WTT; a train selected through UI Automation and the window screenshotted): the layout, the detail panel with live actuals and forecasts, and the history panel. It starts and closes cleanly with no errors logged. The drag and right-click were not tried by hand; see Known issues.
+
+### Decisions
+- **Fred's choices:**
+  - A body drag of a running train retimes it **from its next point**, and **nothing is planned before now** or before its latest report.
+  - **Only the selected train is dragged**; pressing anything else pans.
+  - The **detail panel sits on top of the history**.
+  - The **ghost is the plan path only**, with no live re-forecast while dragging.
+- **A drag stops cleanly at a limit** rather than sending a command that the builder then clamps. An earlier retime is held at max(now, latest report), and at the minimum run into the first point moved, both rounded up to the snap grid. So it makes a plain shift with no warnings. Clamps later in the run (a longer dwell eating into a tight run) are still the builder's, and the preview shows their warnings.
+- **Only WTT and plan lines are dragged.** Actual and forecast lines pan, so dragging the dashes cannot be mistaken for moving the forecast.
+- **The ghost stays until the redrawn scene shows the edit**, so the line does not flick back for a frame.
+- **Plat and Line are separate columns** (the design said "Plat/Line"), so each can be edited.
+- **A plan cell edit:**
+  - An arrival edit retimes from that point (`ShiftTrain`).
+  - A departure edit sets the dwell at a call, and retimes from that point at an origin or a pass.
+  - A typed time takes the day nearest the old time unless a day is given (`00:10+1`).
+- **Hold here… asks for a departure time.** It suggests the later of the plan and now, plus 2 min. At a pass it becomes `AddStop`.
+- **Clone… defaults to the same headcode and +0 min**, and selects the copy so it can be dragged into place.
+- **Cancelled trains are drawn grey with crosses** on the plan layer, over their faint WTT booking. The S10 test that expected them not to be drawn was changed.
+
+### Next
+- S13: disruptions (right-click on the background is free for them; the menu returns nothing there yet), B-drag blocks, and notes. Draw disruptions on the graph; the forecaster already honours them.
+- S14: conflicts can be shown in the right-hand column, as a tab beside the history or below it. A drag preview could check conflicts for the dragged train against the preview plan.
+- S16: the history panel lists `PlanHistory`; the session store keeps it as `PlanCommandJson`, which now includes `resetTrain`.
+
+### Known issues
+- **Drag and right-click have not been tried by hand.** 👤 Fred: on a replay, select a train and try:
+  - dragging its line, Alt+drag from a timing point, and dragging the right end of a stop (look at the ghost and the status bar);
+  - Esc during a drag;
+  - the right-click menu, and Ctrl+Z / Ctrl+Y;
+  - double-clicking a Plan cell, typing a time and pressing Enter.
+  - Also check that releasing Alt after an Alt+drag does not open the menu bar. The key-up is swallowed, but that is untested.
+- Edits act on the plan only. SimSig is not told anything (by design; S19 is the opt-in assist).
+- The detail panel's columns fit at the default 490 px. A narrower panel scrolls sideways.
+- Ad-hoc clones are not matched to live trains (as in S10).
+- **An intermittent failure:** `Clear_starts_a_new_session_with_the_booked_plan` (S10) failed once in the Linux container and passed on five reruns. It is probably a timing race in the test's snapshot wait; not investigated.
+- In Debug builds the engine still logs "Forecast … took 100+ ms" for Waterloo; Release is about 23 ms (S11).
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

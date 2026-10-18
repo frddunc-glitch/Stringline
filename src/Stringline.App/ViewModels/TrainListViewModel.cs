@@ -95,6 +95,14 @@ internal sealed partial class TrainListViewModel : ObservableObject
 
     public TrainRowViewModel? Find(string uid) => _rows.GetValueOrDefault(uid);
 
+    /// <summary>Whole minutes late as the list shows them: <c>+3</c>, <c>0</c>, <c>−1</c> (a true minus sign).</summary>
+    public static string FormatDelay(int minutes) => minutes switch
+    {
+        0 => "0",
+        > 0 => string.Create(CultureInfo.InvariantCulture, $"+{minutes}"),
+        _ => string.Create(CultureInfo.InvariantCulture, $"−{-minutes}"),
+    };
+
     /// <summary>
     /// Colour each row's swatch as the graph colours the train: by category, or by the band of its current delay.
     /// Takes effect at the next <see cref="Update"/>.
@@ -146,12 +154,7 @@ internal sealed partial class TrainListViewModel : ObservableObject
         row.LastSeenText = live.LastSeen.ToString("T", CultureInfo.InvariantCulture);
         var delay = TrainDelays.Current(live, _snapshot.Timetable);
         row.DelayMinutes = delay?.Minutes;
-        row.DelayText = delay is null ? string.Empty : delay.Minutes switch
-        {
-            0 => "0",
-            > 0 => $"+{delay.Minutes}",
-            _ => $"−{-delay.Minutes}",
-        };
+        row.DelayText = delay is null ? string.Empty : FormatDelay(delay.Minutes);
         var colour = working is { IsMatched: true, Train: { } id } && _snapshot.Timetable?.Find(id) is { } train
             ? ColourMode == Graph.GraphColourMode.Delay
                 ? Graph.DelayBands.ColourOfSeconds(delay?.Seconds)

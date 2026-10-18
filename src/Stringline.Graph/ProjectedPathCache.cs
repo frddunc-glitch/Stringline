@@ -161,11 +161,27 @@ internal sealed class ProjectedPathCache : IDisposable
                 }
             }
 
+            if (path.IsCancelled && end == vertices.Count - 1)
+            {
+                AddCross(Point(vertices[0]));
+                AddCross(Point(vertices[^1]));
+            }
+
             runs.Add(new PathRun(colour, _builder.Snapshot()));
             start = end;
         }
 
         return [.. runs];
+    }
+
+    /// <summary>A cross at a cancelled train's end (<c>05-…md</c> §2), within the tiles' bleed.</summary>
+    private void AddCross(SKPoint at)
+    {
+        const float size = 4;
+        _builder.MoveTo(at.X - size, at.Y - size);
+        _builder.LineTo(at.X + size, at.Y + size);
+        _builder.MoveTo(at.X - size, at.Y + size);
+        _builder.LineTo(at.X + size, at.Y - size);
     }
 
     private SKPoint Point(GraphVertex vertex) => Point(vertex.Time, vertex.Axis);

@@ -203,7 +203,7 @@ public class GraphSceneBuilderTests
     }
 
     [Fact]
-    public void The_plan_layer_draws_re_planned_trains_and_clones_but_not_cancellations()
+    public void The_plan_layer_draws_re_planned_trains_clones_and_cancellations()
     {
         var (plan, _) = WorkingPlan.FromTimetable(TwoTrains()).ApplyAll(
         [
@@ -220,7 +220,8 @@ public class GraphSceneBuilderTests
         shifted.Colour.Should().Be(Express);
         shifted.Vertices.Should().Equal(V(T("07:00"), 0), V(T("07:09"), Third), V(T("07:13"), TwoThirds), V(T("07:17"), 1));
         scene.Paths.Single(p => p.Key == "plan:1A51#c1").Vertices[0].Should().Be(V(T("08:00"), 0));
-        scene.InLayer(GraphLayer.Plan).Should().HaveCount(2);
+        scene.InLayer(GraphLayer.Plan).Should().HaveCount(3);
+        scene.Paths.Single(p => p.Key == "plan:2B02").IsCancelled.Should().BeTrue("a cancelled train is drawn grey with crosses (S12)");
         scene.InLayer(GraphLayer.Wtt).Should().HaveCount(2, "the WTT layer still shows the booking");
         GraphSceneBuilder.Build(request with { ShowPlan = false }).InLayer(GraphLayer.Plan).Should().BeEmpty();
     }

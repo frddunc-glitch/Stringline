@@ -33,6 +33,9 @@ internal interface IDialogService
 
     void ShowError(string title, string message);
 
+    /// <summary>Asks for the prompt's values; true if OK was pressed (they have then passed its validation).</summary>
+    bool Prompt(ViewModels.PromptViewModel viewModel);
+
     void ShowList(string title, string heading, IReadOnlyList<string> lines);
 }
 
@@ -98,6 +101,9 @@ internal sealed class WpfDialogService : IDialogService
             MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
+
+    public bool Prompt(ViewModels.PromptViewModel viewModel) =>
+        new Views.PromptDialog(viewModel) { Owner = Owner }.ShowDialog() == true;
 
     public void ShowList(string title, string heading, IReadOnlyList<string> lines) =>
         new Views.ListWindow(title, heading, lines) { Owner = Owner }.Show();

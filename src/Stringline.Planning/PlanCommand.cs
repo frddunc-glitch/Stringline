@@ -18,6 +18,7 @@ namespace Stringline.Planning;
 [JsonDerivedType(typeof(TerminateAt), "terminateAt")]
 [JsonDerivedType(typeof(CancelTrain), "cancelTrain")]
 [JsonDerivedType(typeof(ReinstateTrain), "reinstateTrain")]
+[JsonDerivedType(typeof(ResetTrain), "resetTrain")]
 [JsonDerivedType(typeof(CloneTrain), "cloneTrain")]
 [JsonDerivedType(typeof(AddDisruption), "addDisruption")]
 [JsonDerivedType(typeof(RemoveDisruption), "removeDisruption")]
@@ -277,6 +278,33 @@ public sealed record ReinstateTrain(TrainId Train) : IPlanCommand
     }
 
     public string Describe(WorkingPlan plan) => $"Reinstate {Checks.Name(plan, Train)}";
+}
+
+/// <summary>
+/// Puts a WTT train back as booked: its times, platforms and lines, and not cancelled or terminated short (S12,
+/// "Reset to WTT"). A clone has no booking to go back to; cancel it instead.
+/// </summary>
+public sealed record ResetTrain(TrainId Train) : IPlanCommand
+{
+    public PlanCommandResult Apply(WorkingPlanBuilder b)
+    {
+        ArgumentNullException.ThrowIfNull(b);
+        if (Checks.Train(b, Train, out var plan) is { } error)
+        {
+            return PlanCommandResult.Fail(error);
+        }
+
+        if (plan.Origin == PlanOrigin.Clone || b.Timetable.Find(Train) is not { } wtt)
+        {
+            return PlanCommandResult.Fail($"{plan.Headcode} is not in the WTT; cancel it instead.");
+        }
+
+        return plan.IsModified
+            ? PlanCommandResult.From(b.Update(TrainPlan.FromWtt(wtt)))
+            : PlanCommandResult.Fail($"{plan.Headcode} already runs as booked.");
+    }
+
+    public string Describe(WorkingPlan plan) => $"Reset {Checks.Name(plan, Train)} to the WTT";
 }
 
 /// <summary>

@@ -6,12 +6,17 @@ using Stringline.App.ViewModels;
 
 namespace Stringline.App.Views;
 
-/// <summary>Visible when the value is not null (or a non-empty string); <c>ConverterParameter=invert</c> flips it.</summary>
+/// <summary>Visible when the value is not null (or a non-empty string, or true); <c>ConverterParameter=invert</c> flips it.</summary>
 public sealed class NotNullToVisibilityConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        var visible = value is string s ? s.Length > 0 : value is not null;
+        var visible = value switch
+        {
+            string s => s.Length > 0,
+            bool b => b,
+            _ => value is not null,
+        };
         if (parameter is "invert")
         {
             visible = !visible;

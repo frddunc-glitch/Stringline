@@ -3,13 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Stringline.App.Controls"
         xmlns:views="clr-namespace:Stringline.App.Views"
-        Title="{Binding Title}" Height="820" Width="1440" MinWidth="800" MinHeight="480"
+        Title="{Binding Title}" Height="860" Width="1600" MinWidth="800" MinHeight="480"
         UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     <views:NotNullToVisibilityConverter x:Key="NotNull" />
     <views:StatusLightBrushConverter x:Key="LightBrush" />
-    <views:InfoSeverityBrushConverter x:Key="InfoBrush" />    <Style TargetType="Button" x:Key="ToolButton">
+    <views:InfoSeverityBrushConverter x:Key="InfoBrush" />
+    <Style TargetType="Button" x:Key="ToolButton">
       <Setter Property="Padding" Value="8,2" />
       <Setter Property="Margin" Value="2,0" />
     </Style>
@@ -19,6 +20,9 @@
     <KeyBinding Key="O" Modifiers="Ctrl" Command="{Binding OpenReplayCommand}" />
     <KeyBinding Key="T" Modifiers="Ctrl" Command="{Binding LoadTimetableCommand}" />
     <KeyBinding Key="E" Modifiers="Ctrl" Command="{Binding ExportPngCommand}" CommandParameter="1" />
+    <KeyBinding Key="Z" Modifiers="Ctrl" Command="{Binding UndoCommand}" />
+    <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCommand}" />
+    <KeyBinding Key="Z" Modifiers="Ctrl+Shift" Command="{Binding RedoCommand}" />
   </Window.InputBindings>
 
   <DockPanel>
@@ -56,6 +60,15 @@
         <MenuItem Header="_Vertical (time down)" IsCheckable="True" IsChecked="{Binding IsVertical}" />
         <Separator />
         <MenuItem Header="_Clear selection" Command="{Binding ClearSelectionCommand}" />
+      </MenuItem>
+      <MenuItem Header="_Plan">
+        <MenuItem Header="{Binding UndoHeader}" InputGestureText="Ctrl+Z" Command="{Binding UndoCommand}" />
+        <MenuItem Header="{Binding RedoHeader}" InputGestureText="Ctrl+Y" Command="{Binding RedoCommand}" />
+        <Separator />
+        <MenuItem Header="Reset selected train to _WTT" Command="{Binding ResetSelectedCommand}" />
+        <MenuItem Header="_Cancel or reinstate selected train" Command="{Binding CancelSelectedCommand}" />
+        <MenuItem Header="Cl_one selected train as ad-hoc…" Command="{Binding CloneSelectedCommand}" />
+        <MenuItem Header="_Link selected live train to WTT train…" Command="{Binding LinkSelectedCommand}" />
       </MenuItem>
       <MenuItem Header="_Help">
         <MenuItem Header="_About Stringline" Click="OnAbout" />
@@ -132,6 +145,10 @@
       </StatusBarItem>
       <Separator />
       <StatusBarItem Content="{Binding TrainsText}" />
+      <Separator />
+      <StatusBarItem>
+        <TextBlock Text="{Binding EditStatus}" TextTrimming="CharacterEllipsis" ToolTip="{Binding EditStatus}" />
+      </StatusBarItem>
       <StatusBarItem HorizontalAlignment="Right">
         <TextBlock Text="{Binding RecordingText}" Foreground="#C62828" />
       </StatusBarItem>
@@ -180,12 +197,14 @@
       </DockPanel>
     </Border>
 
-    <!-- Train list | graph -->
+    <!-- Train list | graph | detail and history -->
     <Grid>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="330" MinWidth="180" />
         <ColumnDefinition Width="5" />
-        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="*" MinWidth="300" />
+        <ColumnDefinition Width="5" />
+        <ColumnDefinition Width="490" MinWidth="240" />
       </Grid.ColumnDefinitions>
 
       <DockPanel Grid.Column="0" DataContext="{Binding Trains}">
@@ -240,7 +259,7 @@
       <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="#EEEEEE" />
 
       <Grid Grid.Column="2">
-        <controls:GraphView x:Name="Graph" Scene="{Binding Scene}" Selection="{Binding Selection}" Navigator="{Binding Navigator}">
+        <controls:GraphView x:Name="Graph" Scene="{Binding Scene}" Selection="{Binding Selection}" Navigator="{Binding Navigator}" Ghosts="{Binding Ghosts}">
           <controls:GraphView.InputBindings>
             <KeyBinding Key="Space" Command="{Binding ToggleFollowCommand}" />
             <KeyBinding Key="Escape" Command="{Binding ClearSelectionCommand}" />
@@ -248,6 +267,164 @@
         </controls:GraphView>
         <TextBlock Text="{Binding Placeholder}" Visibility="{Binding Placeholder, Converter={StaticResource NotNull}}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="15" Foreground="#757575" IsHitTestVisible="False" />
+      </Grid>
+
+      <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="#EEEEEE" />
+
+      <Grid Grid.Column="4">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="2*" MinHeight="140" />
+          <RowDefinition Height="5" />
+          <RowDefinition Height="*" MinHeight="90" />
+        </Grid.RowDefinitions>
+
+        <!-- Train detail (RP-1) -->
+        <DockPanel Grid.Row="0">
+          <StackPanel DockPanel.Dock="Top" Margin="6,6,6,4">
+            <DockPanel>
+              <Rectangle Width="4" Fill="{Binding Detail.Colour}" Margin="0,1,6,1"
+                         Visibility="{Binding Detail.Heading, Converter={StaticResource NotNull}}" />
+              <TextBlock Text="{Binding Detail.Heading}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Detail.StatusText}" Foreground="#616161" Margin="8,0,0,0" VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail.StatusText}" />
+            </DockPanel>
+            <TextBlock Text="{Binding Detail.Description}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail.Description}" Margin="0,2,0,0"
+                       Visibility="{Binding Detail.Description, Converter={StaticResource NotNull}}" />
+            <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding Detail.Heading, Converter={StaticResource NotNull}}">
+              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,0" Content="Reset to WTT" Command="{Binding ResetSelectedCommand}"
+                      ToolTip="Put the train back as the WTT books it" />
+              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,0" Content="{Binding CancelSelectedText}" Command="{Binding CancelSelectedCommand}" />
+              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,0" Content="Clone…" Command="{Binding CloneSelectedCommand}"
+                      ToolTip="Copy the train's plan as an ad-hoc train with a new headcode" />
+              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,0" Content="Link…" Command="{Binding LinkSelectedCommand}"
+                      ToolTip="Link the live train to a WTT train by hand" />
+            </StackPanel>
+          </StackPanel>
+          <Grid>
+            <DataGrid x:Name="ScheduleGrid" ItemsSource="{Binding Detail.Rows}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                      CanUserSortColumns="False" CanUserReorderColumns="False" SelectionMode="Single" SelectionUnit="Cell" HeadersVisibility="Column"
+                      GridLinesVisibility="None" RowHeaderWidth="0" BorderThickness="0,1,0,0" AlternatingRowBackground="#FAFAFA"
+                      Visibility="{Binding Detail.HasTrain, Converter={StaticResource BoolToVisibility}}">
+              <DataGrid.Resources>
+                <!-- Passes are italic; edited times bold. A stop's arrival is on its top line, its departure on the bottom. -->
+                <Style x:Key="Passes" TargetType="TextBlock">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsPass}" Value="True">
+                      <Setter Property="FontStyle" Value="Italic" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+                <Style x:Key="PlanArrive" TargetType="TextBlock">
+                  <Setter Property="VerticalAlignment" Value="Top" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding TimesChanged}" Value="True">
+                      <Setter Property="FontWeight" Value="Bold" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+                <Style x:Key="PlanDepart" TargetType="TextBlock" BasedOn="{StaticResource Passes}">
+                  <Setter Property="VerticalAlignment" Value="Bottom" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding TimesChanged}" Value="True">
+                      <Setter Property="FontWeight" Value="Bold" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </DataGrid.Resources>
+              <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Runs}" Value="False">
+                      <Setter Property="Foreground" Value="#9E9E9E" />
+                      <Setter Property="FontStyle" Value="Italic" />
+                      <Setter Property="ToolTip" Value="Not run: the train is terminated short before here" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </DataGrid.RowStyle>
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="*" MinWidth="70" IsReadOnly="True">
+                  <DataGridTextColumn.ElementStyle>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="ToolTip" Value="{Binding Tiploc}" />
+                      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                    </Style>
+                  </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn Header="Plat" Binding="{Binding PlatformText}" Width="36">
+                  <DataGridTextColumn.ElementStyle>
+                    <Style TargetType="TextBlock">
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding PlatformChanged}" Value="True">
+                          <Setter Property="FontWeight" Value="Bold" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn Header="Line" Binding="{Binding LineText}" Width="36">
+                  <DataGridTextColumn.ElementStyle>
+                    <Style TargetType="TextBlock">
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding LineChanged}" Value="True">
+                          <Setter Property="FontWeight" Value="Bold" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn Header="WTT" Binding="{Binding WttText}" Width="Auto" MinWidth="44" IsReadOnly="True" Foreground="#757575" ElementStyle="{StaticResource Passes}" />
+                <DataGridTextColumn Header="Plan arr" Binding="{Binding PlanArriveText}" Width="Auto" MinWidth="50" ElementStyle="{StaticResource PlanArrive}" />
+                <DataGridTextColumn Header="Plan dep" Binding="{Binding PlanDepartText}" Width="Auto" MinWidth="50" ElementStyle="{StaticResource PlanDepart}" />
+                <DataGridTextColumn Header="Actual" Binding="{Binding ActualText}" Width="Auto" MinWidth="50" IsReadOnly="True" />
+                <DataGridTextColumn Header="Forecast" Binding="{Binding ForecastText}" Width="Auto" MinWidth="56" IsReadOnly="True" Foreground="#1565C0" />
+                <DataGridTextColumn Header="Delay" Binding="{Binding DelayText}" Width="36" IsReadOnly="True">
+                  <DataGridTextColumn.ElementStyle>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="HorizontalAlignment" Value="Right" />
+                    </Style>
+                  </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+              </DataGrid.Columns>
+            </DataGrid>
+            <TextBlock Text="Select a train on the graph or in the list to see its schedule. Drag its line to retime it, or right-click it for more."
+                       TextWrapping="Wrap" Foreground="#757575" Margin="12" HorizontalAlignment="Center" VerticalAlignment="Top" TextAlignment="Center"
+                       Visibility="{Binding Detail.Heading, Converter={StaticResource NotNull}, ConverterParameter=invert}" />
+          </Grid>
+        </DockPanel>
+
+        <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#EEEEEE" />
+
+        <!-- Edit history (RP-7) -->
+        <DockPanel Grid.Row="2">
+          <DockPanel DockPanel.Dock="Top" Margin="6,4">
+            <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="↷ Redo" Command="{Binding RedoCommand}"
+                    ToolTip="{Binding RedoTip}" ToolTipService.ShowOnDisabled="True" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="↶ Undo" Command="{Binding UndoCommand}"
+                    ToolTip="{Binding UndoTip}" ToolTipService.ShowOnDisabled="True" />
+            <TextBlock Text="Edit history" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding History.Summary}" Foreground="#757575" Margin="8,0,0,0" VerticalAlignment="Center" />
+          </DockPanel>
+          <ListBox x:Name="HistoryList" ItemsSource="{Binding History.Entries}" BorderThickness="0,1,0,0" HorizontalContentAlignment="Stretch"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <DockPanel>
+                  <TextBlock DockPanel.Dock="Left" Text="{Binding Number, StringFormat={}{0}.}" Foreground="#9E9E9E" Width="26" />
+                  <TextBlock DockPanel.Dock="Left" Text="⚠ " Foreground="#EF6C00" ToolTip="{Binding Warnings}"
+                             Visibility="{Binding Warnings, Converter={StaticResource NotNull}}" />
+                  <TextBlock x:Name="EntryText" Text="{Binding Description}" TextWrapping="Wrap" />
+                </DockPanel>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding IsUndone}" Value="True">
+                    <Setter TargetName="EntryText" Property="Foreground" Value="#9E9E9E" />
+                    <Setter TargetName="EntryText" Property="FontStyle" Value="Italic" />
+                  </DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
       </Grid>
     </Grid>
   </DockPanel>

@@ -22,6 +22,7 @@
 - **Clones** take the source's current plan, with the new headcode, moved by the delta, not cancelled. The new `TrainId` is in the command (`WorkingPlan.NewCloneId` gives `{headcode}#c1`, `#c2`…), so a replay gives the same train.
 - **Live links are commands** (Fred), so they undo. The engine rebuilds the live state with the plan's links whenever they change. Only WTT trains can be linked.
 - **A command that fails changes nothing**, and is not added to the history. A suggestion is all-or-nothing.
+- **`ResetTrain`** (S12, "Reset to WTT") puts a WTT train back as booked: times, platforms, lines, not cancelled or terminated short. A clone cannot be reset; a train as booked is refused.
 - **History:** undo drops the last command and replays the rest over the WTT; a new command clears redo. Reloading the same timetable (same area and name) replays the history and drops commands that no longer apply; a different timetable, or `Clear`, starts a new history.
 
 ## 2. Forecaster (per corridor network, not per graph)

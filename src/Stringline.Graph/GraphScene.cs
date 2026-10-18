@@ -39,6 +39,11 @@ public readonly record struct GraphVertex(double Time, double Axis);
 /// One colour per segment (vertex <c>i</c> to <c>i + 1</c>) when the line changes colour along its length, as an
 /// actual path does when coloured by delay band; null when the whole line is <paramref name="Colour"/>.
 /// </param>
+/// <param name="Points">
+/// For a WTT, plan or forecast path: the plan point index (the same as the WTT's) of each vertex, so an edit on the
+/// graph knows which timing point it is at. A stop with a dwell has two vertices with the same index. Null for actuals.
+/// </param>
+/// <param name="IsCancelled">A cancelled train on the plan layer: drawn thin and grey with crosses at its ends (S12).</param>
 /// <remarks>The bounds are worked out once, when the path is made; do not copy a path <c>with</c> new vertices.</remarks>
 public sealed record GraphPath(
     string Key,
@@ -51,7 +56,9 @@ public sealed record GraphPath(
     TrackDirection? Direction = null,
     string? LiveUid = null,
     int? Working = null,
-    IReadOnlyList<Colour>? SegmentColours = null)
+    IReadOnlyList<Colour>? SegmentColours = null,
+    IReadOnlyList<int>? Points = null,
+    bool IsCancelled = false)
 {
     public double TimeMin => Vertices[0].Time;
 
@@ -61,6 +68,16 @@ public sealed record GraphPath(
 
     public double AxisMax { get; } = Vertices.Count == 0 ? 0 : Vertices.Max(v => v.Axis);
 
+    /// <summary>The plan point index of vertex <paramref name="vertex"/>, if the path has them.</summary>
+    public int? PointAt(int vertex) => Points is { } points && vertex >= 0 && vertex < points.Count ? points[vertex] : null;
+
+    /// <summary>
+    /// True if vertex <paramref name="vertex"/> is the departure end of a stop: the second of two vertices at one
+    /// timing point, where a drag changes the dwell.
+    /// </summary>
+    public bool IsDwellEnd(int vertex) =>
+        vertex > 0 && PointAt(vertex) is { } index && PointAt(vertex - 1) == index && Vertices[vertex].Axis == Vertices[vertex - 1].Axis;
+
     /// <summary>The colour of segment <paramref name="index"/> (from vertex <c>index</c> to the next).</summary>
     public Colour ColourOf(int index) => SegmentColours is { } colours ? colours[index] : Colour;
 
@@ -68,7 +85,7 @@ public sealed record GraphPath(
     public bool DrawsLike(GraphPath other)
     {
         ArgumentNullException.ThrowIfNull(other);
-        return ReferenceEquals(this, other) || (Key == other.Key && Layer == other.Layer && Colour == other.Colour &&
+        return ReferenceEquals(this, other) || (Key == other.Key && Layer == other.Layer && Colour == other.Colour && IsCancelled == other.IsCancelled &&
             Vertices.SequenceEqual(other.Vertices) &&
             (SegmentColours is null ? other.SegmentColours is null : other.SegmentColours is not null && SegmentColours.SequenceEqual(other.SegmentColours)));
     }

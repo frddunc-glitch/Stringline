@@ -135,6 +135,18 @@ internal sealed class ScriptedDialogs : IDialogService
 
     public void ShowError(string title, string message) => Errors.Add(message);
 
+    /// <summary>Answers to prompts, in order: each fills in the values and returns OK (true) or Cancel; none left means cancelled.</summary>
+    public Queue<Func<PromptViewModel, bool>> Prompts { get; } = new();
+
+    /// <summary>Every prompt shown.</summary>
+    public List<PromptViewModel> Prompted { get; } = [];
+
+    public bool Prompt(PromptViewModel viewModel)
+    {
+        Prompted.Add(viewModel);
+        return Prompts.Count > 0 && Prompts.Dequeue()(viewModel) && viewModel.TryAccept();
+    }
+
     public void ShowList(string title, string heading, IReadOnlyList<string> lines) => Lists.Add((title, lines));
 }
 

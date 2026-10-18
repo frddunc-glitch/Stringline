@@ -438,6 +438,32 @@ public sealed class WorkingPlanTests
         public string Describe(WorkingPlan plan) => "Throw";
     }
 
+    // ResetTrain
+
+    [Fact]
+    public void Reset_puts_a_train_back_as_booked()
+    {
+        var plan = Applied(Plan(), new ShiftTrain(Fast, 1, 300));
+        plan = Applied(plan, new ChangePlatform(Fast, 1, "4"));
+        plan = Applied(plan, new TerminateAt(Fast, 2));
+        plan = Applied(plan, new CancelTrain(Fast));
+
+        plan = Applied(plan, new ResetTrain(Fast));
+
+        plan.Get(Fast).Should().BeEquivalentTo(Plan().Get(Fast));
+        plan.Get(Fast).IsModified.Should().BeFalse();
+        plan.Modified.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Reset_is_refused_for_a_train_as_booked_and_for_a_clone()
+    {
+        Refused(Plan(), new ResetTrain(Fast)).Should().Be("1A01 already runs as booked.");
+        Refused(Plan(), new ResetTrain(new TrainId("9Z99"))).Should().Be("No train 9Z99 in the plan.");
+        var cloned = Applied(Plan(), new CloneTrain(Fast, new Headcode("1A51"), 3600, new TrainId("1A51#c1")));
+        Refused(cloned, new ResetTrain(new TrainId("1A51#c1"))).Should().Be("1A51 is not in the WTT; cancel it instead.");
+    }
+
     // Descriptions
 
     [Fact]
@@ -456,6 +482,7 @@ public sealed class WorkingPlanTests
             (new TerminateAt(Fast, 2), "Terminate 1A01 short at C"),
             (new CancelTrain(Fast), "Cancel 1A01"),
             (new ReinstateTrain(Fast), "Reinstate 1A01"),
+            (new ResetTrain(Fast), "Reset 1A01 to the WTT"),
             (new CloneTrain(Fast, new Headcode("1A51"), 7200, new TrainId("1A51#c1")), "Clone 1A01 as 1A51 +2 h"),
             (new AddDisruption(Restriction()), "Add speed restriction A–B 06:00:00–07:00:00"),
             (new RemoveDisruption("SR9"), "Remove disruption SR9"),

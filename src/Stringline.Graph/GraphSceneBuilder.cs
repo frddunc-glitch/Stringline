@@ -67,6 +67,9 @@ public static class GraphSceneBuilder
     /// <summary>Colour of live trains not matched to the WTT.</summary>
     public static Colour UnmatchedColour { get; } = new(0x8A, 0x8A, 0x8A);
 
+    /// <summary>Colour of cancelled trains on the plan layer (<c>05-…md</c> §2).</summary>
+    public static Colour CancelledColour { get; } = new(0x9E, 0x9E, 0x9E);
+
     public static GraphScene Build(GraphSceneRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -90,10 +93,7 @@ public static class GraphSceneBuilder
         {
             foreach (var train in plan.Modified)
             {
-                if (!train.Cancelled)
-                {
-                    AddPlan(paths, corridor, train, profile.StyleFor(train.CategoryId).Colour);
-                }
+                paths.AddRange(PlanPaths(corridor, train, train.Cancelled ? CancelledColour : profile.StyleFor(train.CategoryId).Colour));
             }
         }
 
@@ -128,23 +128,33 @@ public static class GraphSceneBuilder
     private static void AddWtt(List<GraphPath> paths, Corridor corridor, Train train, Colour colour)
     {
         var builder = new PathAccumulator(corridor);
-        foreach (var point in train.Points)
+        for (var i = 0; i < train.Points.Count; i++)
         {
-            AddBooked(builder, point.Location, point.Arrive, point.Depart, point.IsPass);
+            var point = train.Points[i];
+            AddBooked(builder, point.Location, point.Arrive, point.Depart, point.IsPass, i);
         }
 
-        AddPaths(paths, corridor, builder, $"wtt:{train.Id}", GraphLayer.Wtt, train.Id, train.Headcode, colour);
+        AddPaths(paths, corridor, builder, $"wtt:{train.Id}", GraphLayer.Wtt, train.Id, train.Headcode, colour, cancelled: false);
     }
 
-    private static void AddPlan(List<GraphPath> paths, Corridor corridor, TrainPlan train, Colour colour)
+    /// <summary>
+    /// A train's plan as plan-layer paths along a corridor (more than one if it leaves the corridor and comes back), as
+    /// the scene draws a re-planned train; a cancelled train is marked so. Also used for a drag's ghost preview, with
+    /// <paramref name="keyPrefix"/> keeping its keys apart from the scene's.
+    /// </summary>
+    public static IReadOnlyList<GraphPath> PlanPaths(Corridor corridor, TrainPlan train, Colour colour, string keyPrefix = "plan")
     {
+        ArgumentNullException.ThrowIfNull(corridor);
+        ArgumentNullException.ThrowIfNull(train);
         var builder = new PathAccumulator(corridor);
         foreach (var point in train.RunningPoints)
         {
-            AddBooked(builder, point.Location, point.Arrive, point.Depart, point.IsPass);
+            AddBooked(builder, point.Location, point.Arrive, point.Depart, point.IsPass, point.Index);
         }
 
-        AddPaths(paths, corridor, builder, $"plan:{train.Id}", GraphLayer.Plan, train.Id, train.Headcode, colour);
+        var paths = new List<GraphPath>(1);
+        AddPaths(paths, corridor, builder, $"{keyPrefix}:{train.Id}", GraphLayer.Plan, train.Id, train.Headcode, colour, train.Cancelled);
+        return paths;
     }
 
     /// <summary>
@@ -169,7 +179,7 @@ public static class GraphSceneBuilder
             {
                 if (forecast.Points[k] is { Basis: ForecastBasis.Actual, LastTime: { } anchor } p)
                 {
-                    builder.Add(p.Location, anchor, p.DelaySeconds);
+                    builder.Add(p.Location, anchor, p.DelaySeconds, p.Index);
                     break;
                 }
             }
@@ -180,12 +190,12 @@ public static class GraphSceneBuilder
             var p = forecast.Points[k];
             if (p.Arrive is { } arrive && p.Depart is { } depart && depart > arrive)
             {
-                builder.Add(p.Location, arrive, p.DelaySeconds);
-                builder.Add(p.Location, depart, p.DelaySeconds);
+                builder.Add(p.Location, arrive, p.DelaySeconds, p.Index);
+                builder.Add(p.Location, depart, p.DelaySeconds, p.Index);
             }
             else if (p.FirstTime is { } time)
             {
-                builder.Add(p.Location, time, p.DelaySeconds);
+                builder.Add(p.Location, time, p.DelaySeconds, p.Index);
             }
         }
 
@@ -194,12 +204,12 @@ public static class GraphSceneBuilder
         {
             var (pathColour, segmentColours) = byDelay ? DelayColours(segment.Delays) : (colour, null);
             paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", GraphLayer.Forecast, forecast.Train, forecast.Headcode, pathColour,
-                segment.Vertices, Direction: corridor.DirectionOf(segment.Locations), LiveUid: forecast.LiveUid, SegmentColours: segmentColours));
+                segment.Vertices, Direction: corridor.DirectionOf(segment.Locations), LiveUid: forecast.LiveUid, SegmentColours: segmentColours, Points: segment.Indices));
         }
     }
 
     /// <summary>A booked or planned point: one vertex for a pass or a point with one time, two for a stop with a dwell.</summary>
-    private static void AddBooked(PathAccumulator builder, Tiploc location, SimTime? arrive, SimTime? depart, bool isPass)
+    private static void AddBooked(PathAccumulator builder, Tiploc location, SimTime? arrive, SimTime? depart, bool isPass, int index)
     {
         if (arrive is null && depart is null)
         {
@@ -208,21 +218,21 @@ public static class GraphSceneBuilder
 
         if (isPass || arrive is null || depart is null || depart <= arrive)
         {
-            builder.Add(location, (arrive ?? depart)!.Value);
+            builder.Add(location, (arrive ?? depart)!.Value, point: index);
         }
         else
         {
-            builder.Add(location, arrive.Value);
-            builder.Add(location, depart.Value);
+            builder.Add(location, arrive.Value, point: index);
+            builder.Add(location, depart.Value, point: index);
         }
     }
 
-    private static void AddPaths(List<GraphPath> paths, Corridor corridor, PathAccumulator builder, string key, GraphLayer layer, TrainId train, Headcode headcode, Colour colour)
+    private static void AddPaths(List<GraphPath> paths, Corridor corridor, PathAccumulator builder, string key, GraphLayer layer, TrainId train, Headcode headcode, Colour colour, bool cancelled)
     {
         foreach (var (segment, index, count) in builder.Finish())
         {
             paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", layer, train, headcode, colour,
-                segment.Vertices, Direction: corridor.DirectionOf(segment.Locations)));
+                segment.Vertices, Direction: corridor.DirectionOf(segment.Locations), Points: segment.Indices, IsCancelled: cancelled));
         }
     }
 
@@ -277,7 +287,8 @@ public static class GraphSceneBuilder
         return colours.All(c => c == colours[0]) ? (colours[0], null) : (colours[^1], colours);
     }
 
-    private sealed record Segment(List<GraphVertex> Vertices, List<Tiploc> Locations, List<int?> Delays);
+    /// <param name="Indices">The plan point index of each vertex, or null if some vertex has none (actuals).</param>
+    private sealed record Segment(List<GraphVertex> Vertices, List<Tiploc> Locations, List<int?> Delays, List<int>? Indices);
 
     /// <summary>Collects timed locations in running order into one or more corridor visits.</summary>
     private sealed class PathAccumulator(Corridor corridor)
@@ -288,7 +299,8 @@ public static class GraphSceneBuilder
         private bool _away;
 
         /// <param name="delay">Seconds late at this point, if known (delay colouring only).</param>
-        public void Add(Tiploc location, SimTime time, int? delay = null)
+        /// <param name="point">The plan point index, for booked, planned and forecast points; -1 for none.</param>
+        public void Add(Tiploc location, SimTime time, int? delay = null, int point = -1)
         {
             var index = corridor.IndexOf(location);
             if (index < 0)
@@ -299,7 +311,7 @@ public static class GraphSceneBuilder
 
             if (_current is null || (_away && index == _lastIndex))
             {
-                _current = new Segment([], [], []);
+                _current = new Segment([], [], [], []);
                 _segments.Add(_current);
             }
 
@@ -310,6 +322,7 @@ public static class GraphSceneBuilder
                 _current.Vertices.Add(vertex);
                 _current.Locations.Add(location);
                 _current.Delays.Add(delay);
+                _current.Indices!.Add(point);
             }
             else if (delay is not null)
             {
@@ -322,7 +335,7 @@ public static class GraphSceneBuilder
         /// <summary>The visits that draw as a line (at least two vertices), with their index and how many there are.</summary>
         public IEnumerable<(Segment Segment, int Index, int Count)> Finish()
         {
-            var drawn = _segments.Where(s => s.Vertices.Count >= 2).ToList();
+            var drawn = _segments.Where(s => s.Vertices.Count >= 2).Select(s => s.Indices!.Contains(-1) ? s with { Indices = null } : s).ToList();
             return drawn.Select((s, i) => (s, i, drawn.Count));
         }
     }

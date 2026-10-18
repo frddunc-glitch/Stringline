@@ -45,6 +45,15 @@ public sealed record GraphTheme
 
     public LayerStyle Forecast { get; init; } = new(1.5f, 1, Dashed: true);
 
+    /// <summary>A cancelled train on the plan layer: thin, in <see cref="GraphSceneBuilder.CancelledColour"/>, with crosses at its ends.</summary>
+    public LayerStyle Cancelled { get; init; } = new(1f, 1);
+
+    /// <summary>Half the size of a cancelled train's end crosses, in pixels.</summary>
+    public float CancelCross { get; init; } = 4;
+
+    /// <summary>The ghost of a drag edit (S12): where the train would run if the edit were made.</summary>
+    public LayerStyle Ghost { get; init; } = new(3f, 0.6);
+
     /// <summary>Line width of the selected train's actual, plan and forecast paths.</summary>
     public float SelectedWidth { get; init; } = 4;
 

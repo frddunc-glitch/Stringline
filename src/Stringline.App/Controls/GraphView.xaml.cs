@@ -23,6 +23,9 @@ public partial class GraphView : UserControl
     public static readonly DependencyProperty SelectionProperty = DependencyProperty.Register(
         nameof(Selection), typeof(GraphSelection), typeof(GraphView), new PropertyMetadata(null, OnVisualChanged));
 
+    public static readonly DependencyProperty GhostsProperty = DependencyProperty.Register(
+        nameof(Ghosts), typeof(IReadOnlyList<GraphPath>), typeof(GraphView), new PropertyMetadata(null, OnVisualChanged));
+
     public static readonly DependencyProperty NavigatorProperty = DependencyProperty.Register(
         nameof(Navigator), typeof(GraphNavigator), typeof(GraphView), new PropertyMetadata(null, OnNavigatorChanged));
 
@@ -32,6 +35,8 @@ public partial class GraphView : UserControl
     private readonly SkiaGraphRenderer _renderer = new();
     private Point? _pressedAt;
     private bool _dragged;
+    private bool _editing;
+    private bool _altUsed;
     private double? _now;
     private double _nowAt = double.NaN;
     private (string Key, int Vertex)? _tipFor;
@@ -59,6 +64,13 @@ public partial class GraphView : UserControl
         set => SetValue(SelectionProperty, value);
     }
 
+    /// <summary>Lines drawn over the graph as a preview, such as where a train being dragged would run.</summary>
+    public IReadOnlyList<GraphPath>? Ghosts
+    {
+        get => (IReadOnlyList<GraphPath>?)GetValue(GhostsProperty);
+        set => SetValue(GhostsProperty, value);
+    }
+
     public GraphNavigator? Navigator
     {
         get => (GraphNavigator?)GetValue(NavigatorProperty);
@@ -67,6 +79,9 @@ public partial class GraphView : UserControl
 
     /// <summary>Builds the tooltip for a path under the cursor.</summary>
     public Func<GraphHit, HoverInfo?>? Describer { get; set; }
+
+    /// <summary>Edits trains by dragging and gives the right-click menu; without one, presses only pan.</summary>
+    internal IGraphEditor? Editor { get; set; }
 
     /// <summary>Move the now line (interpolated sim seconds). Redraws only when it moves at least half a pixel.</summary>
     public void SetNow(double? now)
@@ -125,7 +140,7 @@ public partial class GraphView : UserControl
         canvas.Save();
         canvas.Scale(scale);
         var now = _now is { } seconds ? new SimTime((int)Math.Floor(seconds)) : scene.Now;
-        _renderer.Render(canvas, scene with { Now = now }, nav.Viewport, Selection);
+        _renderer.Render(canvas, scene with { Now = now }, nav.Viewport, Selection, Ghosts);
         canvas.Restore();
         _nowAt = now is { } n ? nav.Viewport.TimeToPixel(n.Seconds) : double.NaN;
     }
@@ -137,7 +152,19 @@ public partial class GraphView : UserControl
         var p = e.GetPosition(Surface);
         _pressedAt = p;
         _dragged = false;
-        Navigator?.BeginDrag(new ScreenPoint(p.X, p.Y));
+        var at = new ScreenPoint(p.X, p.Y);
+        var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
+        _editing = Editor is { } editor && HitTest(p) is { } hit && editor.BeginEdit(hit, at, alt);
+        _altUsed |= _editing && alt;
+        if (_editing)
+        {
+            HideTip();
+        }
+        else
+        {
+            Navigator?.BeginDrag(at);
+        }
+
         CaptureMouse();
         e.Handled = true;
     }
@@ -151,11 +178,15 @@ public partial class GraphView : UserControl
             if (!_dragged && (Math.Abs(p.X - from.X) > ClickSlop || Math.Abs(p.Y - from.Y) > ClickSlop))
             {
                 _dragged = true;
-                Cursor = Cursors.SizeAll;
+                Cursor = !_editing ? Cursors.SizeAll : Navigator?.Viewport.IsVertical == true ? Cursors.SizeNS : Cursors.SizeWE;
                 HideTip();
             }
 
-            if (_dragged)
+            if (_dragged && _editing)
+            {
+                Editor?.MoveEdit(new ScreenPoint(p.X, p.Y), Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+            }
+            else if (_dragged)
             {
                 Navigator?.DragTo(new ScreenPoint(p.X, p.Y));
             }
@@ -171,6 +202,12 @@ public partial class GraphView : UserControl
         base.OnMouseLeftButtonUp(e);
         var wasClick = _pressedAt is not null && !_dragged;
         _pressedAt = null;
+        if (_editing)
+        {
+            _editing = false;
+            _ = Editor?.EndEditAsync(commit: !wasClick);
+        }
+
         Navigator?.EndDrag();
         ReleaseMouseCapture();
         Cursor = null;
@@ -180,6 +217,79 @@ public partial class GraphView : UserControl
         }
 
         e.Handled = true;
+    }
+
+    /// <summary>Esc during a drag edit drops it (and does not clear the selection).</summary>
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        base.OnPreviewKeyDown(e);
+        if (e.Key == Key.Escape && _editing)
+        {
+            CancelEdit();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Releasing Alt after an Alt+drag must not open the window's menu.</summary>
+    protected override void OnPreviewKeyUp(KeyEventArgs e)
+    {
+        base.OnPreviewKeyUp(e);
+        if (_altUsed && e.Key == Key.System && e.SystemKey is Key.LeftAlt or Key.RightAlt)
+        {
+            _altUsed = false;
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+        if (_editing)
+        {
+            CancelEdit();
+        }
+    }
+
+    /// <summary>A right click on a line: the plan menu for that train at that point.</summary>
+    protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
+    {
+        base.OnMouseRightButtonUp(e);
+        if (_editing || Editor is not { } editor)
+        {
+            return;
+        }
+
+        Focus();
+        HideTip();
+        var items = editor.MenuFor(HitTest(e.GetPosition(Surface)));
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var menu = new ContextMenu { PlacementTarget = this };
+        foreach (var item in items)
+        {
+            menu.Items.Add(item.IsSeparator ? new Separator()
+                : item.Command is null ? new MenuItem { Header = item.Header, IsEnabled = false, FontWeight = FontWeights.SemiBold }
+                : new MenuItem { Header = item.Header, Command = item.Command });
+        }
+
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    private void CancelEdit()
+    {
+        _editing = false;
+        _pressedAt = null;
+        _ = Editor?.EndEditAsync(commit: false);
+        if (IsMouseCaptured)
+        {
+            ReleaseMouseCapture();
+        }
+
+        Cursor = null;
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
