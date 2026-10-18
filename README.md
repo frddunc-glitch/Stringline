@@ -42,6 +42,16 @@ dotnet run --project src/Stringline.Tools -- replay-server my-sim.sslog --start 
 
 Playback starts when the first client connects. Press Space to pause or resume, `+` or `-` to change speed, and Q or Ctrl+C to stop. Close SimSig first, or use `--port`, because only one program can listen on 51515.
 
+## Drawing a train graph
+
+`render-png` draws one corridor's graph to a PNG with the renderer the app uses: the WTT as thin lines and, given a recording, the actual running up to `--at` as heavy lines, with the now line a third of the way across:
+
+```sh
+dotnet run --project src/Stringline.Tools -- render-png --wtt "tests/fixtures/waterloo 2010.WTT" --log tests/fixtures/waterloo-4x.sslog --corridor main --at 07:00 --hours 3 waterloo.png
+```
+
+Without `--profile`, corridors come from the WTT (`corridors` lists them). `--now-at`, `--width`, `--height` and `--no-wtt` change the view.
+
 ## Layout
 
 - `src/` — `Stringline.Core` (sim time, identifiers, lenient JSON), `Gateway`, `Timetable`, `Network`, `Planning`, `Persistence`, `Graph`, `Tools` (the `stringline` CLI) and `App` (WPF, Windows only).
@@ -55,6 +65,8 @@ Copyright (C) 2026 Frederick Duncan and Stringline contributors.
 Stringline is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [`LICENSE`](LICENSE) for the full text.
 
 By contributing, you agree that your contributions are licensed under the same terms.
+
+The graph's labels use [Noto Sans](https://notofonts.github.io/), embedded in `Stringline.Graph` under the SIL Open Font License 1.1 (`src/Stringline.Graph/Fonts/OFL.txt`); the font remains under that licence.
 
 The licence covers Stringline's source code only. Timetables, recordings and other data derived from SimSig simulations (for example, anything in `tests/fixtures/`) remain subject to their owners' terms and are not covered by the GPL.
 

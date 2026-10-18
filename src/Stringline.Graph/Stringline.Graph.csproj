@@ -12,6 +12,18 @@
 
   <ItemGroup>
     <PackageReference Include="SkiaSharp" />
+    <!-- SkiaSharp brings Windows and macOS natives; Linux (CI, cloud sessions, headless render-png) needs its own. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Noto Sans, SIL Open Font Licence 1.1 (Fonts/OFL.txt). -->
+    <EmbeddedResource Include="Fonts\*.ttf" LogicalName="Stringline.Graph.Fonts.%(Filename)%(Extension)" />
+    <None Include="Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" Link="Fonts\OFL-NotoSans.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Stringline.Graph.Tests" />
   </ItemGroup>
 
 </Project>

@@ -4,3 +4,5 @@
 *.wtt binary
 *.WTT binary
 *.zip binary
+*.ttf binary
+*.verified.txt text eol=lf

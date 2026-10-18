@@ -252,6 +252,49 @@
 - The minimum run time comes from the WTT, so it is only as good as the timetable. A section where every train stops at both ends has a slower minimum than a pass-to-pass run would.
 - No CSV import for location names yet (mentioned in `04-…md` §1); names are edited in the profile JSON for now.
 
+## 2026-10-19 — S7: Graph scene and Skia renderer (headless)
+
+### Done
+- **`Stringline.Graph`** (first code; still portable `net10.0`). The design is in `05-…md` §7.
+  - **`GraphViewport`:** time range across, axis range down, surface size and margins. It has `ToScreen`/`ToWorld`, `PanPixels`/`PanTime`, `ZoomTime` (keeps the time under the anchor; held between 5 min and 2 days), `Follow(now)`, `Around(now, span, fraction)` and `Resize`. The Up end is at the top.
+  - **`GraphScene`** (per corridor, in world coordinates: sim seconds × axis 0..1): `GraphLocation`s, `GraphPath`s (layer, train, headcode, colour, vertices, unmatched flag, direction) and `Now`.
+  - **`GraphSceneBuilder`:** pure, `GraphSceneRequest` → scene. It draws the WTT layer from `Train.Points` and the actual layer from `LiveTrain` workings (`AtTimingPoint` actuals only), coloured by the profile's category styles; unmatched and pending workings are grey. Out-and-back trips off the corridor split the path. The plan and forecast layers exist in the model for S10/S11.
+  - **`TimeGrid`:** tick spacing from zoom (5/30 min at a 3 h view), with hour lines heaviest and day-marked labels after midnight.
+  - **`SkiaGraphRenderer`:**
+    - Draws, in order: background, past shading, grid, location lines, paths by layer (culled by bounds), now line, headcode labels (rotated along the line, greedy overlap check), border, time labels, location labels (bold for stations, TIPLOC under a display name) and title.
+    - Paints are pooled by colour and layer. `RenderPng` renders headless.
+    - `GraphTheme` holds the line-style table from `05-…md` §2. `GraphFonts` loads the embedded Noto Sans.
+- **`stringline render-png --wtt t.wtt [--log x.sslog] [--profile p.json] [--corridor main] [--at 07:00] [--hours 3] [--now-at 0.33] [--width] [--height] [--no-wtt] out.png`:**
+  - Plays the recording up to `--at`, through the first event after it.
+  - The profile is generated from the WTT unless given.
+  - `--at` defaults to the end of the recording, or to the timetable start without one.
+- **Tests:**
+  - New `Stringline.Graph.Tests` (57): viewport, grid, scene builder, renderer pixels, clipping, the snapshot comparer itself, and **Verify PNG snapshots**: the small synthetic corridor, Waterloo main at 07:00 from the 4× recording, and Llangollen single line.
+  - `RenderPngCommandTests` in Tools (14).
+  - Totals: 827 (Core 244, Architecture 9, Gateway 202, Timetable 157, Network 103, Graph 57, Tools 55). Green on Windows (Debug) and on Linux (`sdk:10.0` container, portable filter, Release); `render-png` there gives the same output summary as on Windows.
+  - Graph coverage: 98% line, 93% branch.
+
+### Decisions
+- **Fred's choices:**
+  - **Bundle an OFL font** (Noto Sans Regular and Bold, `src/Stringline.Graph/Fonts/`, with `OFL.txt`; noted in the README).
+  - **`--at` is the now time**: the window is around it, with now ⅓ across (`--now-at`).
+  - **The Up end is at the top.**
+- **PNG snapshots compare with a tolerance** (`PngComparer`). Text goes through DirectWrite on Windows and FreeType on Linux, so even with the same font about 0.5–2.5% of pixels differ slightly. Measured: none differ by more than 64 in any channel. The comparer allows 0.01% of pixels beyond 64, and a test checks that it still catches a one-minute move of the now line and an extra train.
+  - It decodes copies of the streams, because `SKBitmap.Decode(Stream)` closes Verify's stream. Without the copy, a real mismatch showed up as `ObjectDisposedException`.
+- **The scene builder takes a `GraphSceneRequest`, not a `PlanSnapshot`.** S10 can build the request from its snapshot, or add an overload.
+- **The scene is whole-day and viewport-independent.** The renderer culls by path bounds; Waterloo builds 1 700+ paths. Path caching and the label grid are left for S9, as planned.
+- **SkiaSharp 4 deprecates `SKPath.MoveTo/LineTo`**, so paths are built with `SKPathBuilder`. `SkiaSharp.NativeAssets.Linux.NoDependencies` (MIT) is added for Linux, CI and cloud sessions.
+- **The Graph tests reference Timetable and Gateway** to play real recordings. The Graph library itself still references only Core, Network and Planning.
+
+### Next
+- S8: host `SkiaGraphRenderer` in an `SKElement`. Keep one renderer per surface. Rebuild the scene with `GraphSceneBuilder` when `LiveState.Version` changes, and change only the `GraphViewport` on pan/zoom (`PanPixels`, `ZoomTime(factor, mouseX)`, `Follow`). Use `SimClock.Now` for `Now`.
+- S9: cache `SKPath`s per path and layer; replace the label list with a grid; add hit testing, the vertical orientation (the viewport is horizontal only so far), delay-band colouring and PNG export (`RenderPng` already exists).
+
+### Known issues
+- Dense corridors at a 3 h view are busy: actual lines are 2.5 px as the style table says, and labels sit on top of lines. S9's label placement and delay-band colours should help.
+- `ActualEvent` has no "at a signal between timing points" position, so actual lines run straight between timing points.
+- Titles use the WTT name, so Waterloo shows "SX May 2010 (Updated - Loader) v1.0.1"; the profile's `Name` can be edited.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

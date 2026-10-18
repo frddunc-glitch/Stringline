@@ -1,0 +1,144 @@
+using System.CommandLine;
+using SkiaSharp;
+using Stringline.Core;
+using Stringline.Gateway.Recording;
+using Stringline.Gateway.Tests;
+using Stringline.Network.Profiles;
+using Stringline.Timetable;
+
+namespace Stringline.Tools.Tests;
+
+/// <summary>Runs <c>stringline render-png</c> in-process against the Waterloo and Llangollen fixtures.</summary>
+public sealed class RenderPngCommandTests : IDisposable
+{
+    private readonly DirectoryInfo _dir = Directory.CreateTempSubdirectory("stringline-render-");
+
+    private static string Waterloo => Fixtures.Path("waterloo 2010.WTT");
+
+    private string Out(string name = "graph.png") => Path.Combine(_dir.FullName, name);
+
+    private static async Task<(int Exit, string Out, string Error)> Run(params string[] args)
+    {
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var root = new RootCommand { RenderPngCommand.Create() };
+        var exit = await root.Parse(["render-png", .. args]).InvokeAsync(new InvocationConfiguration { Output = output, Error = error });
+        return (exit, output.ToString(), error.ToString());
+    }
+
+    [Fact]
+    public async Task Draws_wtt_and_actuals_around_the_time_given()
+    {
+        var (exit, output, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo4x), "--corridor", "main", "--at", "07:00", "--hours", "3", Out());
+
+        exit.Should().Be(0, error);
+        error.Should().BeEmpty();
+        output.Should().StartWith("Wrote graph.png: main (WLOO – WIMB), 06:00:00–09:00:00, now 07:00:00, ");
+        output.Should().MatchRegex(@"\d+ paths in view \(\d+ actual in all\)\.");
+        using var bitmap = SKBitmap.Decode(Out());
+        (bitmap.Width, bitmap.Height).Should().Be((1600, 900));
+    }
+
+    [Fact]
+    public async Task Without_a_log_or_time_starts_at_the_timetable_start()
+    {
+        var (exit, output, _) = await Run("--wtt", Fixtures.Path("llangollen 2012 B.WTT"), "--width", "800", "--height", "400", "--now-at", "0", Out());
+
+        exit.Should().Be(0);
+        var start = new WttReader().Read(Fixtures.Path("llangollen 2012 B.WTT")).Timetable.Header.StartTime;
+        output.Should().Contain($"main (LLANGOLLEN – CARROG), {start}–{start + (3 * 3600)}, now {start}, ");
+        output.Should().Contain("(0 actual in all)");
+        using var bitmap = SKBitmap.Decode(Out());
+        (bitmap.Width, bitmap.Height).Should().Be((800, 400));
+    }
+
+    [Fact]
+    public async Task Without_a_time_the_now_line_is_the_end_of_the_recording()
+    {
+        var (exit, output, _) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo1x), "--hours", "1", Out());
+
+        exit.Should().Be(0);
+        var last = SslogRecording.Load(Fixtures.Path(Fixtures.Waterloo1x)).LastSim!.Value;
+        output.Should().Contain($"now {last},");
+    }
+
+    [Fact]
+    public async Task Uses_a_profile_and_its_corridor_ids()
+    {
+        var tt = new WttReader().Read(Waterloo).Timetable;
+        var profile = StringlineProfile.Create(tt);
+        var renamed = profile with { Corridors = [profile.Corridors[1] with { Id = "windsor" }] };
+        var path = Out("profile.json");
+        await File.WriteAllTextAsync(path, ProfileJson.Serialize(renamed));
+
+        var (exit, output, _) = await Run("--wtt", Waterloo, "--profile", path, "--corridor", "windsor", "--at", "07:00", "--no-wtt", Out());
+
+        exit.Should().Be(0);
+        output.Should().Contain("windsor (WLOO – BARNES)").And.Contain(" 0 paths in view");
+    }
+
+    [Fact]
+    public async Task Reports_an_unknown_corridor()
+    {
+        var (exit, _, error) = await Run("--wtt", Waterloo, "--corridor", "nowhere", Out());
+
+        exit.Should().Be(2);
+        error.Should().Contain("No corridor 'nowhere' in the profile (corridors: main, wloo-barnes).");
+        File.Exists(Out()).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("--at", "noon")]
+    [InlineData("--hours", "0")]
+    [InlineData("--hours", "49")]
+    [InlineData("--now-at", "1.5")]
+    [InlineData("--width", "10")]
+    [InlineData("--height", "99999")]
+    public async Task Refuses_bad_arguments(string option, string value)
+    {
+        var (exit, _, error) = await Run("--wtt", Waterloo, option, value, Out());
+
+        exit.Should().Be(2);
+        error.Should().NotBeEmpty();
+        File.Exists(Out()).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Reports_unreadable_inputs()
+    {
+        var (exit, _, error) = await Run("--wtt", Out("missing.wtt"), Out());
+        exit.Should().Be(2);
+        error.Should().StartWith("Cannot read input:");
+
+        var badProfile = Out("bad.json");
+        await File.WriteAllTextAsync(badProfile, "{ not json");
+        (exit, _, error) = await Run("--wtt", Waterloo, "--profile", badProfile, Out());
+        exit.Should().Be(2);
+        error.Should().StartWith("Cannot read input:");
+    }
+
+    [Fact]
+    public async Task Reports_an_unwritable_output()
+    {
+        var (exit, _, error) = await Run("--wtt", Fixtures.Path("llangollen 2012 B.WTT"), Path.Combine(_dir.FullName, "no-such-dir", "x.png"));
+
+        exit.Should().Be(2);
+        error.Should().StartWith("Cannot write ");
+    }
+
+    [Fact]
+    public void Play_stops_at_the_first_event_after_the_time()
+    {
+        var tt = new WttReader().Read(Waterloo).Timetable;
+        var recording = SslogRecording.Load(Fixtures.Path(Fixtures.Waterloo4x));
+        using var loggers = ConsoleLogging.Create(verbose: false);
+
+        var state = RenderPngCommand.Play(recording, tt, SimTime.FromClock(6, 30), loggers, CancellationToken.None);
+
+        state.Clock.LastReported.Should().BeLessThanOrEqualTo(SimTime.FromClock(6, 30));
+        state.Trains.SelectMany(t => t.Actuals).Should().OnlyContain(a => a.Time <= SimTime.FromClock(6, 30));
+        state.Trains.Should().NotBeEmpty();
+    }
+
+    public void Dispose() => _dir.Delete(recursive: true);
+}

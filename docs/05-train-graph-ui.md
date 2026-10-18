@@ -22,7 +22,8 @@
 Panels are dockable later; v1 uses a fixed three-column layout with a splitter.
 
 ## 2. Graph conventions (train control diagram style)
-- Time on the horizontal axis by default (ViziRail/TCD style); a toggle swaps axes.
+- Time on the horizontal axis by default (ViziRail/TCD style); a toggle swaps axes (S9).
+- The corridor's Up end (its first location) is at the top, so Down trains slope down to the right (Fred, S7). The axis is padded 4% above the first and below the last location.
 - Location axis labels: display name + TIPLOC; stations with platforms bold; loops shown as a double tick.
 - Minor grid every 5 min, major every 30 min with labels; hour lines heavier.
 - Down trains slope one way, Up the other — direction is implicit in the slope.
@@ -75,6 +76,14 @@ List: kind icon · time · location · trains · severity (min). Click focuses g
 Per location, ordered list of upcoming movements in the working-plan order, highlighting where it differs from the WTT order — the controller's crib sheet while signalling.
 
 ## 7. Rendering design (Stringline.Graph)
+
+Built in S7 as below, except: the scene builder takes a `GraphSceneRequest` (profile, corridor, WTT, live trains, now) until S10 provides `PlanSnapshot`; paths are not cached between frames yet, and labels are placed against a simple list of rectangles (both S9).
+
+- **Scene rules.** Only timed points on the corridor become vertices; a pass is one vertex, a stop with both times two (a level segment). A train that leaves the corridor and comes back to the *same* location starts a new path, so time on a branch does not draw as a stop; rejoining elsewhere draws straight across. A path needs two vertices, so a train that only crosses the corridor at one point draws nothing. Each working of a live uid is its own actual path; only `AtTimingPoint` actuals are used (signals have no axis position). Matched actuals take the WTT train's category colour; pending and unmatched ones are grey (`#8A8A8A`).
+- **Labels.** One headcode per train, preferring its actual path over its WTT path, rotated along the first visible sloping segment long enough for it, at ½, ¼ or ¾ of the way along, skipped if it would overlap a label already placed. Labels are the line colour, opaque and 25% darker.
+- **Grid.** Minor spacing is the first of 1/2/5/10/15/30/60… min at least 20 px apart; labelled lines are the first step at least six minor lines and 64 px apart. That gives 5/30 min at a 3 h view, 10/60 at 6 h. Times past midnight are labelled with the day (`00:00+1`).
+- **Text.** Noto Sans Regular and Bold are embedded (SIL OFL), unhinted and anti-aliased, so text is the same on every machine. Glyph edges still differ slightly between DirectWrite (Windows) and FreeType (Linux), so PNG snapshots compare with a tolerance: no channel more than 64 apart on more than 0.01% of pixels. Measured, Windows and Linux renders differ on no pixel by that much.
+
 - `GraphViewport` (time range, distance range, pixel size, orientation) → transforms.
 - `GraphSceneBuilder` turns a `PlanSnapshot` + corridor + viewport into a `GraphScene` of primitives (polylines with style keys, labels, rects). Built off the UI thread; rebuilt only when snapshot, corridor or viewport changes. Polylines are in **world coordinates** (sim seconds, axis position) so panning only changes the transform.
 - `SkiaGraphRenderer.Render(SKCanvas, GraphScene, Viewport)` — culls by bounding box; cached `SKPath`s per train per layer; `SKPaint` objects pooled by style key.

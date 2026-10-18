@@ -95,6 +95,13 @@ LiveState            // reducer: Apply(GatewayEvent) → clock, live trains + ma
 // Stringline.Timetable
 WttReader            // .wtt (zip) or SavedTimetable.xml → WttImportResult(WorkingTimetable, Warnings, UnknownElements, SkippedTrains); tolerant, see 04-…md §1
 
+// Stringline.Graph (S7) — portable; draws to any SKCanvas
+GraphViewport        // time range across × axis range down, surface size, margins; ToScreen/ToWorld, PanPixels, ZoomTime(anchor), Follow(now), Around(now, span, fraction)
+GraphScene           // per corridor, world coordinates (sim seconds, axis 0..1): GraphLocation[], GraphPath[] (layer, train, headcode, colour, vertices), Now
+GraphSceneBuilder    // pure: GraphSceneRequest(profile, corridor, timetable?, live trains, now) → GraphScene; WTT + actual layers (plan/forecast from S10/S11)
+TimeGrid             // tick spacing from zoom (5 min / 30 min at a 3 h view), hour lines heaviest
+SkiaGraphRenderer    // Render(SKCanvas, scene, viewport), RenderPng; pooled paints, culling by path bounds, greedy headcode labels; GraphTheme, GraphFonts (embedded Noto Sans)
+
 public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); string Describe(); }
 ```
 
@@ -117,7 +124,7 @@ public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); s
 | Purpose | Package |
 |---|---|
 | MVVM | CommunityToolkit.Mvvm |
-| Rendering | SkiaSharp, SkiaSharp.Views.WPF |
+| Rendering | SkiaSharp (+ SkiaSharp.NativeAssets.Linux.NoDependencies for Linux), SkiaSharp.Views.WPF; Noto Sans embedded (OFL) |
 | DI / hosting | Microsoft.Extensions.Hosting |
 | Logging | Microsoft.Extensions.Logging.Abstractions in libraries (`ILogger<T>`, `[LoggerMessage]`); Serilog (+ Console/File sinks, Serilog.Extensions.Logging) as the provider in Tools and App |
 | SQLite | Microsoft.Data.Sqlite |
