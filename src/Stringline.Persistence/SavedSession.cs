@@ -104,6 +104,40 @@ public static class SessionCatalogue
     /// <summary>The most recently saved session, if it was left running (not ended): the one to offer for resuming.</summary>
     public static SessionInfo? LatestUnfinished(string folder) => List(folder) is [{ Ended: false } latest, ..] ? latest : null;
 
+    /// <summary>
+    /// Deletes the sessions in <paramref name="folder"/> last saved before <paramref name="cutoff"/> (housekeeping,
+    /// S18), with their SQLite side files. The newest session is always kept, so the start-up offer to resume it
+    /// survives, and so is <paramref name="keep"/> (the session being written). Files that are not readable sessions are
+    /// left alone, and a file that cannot be deleted (open elsewhere, say) is skipped.
+    /// </summary>
+    /// <returns>The paths deleted.</returns>
+    public static IReadOnlyList<string> DeleteOlderThan(string folder, DateTimeOffset cutoff, string? keep = null)
+    {
+        var deleted = new List<string>();
+        foreach (var info in List(folder).Skip(1))
+        {
+            if (info.Updated >= cutoff || info.Path is not { } path
+                || (keep is not null && string.Equals(System.IO.Path.GetFullPath(path), System.IO.Path.GetFullPath(keep), StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Delete(path);
+                File.Delete(path + "-wal");
+                File.Delete(path + "-shm");
+                deleted.Add(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // In use or read-only: try again next time.
+            }
+        }
+
+        return deleted;
+    }
+
     /// <summary>What a session file says about itself, or null if it is not one or cannot be read.</summary>
     public static SessionInfo? ReadInfo(string path)
     {

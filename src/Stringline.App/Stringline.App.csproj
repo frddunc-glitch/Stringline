@@ -11,7 +11,25 @@
     <AssemblyName>Stringline</AssemblyName>
     <!-- WPF needs culture data (XmlLanguage); the libraries stay invariant. -->
     <InvariantGlobalization>false</InvariantGlobalization>
+    <ApplicationIcon>Assets\stringline.ico</ApplicationIcon>
+    <Description>A live electronic train graph for SimSig</Description>
   </PropertyGroup>
+
+  <!-- Single-file, self-contained publish (S18): build/publish.ps1 passes -r win-x64 -p:PublishSingleFile=true. -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <SelfContained>true</SelfContained>
+    <!-- WPF, SkiaSharp and SQLite native libraries go inside the exe and are unpacked on first run. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\stringline.ico" />
+    <!-- The GPL's text, for the About window's View licence (embedded, so a single-file build has it). -->
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="Stringline.LICENSE.txt" Link="LICENSE" Visible="false" />
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Stringline.App.Tests" />

@@ -20,7 +20,7 @@ internal sealed partial class MainViewModel
     /// <summary>The least time between working out suggestions again for live updates alone.</summary>
     private static readonly TimeSpan SuggestionRefresh = TimeSpan.FromSeconds(2);
 
-    private (string Conflict, long Plan, long State, bool Cancellation)? _suggestKey;
+    private (string Conflict, long Plan, long State, SuggestionOptions Options)? _suggestKey;
     private DateTimeOffset _suggestedAt;
     private bool _suggesting;
     private bool _suggestAgain;
@@ -80,7 +80,7 @@ internal sealed partial class MainViewModel
             return;
         }
 
-        var key = (id, Snapshot.PlanVersion, Snapshot.StateVersion, SuggestionPanel.AllowCancellation);
+        var key = (id, Snapshot.PlanVersion, Snapshot.StateVersion, Options: _settings.Planning.ToSuggestionOptions(SuggestionPanel.AllowCancellation));
         if (key == _suggestKey)
         {
             return;
@@ -93,7 +93,7 @@ internal sealed partial class MainViewModel
         }
 
         var now = _time.GetUtcNow();
-        var liveOnly = _suggestKey is { } last && last.Conflict == key.id && last.Plan == key.PlanVersion && last.Cancellation == key.AllowCancellation;
+        var liveOnly = _suggestKey is { } last && last.Conflict == key.id && last.Plan == key.PlanVersion && last.Options == key.Options;
         if (liveOnly && now - _suggestedAt < SuggestionRefresh)
         {
             return; // the next snapshot after the interval brings it up to date
@@ -104,7 +104,7 @@ internal sealed partial class MainViewModel
         _suggesting = true;
         SuggestionPanel.Working(conflict);
         var snapshot = Snapshot;
-        var options = new SuggestionOptions { AllowCancellation = SuggestionPanel.AllowCancellation };
+        var options = key.Options;
         _ = Task.Run(() => Suggester.Suggest(SuggestionRequest.For(snapshot, conflict, options))).ContinueWith(
             t => _ui.Post(() =>
             {

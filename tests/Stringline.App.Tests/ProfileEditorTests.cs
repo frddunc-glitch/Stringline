@@ -525,7 +525,7 @@ public sealed class ProfileEditorWindowTests
     }
 
     /// <summary>Collects WPF binding errors (a mistyped path, say) while it is alive.</summary>
-    private sealed class BindingErrorListener : System.Diagnostics.TraceListener
+    internal sealed class BindingErrorListener : System.Diagnostics.TraceListener
     {
         private readonly List<string> _errors;
 

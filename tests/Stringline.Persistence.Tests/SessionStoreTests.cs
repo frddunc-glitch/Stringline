@@ -262,6 +262,39 @@ public sealed class SessionStoreTests : IDisposable
             .And.EndWith("-2.stringline");
     }
 
+    [Fact]
+    public void Old_sessions_are_deleted_but_never_the_newest_or_the_one_kept()
+    {
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(Wall);
+        string Make(string area, TimeSpan later)
+        {
+            using var writer = SessionWriter.Create(Folder, new SessionInfo { AreaId = area }, Manual, time);
+            writer.OnStep(PlanStep.Execute(new CancelTrain(new TrainId("1A01"))));
+            writer.Flush();
+            time.Advance(later);
+            return writer.Path!;
+        }
+
+        var oldest = Make("waterloo", TimeSpan.FromDays(1));
+        var kept = Make("penrith", TimeSpan.FromDays(1));
+        var old = Make("exeter", TimeSpan.FromDays(30));
+        var recent = Make("brighton", TimeSpan.FromDays(1));
+        var newest = Make("derby", TimeSpan.Zero);
+        File.WriteAllText(Path.Combine(Folder, "notes" + SessionCatalogue.Extension), "not a session");
+
+        var deleted = SessionCatalogue.DeleteOlderThan(Folder, time.GetUtcNow().AddDays(-10), keep: kept);
+
+        deleted.Should().BeEquivalentTo([oldest, old]);
+        Files().Select(Path.GetFileName).Should().BeEquivalentTo(
+            [Path.GetFileName(kept), Path.GetFileName(recent), Path.GetFileName(newest), "notes" + SessionCatalogue.Extension]);
+        Directory.GetFiles(Folder, "*-wal").Should().BeEmpty();
+
+        // With every session older than the cutoff, the newest still stays.
+        SessionCatalogue.DeleteOlderThan(Folder, time.GetUtcNow().AddDays(1)).Should().BeEquivalentTo([kept, recent]);
+        Files().Select(Path.GetFileName).Should().Contain(Path.GetFileName(newest));
+        SessionCatalogue.DeleteOlderThan(Path.Combine(Folder, "nowhere"), time.GetUtcNow()).Should().BeEmpty();
+    }
+
     private static void Sql(string path, string sql)
     {
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());

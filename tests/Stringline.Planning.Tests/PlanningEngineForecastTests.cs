@@ -106,6 +106,23 @@ public sealed class PlanningEngineForecastTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Conflict_options_can_be_changed_while_running()
+    {
+        _engine.SetTimetable(WorkingPlanTests.Timetable());
+        var loaded = await Snapshot(s => s.Plan.Count == 2);
+        var block = new Disruption("B1", DisruptionKind.Block, new Tiploc("A"), new Tiploc("B"), null, SimTime.Parse("06:00"), SimTime.Parse("07:30"));
+        (await _engine.Execute(new AddDisruption(block)).WaitAsync(Timeout)).Applied.Should().BeTrue();
+        var blocked = await Snapshot(s => s.PlanVersion > loaded.PlanVersion && s.Conflicts.Count > 0);
+        blocked.Settings.Conflicts.MinSeveritySeconds.Should().Be(30);
+
+        // A 30-minute hold is under a 2-hour threshold, so nothing is reported.
+        _engine.SetForecast(conflicts: new ConflictOptions { MinSeveritySeconds = 2 * 60 * 60 });
+        var raised = await Snapshot(s => s.Settings.Conflicts.MinSeveritySeconds == 2 * 60 * 60);
+        raised.Conflicts.Count.Should().Be(0);
+        raised.Settings.Forecast.Should().Be(blocked.Settings.Forecast, "the forecast options are kept");
+    }
+
+    [Fact]
     public async Task Snapshots_carry_what_the_forecast_was_made_with_so_suggestions_can_be_made_from_them()
     {
         var network = ForecastNetwork.Build([Line("main", 180, single: false, "A", "B", "C", "D")], WorkingPlanTests.Timetable());

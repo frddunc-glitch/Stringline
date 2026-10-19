@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Stringline.App.Controls"
         xmlns:views="clr-namespace:Stringline.App.Views"
-        Title="{Binding Title}" Height="860" Width="1600" MinWidth="800" MinHeight="480"
+        Title="{Binding Title}" Icon="pack://application:,,,/Stringline;component/Assets/stringline.ico" Height="860" Width="1600" MinWidth="800" MinHeight="480"
         UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
@@ -24,6 +24,7 @@
     <KeyBinding Key="Z" Modifiers="Ctrl" Command="{Binding UndoCommand}" />
     <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCommand}" />
     <KeyBinding Key="Z" Modifiers="Ctrl+Shift" Command="{Binding RedoCommand}" />
+    <KeyBinding Key="OemComma" Modifiers="Ctrl" Command="{Binding ShowSettingsCommand}" />
   </Window.InputBindings>
 
   <DockPanel>
@@ -79,6 +80,8 @@
         <MenuItem Header="_Vertical (time down)" IsCheckable="True" IsChecked="{Binding IsVertical}" />
         <Separator />
         <MenuItem Header="_Clear selection" Command="{Binding ClearSelectionCommand}" />
+        <Separator />
+        <MenuItem Header="_Settings…" InputGestureText="Ctrl+," Command="{Binding ShowSettingsCommand}" />
       </MenuItem>
       <MenuItem Header="_Plan">
         <MenuItem Header="{Binding UndoHeader}" InputGestureText="Ctrl+Z" Command="{Binding UndoCommand}" />
@@ -90,6 +93,9 @@
         <MenuItem Header="_Link selected live train to WTT train…" Command="{Binding LinkSelectedCommand}" />
       </MenuItem>
       <MenuItem Header="_Help">
+        <MenuItem Header="_Getting started (online)" Command="{Binding OpenHelpCommand}" />
+        <MenuItem Header="Open _log folder" Command="{Binding OpenLogFolderCommand}" />
+        <Separator />
         <MenuItem Header="_About Stringline" Click="OnAbout" />
       </MenuItem>
     </Menu>

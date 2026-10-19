@@ -180,6 +180,16 @@ internal sealed class ScriptedDialogs : IDialogService
         Opened.Add(path);
         return null;
     }
+
+    /// <summary>Answers to folder pickers, in order; none left means cancelled.</summary>
+    public Queue<string?> Folders { get; } = new();
+
+    public string? PickFolder(string title, string? initialFolder) => Folders.Count > 0 ? Folders.Dequeue() : null;
+
+    /// <summary>What the user does in the settings window; returns OK (true) or Cancel. Unset means cancelled.</summary>
+    public Func<SettingsViewModel, bool>? Settings { get; set; }
+
+    public bool ShowSettings(SettingsViewModel viewModel) => Settings is { } answer && answer(viewModel) && viewModel.TryAccept();
 }
 
 /// <summary>A main view model wired as the app wires it, with files under a temporary folder.</summary>
@@ -191,7 +201,8 @@ internal sealed class TestApp : IAsyncDisposable
     private readonly Task _engineLoop;
 
     /// <param name="root">Another app's folder, to start the app again over its files (S16: resume); that app cleans it up.</param>
-    public TestApp(Func<AppSettings, AppSettings>? settings = null, string? root = null)
+    /// <param name="logging">The app's log level control, as the app passes it; none by default.</param>
+    public TestApp(Func<AppSettings, AppSettings>? settings = null, string? root = null, AppLogging? logging = null)
     {
         _ownsRoot = root is null;
         _root = root is null ? Directory.CreateTempSubdirectory("stringline-app-") : new DirectoryInfo(root);
@@ -215,7 +226,8 @@ internal sealed class TestApp : IAsyncDisposable
             Ui,
             Paths,
             TimeProvider.System,
-            NullLoggerFactory.Instance)).GetAwaiter().GetResult();
+            NullLoggerFactory.Instance,
+            logging)).GetAwaiter().GetResult();
     }
 
     public TestUiThread Ui { get; } = new();

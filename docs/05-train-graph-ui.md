@@ -174,3 +174,24 @@ Built as §1 describes, with these specifics:
 - **PDF (GR-10; Fred: the current view, fitted to the page).** Session ▸ Export graph as PDF (A3 landscape)… (Ctrl+P), (A4 landscape)… or (view size)…. The view's time and corridor range, orientation, colours, selection and now line are laid out afresh on the page inside 10 mm margins (one point per view pixel), so text keeps its size. One vector page, with the fonts embedded and the sim, corridor and time as its title.
 - **Printing (Fred: a page preset only).** A3 landscape is the default PDF page; print it from a PDF reader. There is no Print command.
 - **CLI.** `stringline report (--log x.sslog | --session s.stringline) [--wtt t.wtt] [--at 07:00] [--all] [--by-train] out.csv` writes the same CSV. A session brings its plan edits as they stood at that time (a replay session reports as at where it had got to). `stringline render-png` (alias `render`) writes a PDF when the output ends in `.pdf`, with `--page a3|a4|view`.
+
+## 12. Settings, About and packaging (S18)
+
+- **Settings window (Fred: all four groups).** View ▸ Settings… (Ctrl+,), modal, with OK, Cancel and Restore defaults. Its tabs:
+  - **Forecast and conflicts:** knock-on (the same switch as the View menu), default dwell and turnaround, "possibly stopped" time (`ForecastOptions`), platform margin and least conflict shown (`ConflictOptions`).
+  - **Suggestions:** allow terminating short or cancelling (the same switch as the panel), and the platform change, line change, terminate and cancel penalties in minutes (`SuggestionOptions`).
+  - **Folders:** timetables (must exist), sessions, recordings and exports. A blank box uses the default, shown under it.
+  - **Logging and housekeeping:** detailed (Debug) logging, days of logs to keep (from the next start), Open log folder, and delete saved sessions last saved more than N days ago (off by default).
+  - Values are typed as text and checked together on OK (durations as `m:ss`, minutes or `90s`, each within a range); the window stays open with the reason until they pass. Nothing changes on Cancel.
+- **Applying.** The settings are saved (`AppSettings.Planning`, folders, logging, `DeleteSessionsAfterDays`). The engine takes the forecast and conflict options at once (`PlanningEngine.SetForecast(…, conflicts)`), suggestions are worked out again with the new penalties, the folders apply to the next save, and the log level changes at once (a Serilog level switch).
+- **Housekeeping.** With deleting on, sessions older than the days chosen are deleted at start-up (`SessionCatalogue.DeleteOlderThan`), never the newest (so it can still be resumed), the one being written or one named on the command line. Turning it on asks first ("Delete N saved sessions … now?"); Not now leaves them until the next start.
+- **Help menu.** Getting started (online) opens the README; Open log folder; About Stringline.
+- **About window.** The icon, version and commit (`0.1.0 (9806001)`, from the build's informational version), the notices GPLv3 §5(d) asks for (copyright, no warranty, the licence with a link, the source link), View licence (the GPL's text, embedded), Copy version (version, OS and runtime, for bug reports), the components it is built with and their licences (`AboutInfo.Credits`, which a test checks against `Directory.Packages.props` and `THIRD-PARTY-NOTICES.md`), and the SimSig disclaimer.
+- **Logging.** `%LOCALAPPDATA%\Stringline\logs\stringline-yyyyMMdd.log`, one file a day, 14 kept by default. Each run starts with the version, commit, OS, runtime and whether it is the single-file build. Unhandled exceptions on any thread and unobserved task exceptions are logged. Credentials never are.
+- **Icon.** A small train graph on a rounded tile, drawn by `AppIcon` (Stringline.Graph) at 16–256 px into `src/Stringline.App/Assets/stringline.ico` by `stringline icon`. Below 32 px it shows only the two stepped trains, so it does not read as an X.
+- **Packaging (Fred: zip and installer).** `build/publish.ps1` publishes a single-file, self-contained `Stringline.exe` for win-x64 (native libraries inside, compressed, about 78 MB), then zips it with `LICENSE.txt`, `THIRD-PARTY-NOTICES.md`, `OFL.txt` and `README.md`. With `-Installer` it also builds `Stringline-x.y.z-setup.exe` with Inno Setup 6 (`installer/Stringline.iss`):
+  - per-user by default, with no admin prompt (all users can be chosen);
+  - a Start-menu shortcut, and an optional desktop one;
+  - Windows 10 2004 or later, x64;
+  - the uninstaller leaves user data.
+- **Releases.** Pushing a `v*` tag runs `.github/workflows/release.yml` on Windows. It tests, publishes with the tag's version and makes a draft GitHub release with both files. Running it by hand builds them as workflow artifacts.

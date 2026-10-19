@@ -47,12 +47,14 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private readonly AppSettingsStore _settingsStore;
     private readonly IDialogService _dialogs;
     private readonly IUiDispatcher _ui;
-    private readonly AppPaths _paths;
+    private readonly AppPaths _defaultPaths;
+    private readonly AppLogging? _logging;
     private readonly TimeProvider _time;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
 
     private AppSettings _settings;
+    private AppPaths _paths;
     private SimSession? _session;
     private SslogRecording? _recording;
     private string? _recordingName;
@@ -76,7 +78,8 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         IUiDispatcher ui,
         AppPaths paths,
         TimeProvider time,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        AppLogging? logging = null)
     {
         _engine = engine;
         _recorder = recorder;
@@ -84,7 +87,9 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _settingsStore = settingsStore;
         _dialogs = dialogs;
         _ui = ui;
+        _defaultPaths = paths;
         _paths = paths;
+        _logging = logging;
         _time = time;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<MainViewModel>();
@@ -92,6 +97,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         InitConflicts();
         InitSessions();
         _settings = settingsStore.Load();
+        _paths = paths.WithFolders(_settings);
         InitSuggestions();
         InitReports();
         Snapshot = engine.Current;
@@ -100,7 +106,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         IsVertical = vertical;
         ColourMode = byDelay ? GraphColourMode.Delay : GraphColourMode.Category;
         ForecastKnockOn = knockOn;
-        engine.SetForecast(options: new ForecastOptions { Interaction = knockOn });
+        engine.SetForecast(options: _settings.Planning.ToForecastOptions(knockOn), conflicts: _settings.Planning.ToConflictOptions());
         Trains.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(TrainListViewModel.Selected))
@@ -261,7 +267,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     partial void OnForecastKnockOnChanged(bool value)
     {
-        _engine.SetForecast(options: new ForecastOptions { Interaction = value });
+        _engine.SetForecast(options: _settings.Planning.ToForecastOptions(value));
         SaveViewSettings();
     }
 

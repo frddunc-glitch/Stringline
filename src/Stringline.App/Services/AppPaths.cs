@@ -27,6 +27,20 @@ internal sealed record AppPaths(string Settings, string Profiles, string Logs, s
         }
     }
 
+    /// <summary>These paths with the folders the user chose in the settings (S18), where they chose any.</summary>
+    public AppPaths WithFolders(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return this with
+        {
+            Sessions = Chosen(settings.SessionsFolder) ?? Sessions,
+            Recordings = Chosen(settings.RecordingsFolder) ?? Recordings,
+            Exports = Chosen(settings.ExportsFolder) ?? Exports,
+        };
+    }
+
+    private static string? Chosen(string? folder) => string.IsNullOrWhiteSpace(folder) ? null : folder.Trim();
+
     /// <summary>Everything under one folder, for tests.</summary>
     public static AppPaths Under(string root) => new(
         Path.Combine(root, "settings.json"),

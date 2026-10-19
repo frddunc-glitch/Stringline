@@ -74,21 +74,7 @@ public partial class MainWindow : Window
 
     private void OnExit(object sender, RoutedEventArgs e) => Close();
 
-    private void OnAbout(object sender, RoutedEventArgs e)
-    {
-        var version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
-        MessageBox.Show(
-            this,
-            $"Stringline {version} — a live train graph for SimSig.\n\n" +
-            "Copyright (C) 2026 Frederick Duncan and Stringline contributors.\n\n" +
-            "This program comes with ABSOLUTELY NO WARRANTY. It is free software, licensed under the GNU General Public " +
-            "Licence version 3 or later; you may redistribute it under those terms.\n\n" +
-            "Source: https://github.com/frddunc-glitch/Stringline\n\n" +
-            "Not affiliated with or endorsed by SimSig. Noto Sans is used under the SIL Open Font Licence.",
-            "About Stringline",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
-    }
+    private void OnAbout(object sender, RoutedEventArgs e) => new Views.AboutWindow { Owner = this }.ShowDialog();
 
     private void OnTrainDoubleClick(object sender, MouseButtonEventArgs e) => _viewModel.CentreOnSelectedTrain();
 

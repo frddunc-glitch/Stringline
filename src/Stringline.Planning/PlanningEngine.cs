@@ -23,7 +23,7 @@ public sealed record PlanningEngineOptions
     /// <summary>The forecaster's settings to start with; <see cref="PlanningEngine.SetForecast"/> changes them.</summary>
     public ForecastOptions Forecast { get; init; } = new();
 
-    /// <summary>The conflict detector's settings.</summary>
+    /// <summary>The conflict detector's settings to start with; <see cref="PlanningEngine.SetForecast"/> changes them.</summary>
     public ConflictOptions Conflicts { get; init; } = new();
 }
 
@@ -72,6 +72,7 @@ public sealed partial class PlanningEngine
     private int _running;
     private ForecastNetwork _network = ForecastNetwork.Empty;
     private ForecastOptions _forecastOptions;
+    private ConflictOptions _conflictOptions;
     private long _forecastSettingsVersion;
     private (long State, long Plan, long Settings) _forecastKey = (-1, -1, -1);
     private Forecast _forecast = Forecast.Empty;
@@ -86,6 +87,7 @@ public sealed partial class PlanningEngine
         _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
         _logger = _loggerFactory.CreateLogger<PlanningEngine>();
         _forecastOptions = _options.Forecast;
+        _conflictOptions = _options.Conflicts;
         _state = CreateState(null);
     }
 
@@ -113,11 +115,11 @@ public sealed partial class PlanningEngine
     public void SetTimetable(WorkingTimetable? timetable) => _queue.Writer.TryWrite(new Input(InputKind.Timetable, Timetable: timetable));
 
     /// <summary>
-    /// Forecast over this network (from the profile's corridors) with these settings from now on; null keeps the
-    /// current one. Publishes a new forecast straight away.
+    /// Forecast over this network (from the profile's corridors) with these settings, and find conflicts with these
+    /// options, from now on; null keeps the current one. Publishes a new forecast straight away.
     /// </summary>
-    public void SetForecast(ForecastNetwork? network = null, ForecastOptions? options = null) =>
-        _queue.Writer.TryWrite(new Input(InputKind.Forecast, Network: network, ForecastOptions: options));
+    public void SetForecast(ForecastNetwork? network = null, ForecastOptions? options = null, ConflictOptions? conflicts = null) =>
+        _queue.Writer.TryWrite(new Input(InputKind.Forecast, Network: network, ForecastOptions: options, ConflictOptions: conflicts));
 
     /// <summary>Start a new session: forget all events, live trains and plan edits; keep the timetable.</summary>
     public void Clear() => _queue.Writer.TryWrite(new Input(InputKind.Clear));
@@ -249,6 +251,7 @@ public sealed partial class PlanningEngine
                 case InputKind.Forecast:
                     _network = input.Network ?? _network;
                     _forecastOptions = input.ForecastOptions ?? _forecastOptions;
+                    _conflictOptions = input.ConflictOptions ?? _conflictOptions;
                     _forecastSettingsVersion++;
                     forced = true;
                     break;
@@ -588,7 +591,7 @@ public sealed partial class PlanningEngine
         }
 
         _forecastKey = key;
-        _settings = new ForecastSettings(_network, _forecastOptions, _options.Conflicts);
+        _settings = new ForecastSettings(_network, _forecastOptions, _conflictOptions);
         _entryDelays = new Dictionary<Headcode, int>(_state.EntryDelays);
         var started = _time.GetTimestamp();
         try
@@ -622,7 +625,7 @@ public sealed partial class PlanningEngine
         started = _time.GetTimestamp();
         try
         {
-            _conflicts = ConflictDetector.Detect(new ConflictRequest(_plan, _forecast) { Network = _network, Options = _options.Conflicts });
+            _conflicts = ConflictDetector.Detect(new ConflictRequest(_plan, _forecast) { Network = _network, Options = _conflictOptions });
         }
 #pragma warning disable CA1031 // A detector fault must not stop the live picture: no conflicts are shown.
         catch (Exception ex)
@@ -668,6 +671,7 @@ public sealed partial class PlanningEngine
         TaskCompletionSource<bool>? Step = null,
         ForecastNetwork? Network = null,
         ForecastOptions? ForecastOptions = null,
+        ConflictOptions? ConflictOptions = null,
         IReadOnlyList<PlanStep>? Steps = null);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not apply a {Event}; skipped")]

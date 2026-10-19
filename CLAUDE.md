@@ -37,7 +37,9 @@ C# / .NET 10 LTS. WPF + CommunityToolkit.Mvvm for the shell; SkiaSharp for the g
 - Render PNG or PDF: `dotnet run --project src/Stringline.Tools -- render-png --wtt t.wtt --log x.sslog --corridor main --at 09:00 --hours 3 [--vertical] [--colour delay] [--no-forecast] [--no-knock-on] [--no-conflicts] out.png` (an `out.pdf` writes a PDF; `--page a3|a4|view`, default A3 landscape).
 - Delay table CSV: `dotnet run --project src/Stringline.Tools -- report (--log x.sslog --wtt t.wtt | --session s.stringline) [--at 09:00] [--all] [--by-train] out.csv` (a session brings its plan edits).
 - Graph benchmarks (GR-9 budget: 500 trains / 6 h < 33 ms a frame): `dotnet run -c Release --project benchmarks/Stringline.Benchmarks -- --quick` (seconds) or `-- --filter "*" --job short` (BenchmarkDotNet).
-- Run the app (Windows): `dotnet run --project src/Stringline.App -- [--wtt t.wtt] [--replay x.sslog --speed 8|max --start 07:30] [--resume|--review s.stringline]`. App logs go to `%LOCALAPPDATA%\Stringline\logs`; sessions autosave to `Documents\Stringline\sessions`.
+- Publish (Windows): `./build/publish.ps1 [-Version 0.2.0] [-Installer]` → `artifacts/Stringline-<v>-win-x64.zip` (single-file exe) and, with Inno Setup 6, `Stringline-<v>-setup.exe`. A `v*` tag runs the Release workflow (draft GitHub release).
+- Redraw the app icon after changing `AppIcon`: `dotnet run --project src/Stringline.Tools -- icon src/Stringline.App/Assets/stringline.ico [--png dir]`.
+- Run the app (Windows): `dotnet run --project src/Stringline.App -- [--wtt t.wtt] [--replay x.sslog --speed 8|max --start 07:30] [--resume|--review s.stringline]`. App logs go to `%LOCALAPPDATA%\Stringline\logs` (Debug with Settings ▸ Logging); sessions autosave to `Documents\Stringline\sessions`.
 
 ## End of every session
 Build and tests green → update `docs/progress.md` (done, decisions, next, known issues, questions for Fred) → update any design doc you changed → commit.

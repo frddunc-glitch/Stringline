@@ -46,6 +46,12 @@ internal interface IDialogService
 
     /// <summary>Opens a file in the program Windows uses for it. Returns why it could not, or null.</summary>
     string? OpenInShell(string path);
+
+    /// <summary>A folder, or null if cancelled.</summary>
+    string? PickFolder(string title, string? initialFolder);
+
+    /// <summary>Shows the settings window; true if OK was pressed (the values have then passed its checks).</summary>
+    bool ShowSettings(ViewModels.SettingsViewModel viewModel);
 }
 
 /// <summary>The real dialogs, owned by the main window.</summary>
@@ -125,6 +131,20 @@ internal sealed class WpfDialogService : IDialogService
 
     public void ShowProfileEditor(ViewModels.ProfileEditorViewModel viewModel) =>
         new Views.ProfileEditorWindow(viewModel) { Owner = Owner }.ShowDialog();
+
+    public string? PickFolder(string title, string? initialFolder)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = title, Multiselect = false };
+        if (!string.IsNullOrEmpty(initialFolder) && System.IO.Directory.Exists(initialFolder))
+        {
+            dialog.InitialDirectory = initialFolder;
+        }
+
+        return dialog.ShowDialog(Owner) == true ? dialog.FolderName : null;
+    }
+
+    public bool ShowSettings(ViewModels.SettingsViewModel viewModel) =>
+        new Views.SettingsWindow(viewModel) { Owner = Owner }.ShowDialog() == true;
 
     public string? OpenInShell(string path)
     {

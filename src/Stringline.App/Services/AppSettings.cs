@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Stringline.Planning;
 
 namespace Stringline.App.Services;
 
@@ -59,6 +60,29 @@ internal sealed record AppSettings
     /// </summary>
     public IReadOnlyDictionary<string, string> SimIdByTimetable { get; init; } = new Dictionary<string, string>();
 
+    /// <summary>The forecast, conflict and suggestion numbers from the settings window (S18).</summary>
+    public PlanningSettings Planning { get; init; } = new();
+
+    /// <summary>Where sessions are saved; <c>Documents\Stringline\sessions</c> when null.</summary>
+    public string? SessionsFolder { get; init; }
+
+    /// <summary>Where recordings are made; <c>Documents\Stringline\recordings</c> when null.</summary>
+    public string? RecordingsFolder { get; init; }
+
+    /// <summary>Where exports are offered first; <c>Documents\Stringline\exports</c> when null.</summary>
+    public string? ExportsFolder { get; init; }
+
+    /// <summary>Log at Debug rather than Information, for chasing a problem.</summary>
+    public bool DetailedLogging { get; init; }
+
+    /// <summary>How many days of log files are kept.</summary>
+    public int LogRetentionDays { get; init; } = DefaultLogRetentionDays;
+
+    public const int DefaultLogRetentionDays = 14;
+
+    /// <summary>Saved sessions last saved more than this many days ago are deleted at start-up; never when null.</summary>
+    public int? DeleteSessionsAfterDays { get; init; }
+
     public string? SimIdFor(string? timetablePath) =>
         timetablePath is { Length: > 0 } && SimIdByTimetable.TryGetValue(PathKey(timetablePath), out var id) ? id : null;
 
@@ -78,6 +102,54 @@ internal sealed record AppSettings
         var map = new Dictionary<string, string>(TimetableByArea, StringComparer.Ordinal) { [areaId.Trim().ToLowerInvariant()] = path };
         return this with { TimetableByArea = map, LastTimetablePath = path };
     }
+}
+
+/// <summary>
+/// The planning numbers the user can change (S18), each defaulting to the planning library's own default. Durations
+/// are in seconds; penalties are in weighted seconds of delay.
+/// </summary>
+internal sealed record PlanningSettings
+{
+    private static readonly ForecastOptions Forecast = new();
+    private static readonly ConflictOptions Conflict = new();
+    private static readonly SuggestionOptions Suggestion = new();
+
+    public int DefaultDwellSeconds { get; init; } = Forecast.DefaultDwellSeconds;
+
+    public int DefaultTurnaroundSeconds { get; init; } = Forecast.DefaultTurnaroundSeconds;
+
+    public int PossiblyStoppedSeconds { get; init; } = Forecast.PossiblyStoppedSeconds;
+
+    public int PlatformMarginSeconds { get; init; } = Conflict.PlatformMarginSeconds;
+
+    public int MinConflictSeconds { get; init; } = Conflict.MinSeveritySeconds;
+
+    public double PlatformChangePenalty { get; init; } = Suggestion.PlatformChangePenalty;
+
+    public double LineChangePenalty { get; init; } = Suggestion.LineChangePenalty;
+
+    public double TerminatePenalty { get; init; } = Suggestion.TerminatePenalty;
+
+    public double CancelPenalty { get; init; } = Suggestion.CancelPenalty;
+
+    public ForecastOptions ToForecastOptions(bool interaction) => new()
+    {
+        Interaction = interaction,
+        DefaultDwellSeconds = DefaultDwellSeconds,
+        DefaultTurnaroundSeconds = DefaultTurnaroundSeconds,
+        PossiblyStoppedSeconds = PossiblyStoppedSeconds,
+    };
+
+    public ConflictOptions ToConflictOptions() => new() { PlatformMarginSeconds = PlatformMarginSeconds, MinSeveritySeconds = MinConflictSeconds };
+
+    public SuggestionOptions ToSuggestionOptions(bool allowCancellation) => new()
+    {
+        AllowCancellation = allowCancellation,
+        PlatformChangePenalty = PlatformChangePenalty,
+        LineChangePenalty = LineChangePenalty,
+        TerminatePenalty = TerminatePenalty,
+        CancelPenalty = CancelPenalty,
+    };
 }
 
 /// <summary>Encrypts secrets for storage on this machine.</summary>

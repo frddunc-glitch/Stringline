@@ -1,9 +1,9 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Serilog;
 using Stringline.App.Services;
 using Stringline.App.ViewModels;
@@ -14,30 +14,41 @@ using Stringline.Planning;
 namespace Stringline.App;
 
 /// <summary>
-/// The application: a generic host for DI and logging (Serilog to rolling files, never credentials), the live
-/// engine running for the app's lifetime, and the main window.
+/// The application: a generic host for DI and logging (Serilog to rolling files at the level the settings ask for,
+/// never credentials), the live engine running for the app's lifetime, and the main window.
 /// </summary>
 public partial class App : Application
 {
     private IHost? _host;
 
+    /// <summary>The app's own log lines, under its name; read each time, as <see cref="Log.Logger"/> is set at start-up.</summary>
+    private static Serilog.ILogger AppLog => Log.ForContext<App>();
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         var paths = AppPaths.Default;
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
-            .Enrich.FromLogContext()
-            .WriteTo.File(Path.Combine(paths.Logs, "stringline-.log"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}",
-                formatProvider: System.Globalization.CultureInfo.InvariantCulture)
-            .CreateLogger();
+        // Read before the host is built, for the log level and how many log files to keep.
+        var settings = new AppSettingsStore(paths, new DpapiSecretProtector(), NullLogger<AppSettingsStore>.Instance).Load();
+        var logging = new AppLogging(paths.Logs, settings.DetailedLogging);
+        Log.Logger = logging.CreateLogger(settings.LogRetentionDays);
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            AppLog.Fatal(args.ExceptionObject as Exception, "Unhandled exception; the app is closing");
+            Log.CloseAndFlush();
+        };
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            AppLog.Error(args.Exception, "Unobserved background task exception");
+            args.SetObserved();
+        };
 
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { DisableDefaults = true });
         builder.Services.AddSerilog(dispose: false);
         builder.Services.AddSingleton(paths);
+        builder.Services.AddSingleton(logging);
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<ISecretProtector, DpapiSecretProtector>();
         builder.Services.AddSingleton<AppSettingsStore>();
@@ -53,7 +64,7 @@ public partial class App : Application
 
         _host = builder.Build();
         _host.Start();
-        Log.Information("Stringline {Version} started", typeof(App).Assembly.GetName().Version);
+        AppLog.Information("Started: {Environment}", AppLogging.Environment());
 
         var window = _host.Services.GetRequiredService<MainWindow>();
         MainWindow = window;
@@ -72,6 +83,7 @@ public partial class App : Application
 
     private static async Task StartAsync(MainViewModel viewModel, StartupOptions options)
     {
+        await viewModel.TidySessionsAsync(keep: options.Resume ?? options.Review);
         if (options.Resume is { } resume)
         {
             await viewModel.ResumeSessionAsync(resume);
@@ -104,14 +116,14 @@ public partial class App : Application
             host.Dispose();
         }
 
-        Log.Information("Stringline stopped");
+        AppLog.Information("Stringline stopped");
         Log.CloseAndFlush();
         base.OnExit(e);
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        Log.Error(e.Exception, "Unhandled exception on the UI thread");
+        AppLog.Error(e.Exception, "Unhandled exception on the UI thread");
         var message = $"Something went wrong: {e.Exception.Message}\n\nDetails are in the log in {AppPaths.Default.Logs}.";
         e.Handled = true;
         if (MainWindow is { IsLoaded: true } owner)
