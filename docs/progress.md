@@ -1155,6 +1155,47 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - 15. **#1:** which code-signing route: SignPath Foundation (free for open source, recommended), Azure Trusted Signing or an OV certificate? Without one, Windows keeps saying "Unknown publisher".
 - 16. **#5:** a multiplayer recording is needed before S29.
 
+## 2026-10-20 — S22: Publisher and sim identity (#1, #6)
+
+### Done
+- **#1 Unknown publisher.**
+  - `Directory.Build.props`: `Authors` and a new `Company` are "Frederick Duncan and Stringline contributors", so the exe's properties name the publisher (checked on a real publish).
+  - New `build/sign.ps1` signs files with `signtool` when `STRINGLINE_SIGN_PFX` names a `.pfx` (`STRINGLINE_SIGN_PASSWORD`, optional `STRINGLINE_SIGN_TIMESTAMP`). Without one it warns and succeeds.
+  - `publish.ps1` signs `Stringline.exe` before zipping. With a certificate it also hands Inno a `stringline` sign tool (`/DSign`), so the installer and its uninstaller are signed (`SignTool=`, `SignedUninstaller=yes` in `Stringline.iss`).
+  - `release.yml` decodes the `SIGN_PFX_BASE64` secret to a temporary file (deleted afterwards) and passes `SIGN_PFX_PASSWORD`. Without the secrets the release is built unsigned, as before.
+  - README: the SmartScreen note now says why Windows shows "Unknown publisher", and a new "Code signing" section explains the set-up.
+- **#6 Sim and timetable shown together.** New `SimTitle` in Core (the Tools need it too): "*sim* – *timetable* (v*version*)", plus " (review)". It is used in:
+  - the window title (`Stringline — Waterloo – SX May 2010 (Updated - Loader) v1.0.1 (v1.0.2)`);
+  - the status bar (`MainViewModel.SimTitleText`, which replaces `SimName`);
+  - the graph's title band (`GraphSceneRequest.SimTitle`, defaulting to the profile and timetable header), so PNG and PDF, and the PDF's document title, in the app and in `render-png`;
+  - saved sessions: `SessionInfo.TimetableVersion` (meta key `timetable_version`), `SessionInfo.Title`, and `DisplayName` (resume prompt, messages);
+  - the CSV: an optional first line `# Sim – Timetable – as at HH:mm:ss` from `DelayReportCsv.WritePoints/WriteTrains(…, title)`, in the app and in `stringline report`.
+- Tests: `SimTitleTests` (fallbacks, tidying, version and review); the title, status bar and graph band on Waterloo (live, replay, review, profile rename); the CSV title line (unit, app and CLI); the session round trip; `SigningScriptTests` (no certificate: warns, exits 0 and leaves the file alone; a missing certificate fails without printing the password). The 8 graph snapshots were re-accepted: only their title band changed.
+
+### Decisions
+- **Signing route: a generic `signtool` + PFX** (Fred, this session). It works with an OV certificate now. SignPath or Azure Trusted Signing can be added in `sign.ps1` later.
+- **The certificate comes only from environment variables**, read inside `sign.ps1`. Inno calls `sign.ps1` rather than `signtool` directly, so the password is never on a command line that ISCC or the workflow could log.
+- **New profiles leave the sim name blank** (Fred: "area ID, tidied"). The sim part shows the area ID tidied: words split at `_`/`-` are capitalised, and an ID with capitals is kept as it is. A saved profile whose name equals the timetable's title (every profile made before S22) is treated as unnamed, so no migration is needed.
+- **The gateway's area ID comes before the timetable's** for the sim part, as the plan says. The unnamed-sim placeholder (`unknown`) is never shown as a name.
+- **The timetable's version is left out when its name already contains it**, and shown as `(v1.0.2)` otherwise.
+- **The CSV title line starts with `#`**, so pandas (`comment='#'`) and similar tools skip it. Excel shows it in A1. It uses " – as at" rather than a comma, so it is quoted only when the timetable's name has a comma.
+
+### Next
+- S23: panel layout, resizing and long names (#2, #3, #9).
+
+### Known issues
+- **The signed path has not run.** This machine has no Windows SDK (`signtool`), and there is no certificate yet. GitHub's `windows-latest` image has `signtool`. Try it once a certificate exists, e.g. with a test tag.
+- `publish.ps1 -Output` takes only a path relative to the repo (as before S22).
+- Renaming the sim in the profile editor updates the title at once. A session file that is already saving keeps the old sim name until the timetable is loaded again.
+
+### Questions for Fred
+- 15 (from the plan update) is answered for now: `signtool` + PFX. **To finish #1**, a certificate is still needed:
+  - SignPath Foundation (free for open source; it would need a small `sign.ps1`/workflow change);
+  - Azure Trusted Signing;
+  - or an OV certificate, which works with this session's set-up as it is.
+  Then set the `SIGN_PFX_BASE64` and `SIGN_PFX_PASSWORD` secrets.
+- 17. A profile made from a *different* timetable of the same sim keeps that timetable's title as its name, so the title can read "Old WTT – New WTT". Clear the sim name in Profile ▸ Edit profile if you see this. Is that good enough, or should a name equal to *any* WTT title count as unset?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

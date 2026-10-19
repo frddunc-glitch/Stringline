@@ -85,7 +85,7 @@ public class SkiaGraphRendererTests
     {
         var view = GraphViewport.Create(SimTime.FromClock(12, 0).Seconds, SimTime.FromClock(13, 0).Seconds, 800, 400);
         using var bitmap = Render(Scene(), view);
-        using var empty = Render(GraphSceneBuilder.Build(new GraphSceneRequest(Profile, TestCorridor)), view);
+        using var empty = Render(GraphSceneBuilder.Build(new GraphSceneRequest(Profile, TestCorridor) { SimTitle = SimTitle.From(Profile.Name, Profile.AreaId, TwoTrains().Header) }), view);
 
         PngComparer.Compare(Png(bitmap), Png(empty)).IsEqual.Should().BeTrue();
     }

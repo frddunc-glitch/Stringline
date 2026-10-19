@@ -172,17 +172,18 @@ internal static class ReportCommand
         var clock = state.Clock.HasTime ? SimClockReading.None with { HasTime = true, LastReported = now ?? state.Clock.LastReported, AreaId = state.Clock.AreaId } : SimClockReading.None;
         var snapshot = new PlanSnapshot(1, tt, live, clock, state.Summarise(), state.Version, state.SessionStart, plan, Forecast: forecast);
         var report = DelayReport.For(snapshot, settings.All ? DelayReportFilter.All : DelayReportFilter.Seen);
+        var title = SimTitle.From(saved?.Info.SimName ?? profile.Name, state.Clock.AreaId, tt.Header);
 
         try
         {
             await using var writer = new StreamWriter(settings.Output.FullName, append: false, DelayReportCsv.Encoding);
             if (settings.ByTrain)
             {
-                DelayReportCsv.WriteTrains(writer, report);
+                DelayReportCsv.WriteTrains(writer, report, title);
             }
             else
             {
-                DelayReportCsv.WritePoints(writer, report, profile);
+                DelayReportCsv.WritePoints(writer, report, profile, title);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

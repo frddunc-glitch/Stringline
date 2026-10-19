@@ -18,7 +18,10 @@ public sealed record StringlineProfile
     /// <summary>The sim's <c>area_id</c>, e.g. <c>waterloo</c>.</summary>
     public required string AreaId { get; init; }
 
-    /// <summary>The sim or timetable name, for display.</summary>
+    /// <summary>
+    /// The sim's name for display, set by the user. Null (the default) shows the area ID tidied (<see cref="SimTitle"/>).
+    /// Profiles made before S22 have the timetable's title here, which <see cref="SimTitle"/> takes as no name.
+    /// </summary>
     public string? Name { get; init; }
 
     /// <summary>Corridors in tab order.</summary>
@@ -53,7 +56,6 @@ public sealed record StringlineProfile
         return new StringlineProfile
         {
             AreaId = timetable.AreaId,
-            Name = timetable.Header.Name,
             Corridors = corridors.ToList(),
             Categories = CategoryStyle.CreateDefaults(timetable),
         };

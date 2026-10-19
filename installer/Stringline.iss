@@ -1,5 +1,6 @@
 ; Stringline installer (S18), built by build/publish.ps1 -Installer with Inno Setup 6:
 ;   ISCC /DAppVersion=0.1.0 /DAppNumericVersion=0.1.0 /DSourceDir=<publish folder> /DOutputDir=<folder> installer/Stringline.iss
+; With a certificate it also passes /DSign and /Sstringline=... so the installer and uninstaller are signed.
 ; It installs the single-file Stringline.exe with its licence and notices, for the current user by default (no admin
 ; prompt) or for all users. Uninstalling leaves settings, profiles, sessions and logs in place.
 
@@ -47,6 +48,11 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
+#ifdef Sign
+; publish.ps1 defines Sign and the "stringline" sign tool (build/sign.ps1) when a code-signing certificate is set up.
+SignTool=stringline
+SignedUninstaller=yes
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

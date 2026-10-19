@@ -7,6 +7,9 @@
     ./build/publish.ps1                      # artifacts/Stringline-0.1.0-win-x64.zip
     ./build/publish.ps1 -Installer           # also artifacts/Stringline-0.1.0-setup.exe (needs Inno Setup 6)
     ./build/publish.ps1 -Version 0.2.0 -Installer
+
+    The exe, installer and uninstaller are code-signed by build/sign.ps1 when STRINGLINE_SIGN_PFX names a certificate
+    (see that script); without one they are left unsigned, with a warning.
 #>
 [CmdletBinding()]
 param(
@@ -41,6 +44,8 @@ try {
 
     # Only the exe and the notices ship; the fonts are embedded in the exe.
     Get-ChildItem $app -Exclude 'Stringline.exe' | Remove-Item -Recurse -Force
+    $sign = Join-Path $PSScriptRoot 'sign.ps1'
+    & $sign (Join-Path $app 'Stringline.exe')
     Copy-Item LICENSE (Join-Path $app 'LICENSE.txt')
     Copy-Item THIRD-PARTY-NOTICES.md (Join-Path $app 'THIRD-PARTY-NOTICES.md')
     Copy-Item src/Stringline.Graph/Fonts/OFL.txt (Join-Path $app 'OFL.txt')
@@ -61,7 +66,12 @@ try {
         }
         if (-not $Iscc) { throw 'Inno Setup 6 (ISCC.exe) was not found. Install it (winget install JRSoftware.InnoSetup) or pass -Iscc.' }
 
-        & $Iscc /Q "/DAppVersion=$Version" "/DAppNumericVersion=$plain" "/DSourceDir=$app" "/DOutputDir=$out" installer/Stringline.iss
+        # Inno signs the installer and its uninstaller through sign.ps1 when there is a certificate.
+        $signing = @()
+        if ($env:STRINGLINE_SIGN_PFX) {
+            $signing = @("/Sstringline=powershell.exe -NoProfile -ExecutionPolicy Bypass -File `$q$sign`$q `$f", '/DSign')
+        }
+        & $Iscc /Q "/DAppVersion=$Version" "/DAppNumericVersion=$plain" "/DSourceDir=$app" "/DOutputDir=$out" @signing installer/Stringline.iss
         if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed ($LASTEXITCODE)." }
         Write-Host "Wrote $(Join-Path $out "Stringline-$Version-setup.exe")"
     }

@@ -41,9 +41,10 @@ public sealed class ReportCommandTests : IDisposable
         exit.Should().Be(0, error);
         output.Should().MatchRegex(@"^Wrote delays\.csv: \d+ trains, \d+ rows, as at 07:00:00; \d+ late at some point, worst \w+ -?\d+ min at \w+\.");
         var lines = Lines();
-        lines[0].Should().Be(string.Join(',', DelayReportCsv.PointColumns));
+        lines[0].Should().Be("# Waterloo – SX May 2010 (Updated - Loader) v1.0.1 (v1.0.2) – as at 07:00:00", "the title line names the sim and timetable (#6)");
+        lines[1].Should().Be(string.Join(',', DelayReportCsv.PointColumns));
         lines.Length.Should().BeGreaterThan(100);
-        lines.Skip(1).Should().OnlyContain(l => l.Split(',').Length == DelayReportCsv.PointColumns.Length);
+        lines.Skip(2).Should().OnlyContain(l => l.Split(',').Length == DelayReportCsv.PointColumns.Length);
         lines.Should().Contain(l => l.EndsWith(",actual", StringComparison.Ordinal)).And.Contain(l => l.EndsWith(",forecast", StringComparison.Ordinal));
     }
 
@@ -57,9 +58,10 @@ public sealed class ReportCommandTests : IDisposable
 
         var seen = Lines("seen.csv");
         var all = Lines("all.csv");
-        seen[0].Should().Be(string.Join(',', DelayReportCsv.TrainColumns));
-        seen.Skip(1).Should().OnlyContain(l => l.Contains(",running,", StringComparison.Ordinal) || l.Contains(",finished,", StringComparison.Ordinal));
-        all.Length.Should().Be(1 + new WttReader().Read(Waterloo).Timetable.Trains.Count);
+        seen[0].Should().StartWith("# Waterloo – ");
+        seen[1].Should().Be(string.Join(',', DelayReportCsv.TrainColumns));
+        seen.Skip(2).Should().OnlyContain(l => l.Contains(",running,", StringComparison.Ordinal) || l.Contains(",finished,", StringComparison.Ordinal));
+        all.Length.Should().Be(2 + new WttReader().Read(Waterloo).Timetable.Trains.Count);
         all.Should().Contain(l => l.Contains(",not started,", StringComparison.Ordinal));
     }
 

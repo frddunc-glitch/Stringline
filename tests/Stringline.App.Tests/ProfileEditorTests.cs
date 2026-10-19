@@ -60,7 +60,7 @@ public sealed class ProfileEditorTests
 
         var editor = await Edit(app, e =>
         {
-            e.Title.Should().Be($"Profile — {e.Draft.Name}");
+            e.Title.Should().Be("Profile — waterloo", "a new profile has no sim name, so the area ID names it");
             e.SelectedCorridor!.Id.Should().Be("main");
 
             // General: rename the corridor's first location.
@@ -270,7 +270,7 @@ public sealed class ProfileEditorTests
         app.Dialogs.Lists.Should().ContainSingle().Which.Lines.Should().ContainSingle().Which.Should().Contain("expected TIPLOC,name");
         var style = await app.Ui.Run(() => vm.Profile!.StyleFor(category));
         style.Should().Be(new CategoryStyle(category!, "Renamed", 99, Colour.Parse("#123456"), LineStyle.Dashed));
-        (await app.Ui.Run(() => vm.Title)).Should().Be("Stringline — Waterloo (edited)");
+        (await app.Ui.Run(() => vm.Title)).Should().Be("Stringline — Waterloo (edited) – SX May 2010 (Updated - Loader) v1.0.1 (v1.0.2)");
         await app.Ui.WaitUntil(() => vm.Scene!.Locations[0].Name == "Waterloo, Main" && vm.Scene.Paths.Any(p => p.Style == LineStyle.Dashed), "the dashed category drawn");
         vm.Scene!.Paths.Where(p => p.Style == LineStyle.Dashed).Should().OnlyContain(p => p.Colour == Colour.Parse("#123456") && p.Layer != GraphLayer.Forecast);
     }

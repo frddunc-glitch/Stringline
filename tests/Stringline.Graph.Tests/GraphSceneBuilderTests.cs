@@ -241,6 +241,17 @@ public class GraphSceneBuilderTests
     {
         var scene = GraphSceneBuilder.Build(new GraphSceneRequest(Profile with { Name = null }, TestCorridor));
 
-        scene.Title.Should().Be("test — A – D");
+        scene.Title.Should().Be("Test — A – D");
+    }
+
+    [Fact]
+    public void The_title_names_the_sim_and_the_timetable_or_what_the_request_gives()
+    {
+        var tt = TwoTrains();
+        var scene = GraphSceneBuilder.Build(new GraphSceneRequest(Profile, TestCorridor) { Timetable = tt });
+        scene.Title.Should().Be("Test – Test sim — A – D", "the test profile's name is the timetable's title, so the area ID names the sim");
+
+        var given = GraphSceneBuilder.Build(new GraphSceneRequest(Profile, TestCorridor) { Timetable = tt, SimTitle = new SimTitle("Given", "WTT", Review: true) });
+        given.Title.Should().Be("Given – WTT (review) — A – D");
     }
 }

@@ -117,7 +117,7 @@ public sealed class ProfileTests : IDisposable
 
         profile.Version.Should().Be(StringlineProfile.CurrentVersion);
         profile.AreaId.Should().Be("test");
-        profile.Name.Should().Be("Test");
+        profile.Name.Should().BeNull("the sim's name is the user's to give; until then the area ID names it");
         profile.Corridors.Should().ContainSingle().Which.Id.Should().Be("main");
         profile.Categories.Should().ContainSingle().Which.CategoryId.Should().Be("PAX");
     }

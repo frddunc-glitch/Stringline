@@ -80,10 +80,22 @@ jobs:
         run: |
           if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
 
+      # Code signing (#1) is optional: with the SIGN_PFX_BASE64 (and SIGN_PFX_PASSWORD) secrets set, build/sign.ps1
+      # signs the exe, installer and uninstaller; without them the files are unsigned and the log says so.
       - name: Publish
         if: steps.check.outputs.skip != 'true'
         shell: pwsh
-        run: ./build/publish.ps1 -Version ${{ steps.version.outputs.version }} -Installer
+        env:
+          SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+          STRINGLINE_SIGN_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
+        run: |
+          if ($env:SIGN_PFX_BASE64) {
+            $pfx = Join-Path $env:RUNNER_TEMP 'stringline-signing.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_PFX_BASE64))
+            $env:STRINGLINE_SIGN_PFX = $pfx
+          }
+          try { ./build/publish.ps1 -Version ${{ steps.version.outputs.version }} -Installer }
+          finally { if ($pfx) { Remove-Item $pfx -Force -ErrorAction SilentlyContinue } }
 
       - uses: actions/upload-artifact@v7
         if: steps.check.outputs.skip != 'true'

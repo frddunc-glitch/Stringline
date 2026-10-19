@@ -149,6 +149,21 @@ public sealed class DelayReportTests
             "2B01,2B01,,,wtt,not started,no,A,D,07:00:00,,,,,,D,0,forecast");
     }
 
+    [Fact]
+    public void A_title_line_names_the_sim_and_timetable_before_the_header()
+    {
+        var report = DelayReport.For(Snapshot(WorkingPlanTests.Plan(), "06:08:20"), DelayReportFilter.All);
+        var title = new SimTitle("Penrith", "Summer, 2024 (v1.2.0)");
+
+        var trains = Write(w => DelayReportCsv.WriteTrains(w, report, title)).Split("\r\n");
+        var points = Write(w => DelayReportCsv.WritePoints(w, report, title: title)).Split("\r\n");
+
+        trains[0].Should().Be("\"# Penrith – Summer, 2024 (v1.2.0) – as at 06:08:20\"", "quoted, as the timetable's name has a comma");
+        trains[1].Should().StartWith("headcode,");
+        points[0].Should().Be(trains[0]);
+        points[1].Should().StartWith("headcode,");
+    }
+
     [Theory]
     [InlineData(null, "")]
     [InlineData("", "")]

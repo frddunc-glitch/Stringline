@@ -146,7 +146,8 @@ public sealed class SessionTests : IDisposable
         await second.Ui.Run(() =>
         {
             vm.IsReviewing.Should().BeTrue();
-            vm.Title.Should().EndWith("(review)");
+            vm.Title.Should().Be("Stringline — Waterloo – SX May 2010 (Updated - Loader) v1.0.1 (v1.0.2) (review)");
+            vm.SimTitleText.Should().EndWith("(v1.0.2) (review)");
             vm.InfoMessage.Should().StartWith("Reviewing ");
             vm.Snapshot.Plan.Get(cancelled).Cancelled.Should().BeFalse("the edit was made at the end of the run");
             vm.SessionPath.Should().BeNull("nothing is saved while reviewing");

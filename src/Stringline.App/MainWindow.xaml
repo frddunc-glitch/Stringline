@@ -164,7 +164,7 @@
         </StackPanel>
       </StatusBarItem>
       <Separator />
-      <StatusBarItem Content="{Binding SimName}" />
+      <StatusBarItem Content="{Binding SimTitleText}" />
       <Separator />
       <StatusBarItem>
         <StackPanel Orientation="Horizontal">

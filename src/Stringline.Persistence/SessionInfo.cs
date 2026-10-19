@@ -29,6 +29,9 @@ public sealed record SessionInfo
     /// <summary>The timetable's own name, for checking a different file is the same timetable.</summary>
     public string? TimetableName { get; init; }
 
+    /// <summary>The timetable's version from its header, e.g. <c>1.0.2</c>.</summary>
+    public string? TimetableVersion { get; init; }
+
     /// <summary>Live: the gateway connected to.</summary>
     public string? Host { get; init; }
 
@@ -66,6 +69,9 @@ public sealed record SessionInfo
     /// <summary>The file, when read from one.</summary>
     public string? Path { get; init; }
 
-    /// <summary>A name for lists and the title: the sim, then when it was made.</summary>
-    public string DisplayName => $"{(SimName is { Length: > 0 } name ? name : AreaId is { Length: > 0 } area ? area : "SimSig")} {Created.ToLocalTime():yyyy-MM-dd HH:mm}";
+    /// <summary>The sim and timetable the session was on (#6).</summary>
+    public SimTitle Title => SimTitle.From(SimName, AreaId, TimetableName, TimetableVersion);
+
+    /// <summary>A name for lists and messages: the sim and timetable, then when it was made.</summary>
+    public string DisplayName => $"{Title} {Created.ToLocalTime():yyyy-MM-dd HH:mm}";
 }

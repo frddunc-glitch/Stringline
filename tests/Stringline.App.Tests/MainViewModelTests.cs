@@ -12,6 +12,9 @@ public sealed class MainViewModelTests
 {
     private const string Waterloo = "waterloo 2010.WTT";
 
+    /// <summary>The fixture's sim and timetable as the app names them (#6).</summary>
+    private const string WaterlooTitle = "Waterloo – SX May 2010 (Updated - Loader) v1.0.1 (v1.0.2)";
+
     [Fact]
     public async Task Starts_empty_and_asks_for_a_session()
     {
@@ -47,7 +50,9 @@ public sealed class MainViewModelTests
         {
             vm.Corridors.Should().HaveCountGreaterThanOrEqualTo(2);
             vm.SelectedCorridor.Should().Be(vm.Corridors[0]);
-            vm.Title.Should().StartWith("Stringline — ");
+            vm.Title.Should().Be($"Stringline — {WaterlooTitle}");
+            vm.SimTitleText.Should().Be(WaterlooTitle);
+            vm.Scene!.Title.Should().StartWith($"{WaterlooTitle} — ", "the PNG and PDF title band names the sim and timetable");
             vm.Placeholder.Should().BeNull();
             vm.Transport.Should().NotBeNull();
             vm.ConnectionText.Should().StartWith("Replay waterloo-4x.sslog");
@@ -216,7 +221,8 @@ public sealed class MainViewModelTests
         await app.Ui.WaitUntil(() => vm.IsRecording, "recording");
         await server.PublishAsync(GatewayTopics.TrainMovements, """{"train_location":{"headcode":"2O03","uid":"7","action":"depart","location":"WLOO","platform":"5","time":21630}}""");
         await app.Ui.WaitUntil(() => vm.Snapshot.Trains.Count == 1, "the live train");
-        (await app.Ui.Run(() => vm.SimName)).Should().Be("waterloo");
+        (await app.Ui.Run(() => vm.SimTitleText)).Should().Be("Waterloo", "the gateway's area ID names the sim until a timetable is loaded");
+        (await app.Ui.Run(() => vm.Title)).Should().Be("Stringline — Waterloo");
         (await app.Ui.Run(() => vm.Trains.Rows.Single().StatusText)).Should().Be("Unmatched", "no timetable is loaded");
 
         var path = app.Recorder.Path!;

@@ -54,7 +54,7 @@ public sealed class SessionStoreTests : IDisposable
         string path;
         using (var writer = SessionWriter.Create(Folder, new SessionInfo { Kind = SavedSessionKind.Live, Host = "localhost", Port = 51515 }, Manual))
         {
-            writer.SetTimetable(@"C:\tt\waterloo 2010.WTT", "Waterloo 2010", "waterloo", "London Waterloo");
+            writer.SetTimetable(@"C:\tt\waterloo 2010.WTT", "Waterloo 2010", "waterloo", "London Waterloo", "1.0.2");
             Feed(writer, Clock(25200));
             Feed(writer, Location("1A01", 25230, at: 1));
             writer.OnStep(PlanStep.Execute(new CancelTrain(new TrainId("1A01")), "Cancel 1A01", new SimTime(25230), Wall.AddSeconds(2)));
@@ -73,6 +73,7 @@ public sealed class SessionStoreTests : IDisposable
             SimName = "London Waterloo",
             TimetablePath = @"C:\tt\waterloo 2010.WTT",
             TimetableName = "Waterloo 2010",
+            TimetableVersion = "1.0.2",
             Host = "localhost",
             Port = 51515,
             LastSimTime = new SimTime(25260),
@@ -82,6 +83,8 @@ public sealed class SessionStoreTests : IDisposable
             Path = path,
         });
         saved.Info.App.Should().StartWith("Stringline ");
+        saved.Info.Title.ToString().Should().Be("London Waterloo – Waterloo 2010 (v1.0.2)");
+        saved.Info.DisplayName.Should().StartWith("London Waterloo – Waterloo 2010 (v1.0.2) ");
         saved.Frames.Select(f => f.Sim).Should().Equal(new SimTime(25200), new SimTime(25200), new SimTime(25260));
         saved.Frames[1].BodyText.Should().Be(Location("1A01", 25230).BodyText);
         saved.Frames[1].At.Should().Be(Wall.AddSeconds(1));
@@ -257,7 +260,7 @@ public sealed class SessionStoreTests : IDisposable
         var second = Make("penrith");
 
         SessionCatalogue.List(Folder).Select(s => s.Path).Should().Equal(second, first);
-        SessionCatalogue.List(Folder)[0].DisplayName.Should().StartWith("penrith ");
+        SessionCatalogue.List(Folder)[0].DisplayName.Should().StartWith("Penrith ", "the area ID, tidied, names a session with no sim name or timetable");
         SessionWriter.NewPath(Folder, "waterloo", Wall).Should().NotBe(first, "a name already taken gets a suffix")
             .And.EndWith("-2.stringline");
     }

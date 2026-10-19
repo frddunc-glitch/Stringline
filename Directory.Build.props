@@ -12,7 +12,8 @@
     <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
     <Deterministic>true</Deterministic>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <Authors>Fred</Authors>
+    <Authors>Frederick Duncan and Stringline contributors</Authors>
+    <Company>Frederick Duncan and Stringline contributors</Company>
     <Product>Stringline</Product>
     <Copyright>Copyright (C) 2026 Frederick Duncan and Stringline contributors</Copyright>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>

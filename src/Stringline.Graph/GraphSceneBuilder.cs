@@ -45,6 +45,11 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
     /// <summary>Colour actual lines by category (the default) or by delay band.</summary>
     public GraphColourMode ColourMode { get; init; } = GraphColourMode.Category;
 
+    /// <summary>
+    /// The sim and timetable for the title band. Default: from <see cref="Profile"/> and <see cref="Timetable"/>'s header.
+    /// </summary>
+    public SimTitle? SimTitle { get; init; }
+
     /// <summary>A request for the timetable and live trains of a <see cref="PlanSnapshot"/>, with the now line at its last reported clock.</summary>
     public static GraphSceneRequest For(StringlineProfile profile, Corridor corridor, PlanSnapshot snapshot)
     {
@@ -127,7 +132,8 @@ public static class GraphSceneBuilder
             }
         }
 
-        var title = $"{profile.Name ?? profile.AreaId} — {corridor.Name}";
+        var sim = request.SimTitle ?? SimTitle.From(profile.Name, profile.AreaId, request.Timetable?.Header);
+        var title = $"{sim} — {corridor.Name}";
         var scene = new GraphScene(corridor.Id, title, locations, paths, request.Now);
         if (request.ShowDisruptions && request.Plan is { } withDisruptions)
         {

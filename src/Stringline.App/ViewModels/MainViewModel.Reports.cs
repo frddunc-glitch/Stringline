@@ -89,6 +89,7 @@ internal sealed partial class MainViewModel
         var byTrain = string.Equals(kind, "trains", StringComparison.OrdinalIgnoreCase);
         var report = DelayReport.For(Snapshot, Delays.Filter);
         var profile = Profile;
+        var title = CurrentSimTitle();
         SaveExport(
             byTrain ? "Export train delays as CSV" : "Export the delay table as CSV",
             FileFilters.Csv,
@@ -99,11 +100,11 @@ internal sealed partial class MainViewModel
                 using var writer = new StreamWriter(path, append: false, DelayReportCsv.Encoding);
                 if (byTrain)
                 {
-                    DelayReportCsv.WriteTrains(writer, report);
+                    DelayReportCsv.WriteTrains(writer, report, title);
                 }
                 else
                 {
-                    DelayReportCsv.WritePoints(writer, report, profile);
+                    DelayReportCsv.WritePoints(writer, report, profile, title);
                 }
             });
     }
@@ -127,7 +128,7 @@ internal sealed partial class MainViewModel
         var now = NowSeconds is { } seconds ? new SimTime((int)Math.Floor(seconds)) : scene.Now;
         var selection = Selection;
         var corridor = Corridors.FirstOrDefault(c => c.Id == scene.CorridorId)?.Name ?? scene.CorridorId;
-        var title = $"{Profile?.Name ?? Profile?.AreaId ?? "Stringline"} – {corridor}{(now is { } t ? " – " + t.ToString("t", CultureInfo.InvariantCulture) : string.Empty)}";
+        var title = $"{CurrentSimTitle()?.ToString() ?? "Stringline"} — {corridor}{(now is { } t ? " – " + t.ToString("t", CultureInfo.InvariantCulture) : string.Empty)}";
         SaveExport("Export the graph as PDF", FileFilters.Pdf, ExportName(scene.CorridorId, now, ".pdf"), $"the graph ({pdfPage.Name})", path =>
         {
             using var renderer = new SkiaGraphRenderer();

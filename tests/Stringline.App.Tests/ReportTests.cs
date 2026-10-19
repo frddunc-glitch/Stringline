@@ -91,12 +91,14 @@ public sealed class ReportTests
         app.Dialogs.SaveSuggestions[0].Should().MatchRegex(@"[\\/]exports[\\/]waterloo-delays-\d{4}\.csv$");
         app.Dialogs.SaveSuggestions[1].Should().MatchRegex(@"[\\/]exports[\\/]waterloo-train-delays-\d{4}\.csv$");
         var pointLines = CsvLines(points);
-        pointLines[0].Should().Be(string.Join(',', DelayReportCsv.PointColumns));
+        pointLines[0].Should().MatchRegex(@"^# Waterloo – SX May 2010 \(Updated - Loader\) v1\.0\.1 \(v1\.0\.2\) – as at \d\d:\d\d:\d\d$", "the title line names the sim and timetable (#6)");
+        pointLines[1].Should().Be(string.Join(',', DelayReportCsv.PointColumns));
         pointLines.Length.Should().BeGreaterThan(100);
         var trainLines = CsvLines(trains);
-        trainLines[0].Should().Be(string.Join(',', DelayReportCsv.TrainColumns));
+        trainLines[0].Should().StartWith("# Waterloo – SX May 2010");
+        trainLines[1].Should().Be(string.Join(',', DelayReportCsv.TrainColumns));
         var report = await app.Ui.Run(() => DelayReport.For(vm.Snapshot));
-        trainLines.Length.Should().BeInRange(report.Trains.Count - 5 + 1, report.Trains.Count + 5 + 1, "one row per train seen (the replay may have moved on a little)");
+        trainLines.Length.Should().BeInRange(report.Trains.Count - 5 + 2, report.Trains.Count + 5 + 2, "one row per train seen (the replay may have moved on a little)");
     }
 
     [Fact]

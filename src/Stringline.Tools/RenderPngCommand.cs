@@ -201,7 +201,7 @@ internal static class RenderPngCommand
         var pdfPage = settings.IsPdf ? PdfPage.Parse(settings.Page, viewport) : null;
         using (var renderer = new SkiaGraphRenderer())
         {
-            bytes = pdfPage is null ? renderer.RenderPng(scene, viewport) : renderer.RenderPdf(scene, viewport, page: pdfPage, title: $"{profile.Name ?? profile.AreaId} – {corridor.Name}");
+            bytes = pdfPage is null ? renderer.RenderPng(scene, viewport) : renderer.RenderPdf(scene, viewport, page: pdfPage);
         }
 
         try

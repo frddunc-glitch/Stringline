@@ -9,7 +9,8 @@ namespace Stringline.Planning;
 /// Writes a <see cref="DelayReport"/> as CSV (SES-2, <c>05-…md</c> §11): one row per train and timing point
 /// (<see cref="WritePoints"/>), or one per train (<see cref="WriteTrains"/>). RFC 4180: a header row, fields quoted
 /// where needed, CRLF line ends. Times are <c>HH:mm:ss</c> with a <c>+1</c> day marker after midnight, delays are
-/// signed seconds (negative = early), and blank means unknown.
+/// signed seconds (negative = early), and blank means unknown. Given a <see cref="SimTitle"/>, a first line
+/// <c># Sim – Timetable – as at 09:00:00</c> comes before the header row (#6); readers that take <c>#</c> as a comment skip it.
 /// </summary>
 public static class DelayReportCsv
 {
@@ -31,10 +32,12 @@ public static class DelayReportCsv
 
     /// <summary>One row per train and timing point, trains in report order.</summary>
     /// <param name="profile">For location display names; TIPLOCs are used without one.</param>
-    public static void WritePoints(TextWriter writer, DelayReport report, StringlineProfile? profile = null)
+    /// <param name="title">The sim and timetable, for a title line before the header row.</param>
+    public static void WritePoints(TextWriter writer, DelayReport report, StringlineProfile? profile = null, SimTitle? title = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(report);
+        WriteTitle(writer, report, title);
         WriteRow(writer, PointColumns);
         foreach (var train in report.Trains)
         {
@@ -70,10 +73,12 @@ public static class DelayReportCsv
     }
 
     /// <summary>One row per train: where it is, its worst actual delay and its final (actual or forecast) delay.</summary>
-    public static void WriteTrains(TextWriter writer, DelayReport report)
+    /// <param name="title">The sim and timetable, for a title line before the header row.</param>
+    public static void WriteTrains(TextWriter writer, DelayReport report, SimTitle? title = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(report);
+        WriteTitle(writer, report, title);
         WriteRow(writer, TrainColumns);
         foreach (var t in report.Trains)
         {
@@ -139,6 +144,14 @@ public static class DelayReportCsv
     private static string? Time(SimTime? time) => time?.ToString("T", CultureInfo.InvariantCulture);
 
     private static string? Number(int? value) => value?.ToString(CultureInfo.InvariantCulture);
+
+    private static void WriteTitle(TextWriter writer, DelayReport report, SimTitle? title)
+    {
+        if (title is not null)
+        {
+            WriteRow(writer, [$"# {title}{(report.Now is { } now ? " – as at " + Time(now) : string.Empty)}"]);
+        }
+    }
 
     private static void WriteRow(TextWriter writer, string?[] fields)
     {

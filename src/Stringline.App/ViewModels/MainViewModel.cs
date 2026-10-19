@@ -191,8 +191,9 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty]
     public partial StatusLight ConnectionLight { get; private set; }
 
+    /// <summary>"Sim – timetable" for the status bar (#6); empty until either is known.</summary>
     [ObservableProperty]
-    public partial string SimName { get; private set; } = string.Empty;
+    public partial string SimTitleText { get; private set; } = string.Empty;
 
     [ObservableProperty]
     public partial string ClockText { get; private set; } = "Sim —";
@@ -597,7 +598,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _timetable = loaded;
         HasTimetable = true;
         _engine.SetTimetable(loaded.Timetable);
-        Store?.SetTimetable(loaded.Path, loaded.Timetable.Header.Name, loaded.Timetable.AreaId, loaded.Profile.Name);
+        Store?.SetTimetable(loaded.Path, loaded.Timetable.Header.Name, loaded.Timetable.AreaId, loaded.Profile.Name, loaded.Timetable.Header.TimetableVersion);
         _engine.SetForecast(await Task.Run(() => ForecastNetwork.For(loaded.Profile, loaded.Timetable)));
         var area = loaded.Timetable.AreaId;
         if (area.Length > 0)
@@ -847,6 +848,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             ShowDisruptions = ShowDisruptions,
             ShowConflicts = ShowConflicts,
             ColourMode = ColourMode,
+            SimTitle = CurrentSimTitle(),
         };
         _building = true;
         _sceneDirty = false;
@@ -923,8 +925,21 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     private void UpdateTitle()
     {
-        SimName = Profile?.Name is { Length: > 0 } name ? name : Snapshot.AreaId ?? string.Empty;
-        Title = (SimName.Length > 0 ? $"Stringline — {SimName}" : "Stringline") + (IsReviewing ? " (review)" : string.Empty);
+        var sim = CurrentSimTitle();
+        SimTitleText = sim?.ToString() ?? string.Empty;
+        Title = sim is null ? "Stringline" + (IsReviewing ? " (review)" : string.Empty) : $"Stringline — {sim}";
+    }
+
+    /// <summary>
+    /// The sim and timetable as every place shows them (#6): the profile's name, then the gateway's area ID, then the
+    /// timetable's; null while none of them is known.
+    /// </summary>
+    private SimTitle? CurrentSimTitle()
+    {
+        var header = _timetable?.Timetable.Header;
+        var area = Snapshot.AreaId is { Length: > 0 } live ? live
+            : Profile?.AreaId is { Length: > 0 } own && own != TimetableLoader.UnnamedSim ? own : null;
+        return Profile is null && header is null && area is null ? null : SimTitle.From(Profile?.Name, area, header, IsReviewing);
     }
 
     private void UpdatePlaceholder() => Placeholder =

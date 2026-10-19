@@ -16,7 +16,7 @@ Download one of these from the [Releases](https://github.com/frddunc-glitch/Stri
 - **`Stringline-x.y.z-setup.exe`**: the installer. It installs for your Windows account only, without asking for administrator rights, and adds Stringline to the Start menu. To uninstall, use Settings ▸ Apps.
 - **`Stringline-x.y.z-win-x64.zip`**: the portable version. Unzip it anywhere and run `Stringline.exe`.
 
-The downloads are not code-signed, so Windows SmartScreen may warn you the first time. Choose **More info ▸ Run anyway**. The first start takes a few seconds longer while Windows unpacks the app.
+The downloads are not yet code-signed, so Windows shows "Unknown publisher" and SmartScreen may warn you the first time. Choose **More info ▸ Run anyway**. Only a code-signing certificate makes Windows show the publisher; the build signs the files as soon as one is set up (see [Code signing](#code-signing)). The first start takes a few seconds longer while Windows unpacks the app.
 
 Uninstalling leaves your settings, profiles, sessions and logs in place (see [Where your files are kept](#where-your-files-are-kept)). Delete those folders by hand if you want them gone too.
 
@@ -106,6 +106,10 @@ dotnet test Stringline.Portable.slnf
 ```
 
 The version comes from `Directory.Build.props` unless you pass `-Version`. Pushing a tag such as `v0.2.0` runs the **Release** workflow, which tests, publishes and makes a draft GitHub release with both files. The installer script is `installer/Stringline.iss`. The app icon is drawn by code (`AppIcon` in `Stringline.Graph`); after changing it, run `dotnet run --project src/Stringline.Tools -- icon src/Stringline.App/Assets/stringline.ico`.
+
+### Code signing
+
+Windows names the publisher only for Authenticode-signed files, so until there is a certificate it says "Unknown publisher". `build/sign.ps1` signs `Stringline.exe`, the installer and its uninstaller with `signtool` when `STRINGLINE_SIGN_PFX` names a `.pfx` file (and `STRINGLINE_SIGN_PASSWORD` gives its password). Without it the files are left unsigned and the build warns. In the Release workflow, set the repository secrets `SIGN_PFX_BASE64` (the `.pfx`, base64-encoded) and `SIGN_PFX_PASSWORD`. The certificate never appears on a command line or in the log.
 
 ### Recording a SimSig session
 

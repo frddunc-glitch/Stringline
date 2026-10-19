@@ -186,7 +186,7 @@ public sealed partial class SessionWriter : IDisposable
     }
 
     /// <summary>The timetable now in use.</summary>
-    public void SetTimetable(string? path, string? name, string? areaId, string? simName)
+    public void SetTimetable(string? path, string? name, string? areaId, string? simName, string? version = null)
     {
         lock (_lock)
         {
@@ -194,6 +194,7 @@ public sealed partial class SessionWriter : IDisposable
             {
                 TimetablePath = path,
                 TimetableName = name,
+                TimetableVersion = version,
                 AreaId = _info.AreaId ?? (areaId is { Length: > 0 } ? areaId : null),
                 SimName = simName is { Length: > 0 } ? simName : _info.SimName,
             };
