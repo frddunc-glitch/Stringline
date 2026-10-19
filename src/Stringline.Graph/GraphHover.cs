@@ -32,6 +32,51 @@ public static class GraphHover
     public const string Note = "Note";
     public const string Match = "Match";
     public const string Train = "Train";
+    public const string Conflict = "Conflict";
+    public const string Disruption = "Disruption";
+
+    /// <summary>
+    /// The tooltip for whatever is under the mouse (#12): a train line, a conflict's ring or highlight, a block or speed
+    /// restriction, a note, or a location's label. The same in both orientations, as it reads only the scene.
+    /// </summary>
+    /// <param name="suggestionFor">The top suggestion for a conflict, worded, if one has been worked out.</param>
+    public static HoverInfo Describe(GraphTarget target, GraphScene scene, PlanSnapshot snapshot, Func<Conflict, string?>? suggestionFor = null)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return target.Kind switch
+        {
+            GraphTargetKind.Path => WithinBoxes(Describe(target.Hit!, scene, snapshot), target),
+            GraphTargetKind.ConflictRing or GraphTargetKind.Conflict => GraphConflicts.Describe(target.Conflict!, scene, suggestionFor?.Invoke(target.Conflict!.Conflict)),
+            GraphTargetKind.Disruption => GraphAnnotations.Describe(target.Disruption!, scene),
+            GraphTargetKind.Note => GraphAnnotations.Describe(target.Note!, scene),
+            _ => GraphLabels.Describe(target.Location!),
+        };
+    }
+
+    /// <summary>
+    /// A line's tooltip, with the conflict highlight and disruption it is inside (#12): a held train's line covers its
+    /// conflict's band, so this is where that conflict can be read.
+    /// </summary>
+    private static HoverInfo WithinBoxes(HoverInfo info, GraphTarget target)
+    {
+        if (target.Conflict is null && target.Disruption is null)
+        {
+            return info;
+        }
+
+        var lines = info.Lines.ToList();
+        if (target.Conflict?.Conflict is { } c)
+        {
+            lines.Add(new HoverLine(Conflict, $"{GraphConflicts.KindName(c.Kind)}: {c.Summary}"));
+        }
+
+        if (target.Disruption?.Disruption is { } d)
+        {
+            lines.Add(new HoverLine(Disruption, $"{(d.Kind == DisruptionKind.Block ? "Block" : "Speed restriction")} {d.Id}, {d.Start} – {d.End}"));
+        }
+
+        return info with { Lines = lines };
+    }
 
     public static HoverInfo Describe(GraphHit hit, GraphScene scene, PlanSnapshot snapshot)
     {
@@ -91,13 +136,13 @@ public static class GraphHover
         return new HoverInfo(heading, lines);
     }
 
-    /// <summary>"3 min late", "1 min early", or "Right time" within a minute either way.</summary>
+    /// <summary>"3 min late", "1 min early", or "On time" within a minute either way (#11).</summary>
     public static string FormatDelay(int seconds)
     {
         var minutes = seconds / SimTime.SecondsPerMinute;
         return minutes switch
         {
-            0 => "Right time",
+            0 => "On time",
             > 0 => $"{minutes} min late",
             _ => $"{-minutes} min early",
         };

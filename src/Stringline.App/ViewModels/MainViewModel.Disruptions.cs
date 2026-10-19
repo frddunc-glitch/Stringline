@@ -33,22 +33,11 @@ internal sealed partial class MainViewModel
     partial void OnShowDisruptionsChanged(bool value) => RequestScene();
 
     /// <summary>
-    /// The tooltip for a note or disruption under the cursor, when no train line is, or for a location's label in the
-    /// margin (its full name and TIPLOC, #3).
+    /// The tooltip for whatever is under a point (<see cref="GraphHitTester.TargetAt"/>): a conflict, note, train line,
+    /// disruption, or a location's label in the margin (its full name and TIPLOC, #3).
     /// </summary>
-    public HoverInfo? DescribeAt(ScreenPoint at)
-    {
-        if (Scene is not { } scene)
-        {
-            return null;
-        }
-
-        var view = Navigator.Viewport;
-        return GraphAnnotations.NoteAt(scene, view, at) is { } note ? GraphAnnotations.Describe(note, scene)
-            : GraphAnnotations.DisruptionAt(scene, view, at) is { } disruption ? GraphAnnotations.Describe(disruption, scene)
-            : GraphLabels.LocationAt(scene, view, at) is { } location ? GraphLabels.Describe(location)
-            : null;
-    }
+    public HoverInfo? DescribeAt(ScreenPoint at) =>
+        Scene is { } scene && GraphHitTester.TargetAt(scene, Navigator.Viewport, at) is { } target ? Describe(target) : null;
 
     /// <summary>
     /// The right-click menu at a point: a note's, else the train line's (<see cref="MenuFor(GraphHit?)"/>), else the

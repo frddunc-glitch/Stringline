@@ -56,6 +56,11 @@ public sealed class SuggestionPanelTests
         best.Tip.Should().NotBeEmpty();
         rows.Should().NotContain(r => r.Suggestion.Kind == SuggestionKind.Cancel || r.Suggestion.Kind == SuggestionKind.TerminateShort, "cancelling is off by default");
 
+        // The conflict's tooltip on the graph gives the best one (#12).
+        await app.Ui.WaitUntil(() => vm.Scene!.Conflicts.Any(c => c.Id == held.Id), "its ring drawn");
+        var tip = await app.Ui.Run(() => vm.DescribeAt(GraphConflicts.RingOf(vm.Scene!.Conflicts.First(c => c.Id == held.Id), vm.Navigator.Viewport)));
+        (tip!.ValueOf("Suggest"), tip.ValueOf("Tip")).Should().Be((best.Title, (string?)null));
+
         // Preview draws its train's new plan as a ghost; a second click hides it.
         await app.Ui.Run(() => vm.PreviewSuggestionCommand.Execute(best));
         var (ghosts, previewed) = await app.Ui.Run(() => (vm.Ghosts, best.IsPreviewed));

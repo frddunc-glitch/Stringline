@@ -9,7 +9,7 @@ namespace Stringline.Graph.Tests;
 /// <summary>Colouring actual lines by delay band (GR-7), segment by segment (Fred, S9).</summary>
 public sealed class DelayBandTests
 {
-    /// <summary>1A01 is booked A 07:00, B 07:04, C 07:08: right time at A, 6 min late at B, 22 min at C.</summary>
+    /// <summary>1A01 is booked A 07:00, B 07:04, C 07:08: on time at A, 6 min late at B, 22 min at C.</summary>
     private static readonly LiveTrain Losing = Live("901", "1A01", MatchStatus.Matched, "1A01",
         ("A", TrainLocationAction.Depart, "07:00:30"), ("B", TrainLocationAction.Pass, "07:10:00"), ("C", TrainLocationAction.Pass, "07:30:00"));
 
@@ -24,8 +24,8 @@ public sealed class DelayBandTests
     });
 
     [Theory]
-    [InlineData(-3, DelayBand.RightTime)]
-    [InlineData(0, DelayBand.RightTime)]
+    [InlineData(-3, DelayBand.OnTime)]
+    [InlineData(0, DelayBand.OnTime)]
     [InlineData(1, DelayBand.Slight)]
     [InlineData(5, DelayBand.Slight)]
     [InlineData(6, DelayBand.Late)]
@@ -36,10 +36,10 @@ public sealed class DelayBandTests
     [Fact]
     public void Seconds_round_towards_zero_first()
     {
-        DelayBands.BandOfSeconds(59).Should().Be(DelayBand.RightTime);
+        DelayBands.BandOfSeconds(59).Should().Be(DelayBand.OnTime);
         DelayBands.BandOfSeconds(60).Should().Be(DelayBand.Slight);
         DelayBands.BandOfSeconds(359).Should().Be(DelayBand.Slight);
-        DelayBands.BandOfSeconds(-120).Should().Be(DelayBand.RightTime);
+        DelayBands.BandOfSeconds(-120).Should().Be(DelayBand.OnTime);
         DelayBands.ColourOfSeconds(null).Should().Be(DelayBands.Unknown);
     }
 
@@ -74,7 +74,7 @@ public sealed class DelayBandTests
         var path = Scene(GraphColourMode.Delay, onTime).InLayer(GraphLayer.Actual).Single();
 
         path.SegmentColours.Should().BeNull();
-        path.Colour.Should().Be(DelayBands.RightTime);
+        path.Colour.Should().Be(DelayBands.OnTime);
     }
 
     [Theory]
@@ -110,5 +110,5 @@ public sealed class DelayBandTests
     private static SKColor Pixel(SKBitmap bitmap, ScreenPoint p) => bitmap.GetPixel((int)Math.Round(p.X), (int)Math.Round(p.Y));
 
     private static string Name(Network.Profiles.Colour c) =>
-        c == DelayBands.RightTime ? "RightTime" : c == DelayBands.Slight ? "Slight" : c == DelayBands.Late ? "Late" : c == DelayBands.VeryLate ? "VeryLate" : "Unknown";
+        c == DelayBands.OnTime ? "OnTime" : c == DelayBands.Slight ? "Slight" : c == DelayBands.Late ? "Late" : c == DelayBands.VeryLate ? "VeryLate" : "Unknown";
 }

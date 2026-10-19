@@ -32,14 +32,17 @@ internal sealed partial class MainViewModel
         ConflictsText = Snapshot.Plan.Count == 0 ? string.Empty : ConflictList.Summary;
     }
 
-    /// <summary>The tooltip for a conflict's ring under the cursor; it comes before a train line's.</summary>
-    public HoverInfo? DescribeConflictAt(ScreenPoint at) =>
-        Scene is { } scene && GraphConflicts.ConflictAt(scene, Navigator.Viewport, at) is { } conflict ? GraphConflicts.Describe(conflict, scene) : null;
+    /// <summary>A click on the graph at a point: see <see cref="ClickConflict"/>.</summary>
+    public bool ClickConflictAt(ScreenPoint at) =>
+        ClickConflict(Scene is { } scene ? GraphHitTester.TargetAt(scene, Navigator.Viewport, at) : null);
 
-    /// <summary>A click on the graph: a conflict's ring picks it (true); otherwise the click is the train line's.</summary>
-    public bool ClickConflictAt(ScreenPoint at)
+    /// <summary>
+    /// A click on the graph: a conflict's ring, or its highlight away from any line (#12), picks it (true); otherwise
+    /// the click is the train line's.
+    /// </summary>
+    public bool ClickConflict(GraphTarget? target)
     {
-        if (Scene is not { } scene || GraphConflicts.ConflictAt(scene, Navigator.Viewport, at) is not { } conflict)
+        if (target is not { Kind: GraphTargetKind.ConflictRing or GraphTargetKind.Conflict, Conflict: { } conflict })
         {
             return false;
         }
@@ -48,6 +51,10 @@ internal sealed partial class MainViewModel
         SelectConflict(conflict.Conflict);
         return true;
     }
+
+    /// <summary>The best suggestion for a conflict, worded as the suggestions panel shows it, if it has been worked out.</summary>
+    private string? TopSuggestionFor(Conflict conflict) =>
+        SuggestionPanel.ConflictId == conflict.Id && SuggestionPanel.Rows.Count > 0 ? SuggestionPanel.Rows[0].Title : null;
 
     /// <summary>
     /// Show a conflict (FC-4): on the corridor shown if it meets it, else the first that does; the view stops following

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Stringline.App.Services;
 using Stringline.App.ViewModels;
@@ -114,10 +115,12 @@ public sealed class StatusTextTests
     {
         var clock = new SimClock();
         StatusText.Clock(clock.Reading, SimTime.Zero).Should().Be("Sim —");
+        StatusText.ClockTime(clock.Reading, SimTime.Zero).Should().Be("—");
         StatusText.Speed(clock.Reading).Should().BeEmpty();
 
         clock.Observe(new ClockEvent(T0, "test", SimTime.Parse("09:14:32"), 125, false));
         StatusText.Clock(clock.Reading, SimTime.Parse("09:14:32")).Should().Be("Sim 09:14:32");
+        StatusText.ClockTime(clock.Reading, SimTime.Parse("09:14:32")).Should().Be("09:14:32", "the toolbar's clock (#13)");
         StatusText.Speed(clock.Reading).Should().Be("×4");
 
         clock.Observe(new ClockEvent(T0, "test", SimTime.Parse("09:15"), 1, false));
@@ -132,6 +135,12 @@ public sealed class StatusTextTests
         clock.Observe(new ClockEvent(T0, "test", SimTime.Parse("09:16"), 500, true));
         StatusText.Speed(clock.Reading).Should().Be("paused");
     }
+
+    [Theory]
+    [InlineData("Normal", 16)]
+    [InlineData("Large", 24)]
+    [InlineData("Huge", 36)]
+    public void Sizes_the_toolbar_clock(string size, double pixels) => StatusText.ClockFontSize(Enum.Parse<ClockSize>(size)).Should().Be(pixels);
 
     [Fact]
     public void Counts_trains()
@@ -164,6 +173,23 @@ public sealed class TrainListViewModelTests
 
     private static PlanSnapshot Snapshot(params LiveTrain[] trains) =>
         new(1, Tt, trains, SimClockReading.None, new MatchSummary(trains.Length, trains.Length, 0, 0, 0, new Dictionary<MatchMethod, int>()), 1, null);
+
+    [Theory]
+    [InlineData("+3", "3 min late")]
+    [InlineData("0", "On time")]
+    [InlineData("−1", "1 min early")]
+    [InlineData(" +12 ", "12 min late")]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    [InlineData("08:03", null)]
+    public void A_delay_cell_reads_as_words_in_its_tooltip(string? cell, string? words)
+    {
+        TrainListViewModel.DelayWords(cell).Should().Be(words);
+        if (words is not null)
+        {
+            TrainListViewModel.DelayWords(TrainListViewModel.FormatDelay(int.Parse(cell!.Trim().Replace('−', '-'), CultureInfo.InvariantCulture))).Should().Be(words, "it reads what FormatDelay writes");
+        }
+    }
 
     [Fact]
     public void Lists_trains_by_delay_with_unknown_delays_last()

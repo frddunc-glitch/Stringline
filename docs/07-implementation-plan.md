@@ -179,6 +179,7 @@ Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fi
   - a large sim clock (and speed) at the toolbar's right, sized by a setting (Normal/Large/Huge);
   - optionally, a small always-on-top clock window for a second monitor.
   - Otherwise, leave it for user feedback.
+  - *Built in S24:* the clock went at the right of the menu row, because the toolbar has no room at 1280 px. There is no floating window (Fred). The CSV needed no change: it never had the wording.
 - **Tests:** the hover text per kind; the wording test; App tests for the clock setting if built.
 
 ### S25 — Menus against the UI spec 🪟 (#8)

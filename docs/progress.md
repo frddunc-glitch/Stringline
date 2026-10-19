@@ -1235,6 +1235,57 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - The corridor tabs in the toolbar still wrap into two rows at 1280 px (as before S23). S25 reviews the toolbar.
 - The View menu repeats some access keys (W, F, A), as before; S25 checks them.
 
+## 2026-10-20 — S24: Wording, tooltips and the clock (#11, #12, #13)
+
+### Done
+- **#11 Early / On time / Late.**
+  - `DelayBand.RightTime` is now `DelayBand.OnTime` (and `DelayBands.OnTime`). The colour is the same.
+  - `GraphHover.FormatDelay` says "On time" within the minute, and "*n* min late" or "*n* min early" otherwise. This reaches the hover, the forecast line and the train detail's heading.
+  - The toolbar's colour tooltip, README, `05-…md` and `06-…md`, and code comments are reworded.
+  - The lists keep their signed minutes (`+3`, `0`, `−1`), and every delay cell now has a tooltip in words: the train list, the train detail, Regulation, and both Delays lists including Final. This is a `DelayCell` style with `DelayWordsConverter` → `TrainListViewModel.DelayWords`.
+  - New `WordingTests` (Architecture, portable) fails if "right time" (any spacing or case) is in `src/**/*.cs|xaml`, the README or the design docs. `progress.md` and the plan are left out because they record the history.
+- **#12 Tooltips for the red boxes.**
+  - New `GraphHitTester.TargetAt` (Graph, portable) finds what is under the mouse, in this order: a conflict's ring, a note, a train line (using the hit grid if given), a conflict's highlight, a block or speed restriction, then a location label.
+  - The result is a `GraphTarget`. When it is a line, the target also carries the highlight and disruption the line is inside.
+  - `GraphConflicts.HighlightAt` picks the smallest highlight under a point.
+  - `GraphHover.Describe(GraphTarget, …, suggestionFor)` builds every tooltip. `GraphView` now has one describer and one click handler (`ConflictClicker(GraphTarget?)`), in place of three describers.
+  - **Conflict tooltip:** kind and summary, then Trains ("2B02 gives way to 1A01", "1A01 held by block B1"), Where (from–to), When (with the clash's span), Resolve, Knock-on, and Suggest. Suggest is the top row of the suggestions panel when it is showing that conflict; otherwise a tip says "Click to focus it and see suggestions".
+  - Clicking a highlight away from any line focuses the conflict, as clicking the ring does.
+  - **Disruption tooltip:** now adds Effect for a block ("trains running into it are held until it ends") and "Tip: Right-click to edit or remove it". A restriction still shows its slower running.
+  - **A line inside a box:** its tooltip adds a "Conflict" row and a "Disruption" row. A held train's line runs right along its own 8 px hold band, so without this the band's conflict could never be read there (found by the App test).
+- **#13 Sim clock** (built: Fred chose the toolbar clock with a size setting, and no separate window).
+  - The sim time is shown in bold Consolas, with the speed smaller and grey, at the right of the **menu row**.
+  - Settings has a new **Display** tab with "Sim clock size": Normal, Large or Huge (16, 24 or 36 px). It is `AppSettings.ClockSize`, saved by name.
+  - The status bar keeps its clock.
+- **Tests:**
+  - `GraphTargetTests`: the order of targets, plain and through the hit grid, in both orientations. The tooltip is the same horizontal and vertical. A line inside a highlight and a block names both. The label is found last.
+  - `GraphConflictTests`: the new tooltip rows, the suggestion, the block and lone-train wording, and highlight hit testing (smallest first).
+  - Disruption tooltip; delay words; the toolbar clock's sizes and `ClockTime`.
+  - The Display setting round trip and Restore defaults; the property-change notifications.
+  - The ring's tooltip in the app names the trains. The held train's band names its conflict. The tooltip carries the panel's top suggestion once it is worked out.
+  - `MainWindowTests`: at 1280×720 with the Normal and Huge clock, the clock and the toolbar's last button are both on screen, and the clock sits above the toolbar.
+- Totals: 1 464 (Core 259, Architecture 10, Gateway 207, Timetable 163, Network 140, Planning 231, Persistence 12, Graph 236, Tools 63, App 143). Green on Windows (Debug), and on Linux (`sdk:10.0` container, portable filter, Release: 1 321).
+
+### Decisions
+- **Lists keep their numbers, and the words go in tooltips (Fred).** "On time" would not fit a 32 px column, and signed minutes sort and scan well.
+- **The CSV is unchanged (Fred).** It never had the old wording: delays there are signed seconds. There is nothing to put in the release notes.
+- **Toolbar clock with a size setting, and no floating window (Fred).**
+- **The clock sits at the right of the menu row, not on the toolbar.** On the toolbar it pushed "Follow" off the window at 1280 px, but the menu row is empty on the right at any width. A Huge clock makes the menu row taller, which is what the user chose.
+- **Hover and click order:** ring, note, line, highlight, disruption, label.
+  - A line wins over the box it is in, so hovering and clicking a train still work inside red boxes. The line's tooltip names the box instead.
+  - Clicking a note still selects the line under it, as before.
+- **The top suggestion is shown only when it has already been worked out** (the conflict picked in the panel). Hovering does not start the suggester, which can take a while.
+- **The headway used is not in the conflict tooltip yet.** Conflicts do not record it; S27 adds that with sim-aware headways.
+
+### Next
+- S25: menus against the UI spec (#8). The new Display tab is a candidate for Tools ▸ Options.
+
+### Known issues
+- **Not tried by hand.** 👤 Fred:
+  - hover the red boxes on a live sim, in both orientations;
+  - try Settings ▸ Display ▸ Huge from across the room.
+- The corridor tabs still squeeze into two rows at 1280 px (as before; S25 reviews the toolbar).
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

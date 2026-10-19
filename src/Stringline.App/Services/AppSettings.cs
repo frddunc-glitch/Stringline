@@ -2,6 +2,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Stringline.Planning;
 
@@ -80,6 +81,9 @@ internal sealed record AppSettings
 
     public const int DefaultLogRetentionDays = 14;
 
+    /// <summary>How big the sim clock at the toolbar's right is drawn (#13).</summary>
+    public ClockSize ClockSize { get; init; } = ClockSize.Normal;
+
     /// <summary>The main window's panels, splitters and place (#9).</summary>
     public WindowLayout Layout { get; init; } = new();
 
@@ -105,6 +109,15 @@ internal sealed record AppSettings
         var map = new Dictionary<string, string>(TimetableByArea, StringComparer.Ordinal) { [areaId.Trim().ToLowerInvariant()] = path };
         return this with { TimetableByArea = map, LastTimetablePath = path };
     }
+}
+
+/// <summary>How big the toolbar's sim clock is (#13).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ClockSize>))]
+internal enum ClockSize
+{
+    Normal,
+    Large,
+    Huge,
 }
 
 /// <summary>

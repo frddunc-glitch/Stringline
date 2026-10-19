@@ -26,6 +26,25 @@ public sealed class ConflictPanelTests
         return new Disruption("B1", DisruptionKind.Block, corridor.Locations[0].Tiploc, corridor.Locations[2].Tiploc, null, SimTime.Parse("07:00"), SimTime.Parse("07:20"));
     }
 
+    /// <summary>A point in a conflict's highlight where the mouse finds a <paramref name="kind"/> inside it, if any.</summary>
+    private static ScreenPoint? HighlightPoint(MainViewModel vm, string id, GraphTargetKind kind)
+    {
+        var (scene, view) = (vm.Scene!, vm.Navigator.Viewport);
+        var rect = GraphConflicts.RectOf(scene.Conflicts.First(c => c.Id == id), view);
+        for (var x = Math.Max(rect.Left, view.PlotLeft) + 1; x < Math.Min(rect.Right, view.PlotRight); x += 2)
+        {
+            for (var y = Math.Max(rect.Top, view.PlotTop) + 1; y < Math.Min(rect.Bottom, view.PlotBottom); y += 2)
+            {
+                if (GraphHitTester.TargetAt(scene, view, new ScreenPoint(x, y)) is { } t && t.Kind == kind && t.Conflict?.Id == id)
+                {
+                    return new ScreenPoint(x, y);
+                }
+            }
+        }
+
+        return null;
+    }
+
     [Fact]
     public async Task A_block_lists_its_conflicts_and_picking_one_focuses_the_graph()
     {
@@ -61,12 +80,20 @@ public sealed class ConflictPanelTests
         // Its ring on the graph: the tooltip, and a click picks it again after the selection is cleared.
         await app.Ui.WaitUntil(() => vm.Scene!.Conflicts.Any(c => c.Id == held.Id), "its ring drawn");
         var ring = await app.Ui.Run(() => GraphConflicts.RingOf(vm.Scene!.Conflicts.First(c => c.Id == held.Id), vm.Navigator.Viewport));
-        (await app.Ui.Run(() => vm.DescribeConflictAt(ring)))!.Heading.Should().StartWith("Block: ");
+        var ringTip = (await app.Ui.Run(() => vm.DescribeAt(ring)))!;
+        ringTip.Heading.Should().StartWith("Block: ");
+        ringTip.ValueOf("Trains").Should().Be($"{held.Conflict.HeadcodeA} held by block B1");
         await app.Ui.Run(() => vm.SelectPath(null));
         (await app.Ui.Run(() => (vm.Selection, vm.ConflictList.Selected))).Should().Be(((GraphSelection?)null, (ConflictRowViewModel?)null));
         (await app.Ui.Run(() => vm.ClickConflictAt(ring))).Should().BeTrue();
         (await app.Ui.Run(() => (vm.Selection?.ConflictId, vm.ConflictList.Selected?.Id))).Should().Be((held.Id, held.Id));
         (await app.Ui.Run(() => vm.ClickConflictAt(new ScreenPoint(ring.X + 40, ring.Y + 40)))).Should().BeFalse();
+
+        // Its red band along the held train's line (#12): the line's tooltip names the conflict. (The train waits
+        // outside the block, so the block is not named.)
+        var band = await app.Ui.Run(() => HighlightPoint(vm, held.Id, GraphTargetKind.Path));
+        band.Should().NotBeNull("the held train's line runs along the band");
+        (await app.Ui.Run(() => vm.DescribeAt(band!.Value)))!.ValueOf(GraphHover.Conflict).Should().Be(ringTip.Heading);
 
         // Hidden from the graph, still listed.
         await app.Ui.Run(() => vm.ShowConflicts = false);

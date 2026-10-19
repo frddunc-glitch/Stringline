@@ -16,8 +16,8 @@ public enum GraphColourMode
 /// <summary>A band of lateness (<c>05-…md</c> §2, delay bands).</summary>
 public enum DelayBand
 {
-    /// <summary>Early or right time: 0 minutes late or less.</summary>
-    RightTime,
+    /// <summary>Early or on time: 0 minutes late or less.</summary>
+    OnTime,
 
     /// <summary>1–5 minutes late.</summary>
     Slight,
@@ -31,11 +31,11 @@ public enum DelayBand
 
 /// <summary>
 /// Delay bands and their colours: ≤ 0 min green, 1–5 amber, 6–15 orange, &gt; 15 red. Minutes are whole minutes
-/// rounded towards zero, as <c>TrainDelay.Minutes</c> is, so 59 s late is right time.
+/// rounded towards zero, as <c>TrainDelay.Minutes</c> is, so 59 s late is on time.
 /// </summary>
 public static class DelayBands
 {
-    public static Colour RightTime { get; } = new(0x2E, 0x7D, 0x32);
+    public static Colour OnTime { get; } = new(0x2E, 0x7D, 0x32);
 
     public static Colour Slight { get; } = new(0xE0, 0xA0, 0x00);
 
@@ -48,7 +48,7 @@ public static class DelayBands
 
     public static DelayBand BandOf(int minutes) => minutes switch
     {
-        <= 0 => DelayBand.RightTime,
+        <= 0 => DelayBand.OnTime,
         <= 5 => DelayBand.Slight,
         <= 15 => DelayBand.Late,
         _ => DelayBand.VeryLate,
@@ -59,7 +59,7 @@ public static class DelayBands
 
     public static Colour ColourOf(DelayBand band) => band switch
     {
-        DelayBand.RightTime => RightTime,
+        DelayBand.OnTime => OnTime,
         DelayBand.Slight => Slight,
         DelayBand.Late => Late,
         DelayBand.VeryLate => VeryLate,

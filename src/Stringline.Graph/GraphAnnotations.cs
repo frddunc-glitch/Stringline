@@ -237,7 +237,10 @@ public static class GraphAnnotations
         return new GraphSpan(from, to, new SimTime(start), new SimTime(end));
     }
 
-    /// <summary>The tooltip for a disruption: its kind, where, when, track, running and note.</summary>
+    /// <summary>
+    /// The tooltip for a disruption (#12): its kind, where, when, track, its effect (held, or the slower running), its
+    /// note, and that a right-click edits it.
+    /// </summary>
     public static HoverInfo Describe(GraphDisruption disruption, GraphScene scene)
     {
         ArgumentNullException.ThrowIfNull(disruption);
@@ -249,16 +252,16 @@ public static class GraphAnnotations
             new("When", $"{d.Start} – {d.End}"),
             new("Track", TrackChoice.Of(d.Track, d.Direction).Label),
         };
-        if (d.Kind == DisruptionKind.SpeedRestriction)
-        {
-            lines.Add(new HoverLine("Running", GraphDisruption.RunningText(d).Trim() is { Length: > 0 } running ? running : "no slower"));
-        }
+        lines.Add(d.Kind == DisruptionKind.SpeedRestriction
+            ? new HoverLine("Running", GraphDisruption.RunningText(d).Trim() is { Length: > 0 } running ? running : "no slower")
+            : new HoverLine("Effect", "trains running into it are held until it ends"));
 
         if (!string.IsNullOrWhiteSpace(d.Note))
         {
             lines.Add(new HoverLine("Note", d.Note.Trim()));
         }
 
+        lines.Add(new HoverLine("Tip", "Right-click to edit or remove it"));
         return new HoverInfo($"{(d.Kind == DisruptionKind.Block ? "Block" : "Speed restriction")} {d.Id}", lines);
     }
 

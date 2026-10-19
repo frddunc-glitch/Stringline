@@ -174,9 +174,9 @@ public sealed class GraphInteractionTests
     }
 
     [Theory]
-    [InlineData(0, "Right time")]
-    [InlineData(59, "Right time")]
-    [InlineData(-59, "Right time")]
+    [InlineData(0, "On time")]
+    [InlineData(59, "On time")]
+    [InlineData(-59, "On time")]
     [InlineData(60, "1 min late")]
     [InlineData(-150, "2 min early")]
     public void Formats_delays(int seconds, string expected)

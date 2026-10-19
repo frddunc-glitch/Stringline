@@ -30,6 +30,8 @@ Uninstalling leaves your settings, profiles, sessions and logs in place (see [Wh
 4. **Read the graph.** Time runs across, and each corridor is a tab. Thin lines are the working timetable, heavy lines the actual running, and dashed lines the forecast. The vertical line is now.
    - Mouse wheel zooms in time, Ctrl+wheel zooms along the corridor, and dragging pans. Space follows now.
    - Click a train to select it. The panel on the right shows its timings.
+   - Hover over anything for its details: a train shows its booked, actual and forecast times and whether it is early, on time or late; a red conflict ring or box shows the trains, where, when, the delay needed and the best suggestion; a block or speed restriction shows its section, tracks, times and effect (right-click to edit it).
+   - The sim time is at the top right. Settings ▸ Display makes it Large or Huge.
 5. **Re-plan.**
    - Drag a train's path, or right-click it to hold it, change its platform, cancel it or clone it.
    - Right-click the graph's background, or B+drag, to add a block, a speed restriction or a note.
@@ -43,7 +45,7 @@ Uninstalling leaves your settings, profiles, sessions and logs in place (see [Wh
 
 ## Settings
 
-**View ▸ Settings…** (Ctrl+,) has four tabs:
+**View ▸ Settings…** (Ctrl+,) has five tabs:
 
 - **Forecast and conflicts:**
   - knock-on delay from other trains;
@@ -54,6 +56,7 @@ Uninstalling leaves your settings, profiles, sessions and logs in place (see [Wh
 - **Suggestions:** whether suggestions may terminate short or cancel a train, and what each kind of re-plan costs when suggestions are ranked.
 - **Folders:** where to look for timetables, and where sessions, recordings and exports go.
 - **Logging and housekeeping:** detailed (Debug) logging, how many days of logs to keep, and deleting saved sessions after a number of days (off unless you turn it on; the newest is always kept).
+- **Display:** the size of the sim clock at the top right (Normal, Large or Huge).
 
 Connection details are in the Connect dialog. The graph's colours, layers and orientation are in the View menu. Stringline remembers all of them.
 
@@ -145,7 +148,7 @@ dotnet run --project src/Stringline.Tools -- render-png --wtt "tests/fixtures/wa
 Without `--profile`, corridors come from the WTT (`corridors` lists them).
 - `--now-at`, `--width`, `--height` and `--no-wtt` change the view.
 - `--vertical` runs time down the image.
-- `--colour delay` colours the actual running by delay band: green right time, amber 1–5 min late, orange 6–15, red over 15.
+- `--colour delay` colours the actual running by delay band: green on time or early, amber 1–5 min late, orange 6–15, red over 15.
 
 An output ending in `.pdf` writes a PDF (`--page a3|a4|view`). `report` writes the delay table as CSV.
 

@@ -8,7 +8,7 @@ namespace Stringline.Planning;
 /// <summary>A train's delay at one timing point: actual minus booked, in seconds (negative = early).</summary>
 public sealed record TrainDelay(int Seconds, Tiploc Location, SimTime Actual, SimTime Booked, TrainLocationAction Action)
 {
-    /// <summary>Whole minutes late, rounded towards zero as railway delay minutes are (59 s late is right time).</summary>
+    /// <summary>Whole minutes late, rounded towards zero as railway delay minutes are (59 s late is on time).</summary>
     public int Minutes => Seconds / SimTime.SecondsPerMinute;
 }
 

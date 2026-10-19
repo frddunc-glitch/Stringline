@@ -171,11 +171,14 @@ public sealed class GraphDisruptionTests
 
         GraphAnnotations.Describe(scene.Disruptions[0], scene).ToString().Should().Be(
             "Block B1" + Environment.NewLine + "Where: Charlie – Alpha" + Environment.NewLine + "When: 07:00:00 – 07:20:00" + Environment.NewLine +
-            "Track: Down (Down trains)" + Environment.NewLine + "Note: Engineering");
+            "Track: Down (Down trains)" + Environment.NewLine + "Effect: trains running into it are held until it ends" + Environment.NewLine +
+            "Note: Engineering" + Environment.NewLine + "Tip: Right-click to edit or remove it");
         var restriction = GraphAnnotations.Describe(scene.Disruptions[1], scene);
         restriction.Heading.Should().Be("Speed restriction SR1");
         restriction.ValueOf("Running").Should().Be("×1.5 +30 s");
         restriction.ValueOf("Track").Should().Be("All lines");
+        restriction.ValueOf("Effect").Should().BeNull("a restriction says how much slower instead");
+        restriction.ValueOf("Tip").Should().Be("Right-click to edit or remove it");
         GraphAnnotations.Describe(scene.Notes[0], scene).ValueOf("At").Should().Be("B 07:10:00");
     }
 

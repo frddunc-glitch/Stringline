@@ -28,6 +28,14 @@ public sealed class NotNullToVisibilityConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
+/// <summary>A delay cell's "+3", "0" or "−1" in words for its tooltip (#11); null (no tooltip) for anything else.</summary>
+public sealed class DelayWordsConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => TrainListViewModel.DelayWords(value as string);
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
 /// <summary>The status bar dot's colour.</summary>
 public sealed class StatusLightBrushConverter : IValueConverter
 {

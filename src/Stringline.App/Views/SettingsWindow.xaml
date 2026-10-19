@@ -185,6 +185,20 @@
                      Text="Checked at start-up. The newest session is always kept, so it can still be resumed." />
         </StackPanel>
       </TabItem>
+
+      <!-- Display (#13) -->
+      <TabItem Header="Display">
+        <StackPanel Margin="10">
+          <TextBlock Style="{StaticResource Intro}"
+                     Text="How the main window shows things. The graph's layers and colours are in the View menu." />
+          <StackPanel Orientation="Horizontal">
+            <Label Content="Sim _clock size" Target="{Binding ElementName=ClockSizes}" />
+            <ComboBox x:Name="ClockSizes" Width="100" Margin="8,0,0,0" ItemsSource="{Binding ClockSizes}" SelectedItem="{Binding ClockSize}" />
+          </StackPanel>
+          <TextBlock Style="{StaticResource Hint}"
+                     Text="The sim time and speed at the right of the toolbar. Large or Huge can be read from across the room." />
+        </StackPanel>
+      </TabItem>
     </TabControl>
   </DockPanel>
 </Window>

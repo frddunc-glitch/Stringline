@@ -97,7 +97,7 @@ public sealed record TrainForecast(
     }
 
     /// <summary>
-    /// True if some forecast time is a minute or more off the plan. Less is right time, as railway delay minutes go:
+    /// True if some forecast time is a minute or more off the plan. Less is on time, as railway delay minutes go:
     /// the forecast's shortest dwells often differ from the WTT's half-minute bookings by seconds.
     /// </summary>
     public bool Deviates => Points.Any(p => (p.Basis is ForecastBasis.Forecast or ForecastBasis.Arrived) && p.DelaySeconds is { } d && Math.Abs(d) >= SimTime.SecondsPerMinute);

@@ -64,6 +64,7 @@ internal sealed partial class MainViewModel
 
         // Setting these through the properties also tells the engine and the suggestions; the settings already match.
         ForecastKnockOn = next.ForecastKnockOn;
+        ClockSize = next.ClockSize;
         SuggestionPanel.AllowCancellation = next.SuggestCancellations;
         if (before.Planning != next.Planning)
         {

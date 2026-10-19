@@ -107,6 +107,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         IsVertical = vertical;
         ColourMode = byDelay ? GraphColourMode.Delay : GraphColourMode.Category;
         ForecastKnockOn = knockOn;
+        ClockSize = _settings.ClockSize;
         engine.SetForecast(options: _settings.Planning.ToForecastOptions(knockOn), conflicts: _settings.Planning.ToConflictOptions());
         Trains.PropertyChanged += (_, e) =>
         {
@@ -204,6 +205,21 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     [ObservableProperty]
     public partial string SpeedText { get; private set; } = string.Empty;
+
+    /// <summary>The toolbar's sim clock (#13): "09:14:32", or a dash before the first clock.</summary>
+    [ObservableProperty]
+    public partial string SimClockText { get; private set; } = StatusText.NoTime;
+
+    /// <summary>How big the toolbar's clock is, from the settings (#13).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ClockFontSize), nameof(SpeedFontSize))]
+    public partial ClockSize ClockSize { get; private set; }
+
+    /// <summary>The toolbar clock's font size in pixels for <see cref="ClockSize"/>.</summary>
+    public double ClockFontSize => StatusText.ClockFontSize(ClockSize);
+
+    /// <summary>The speed beside the toolbar clock: smaller, but never below the toolbar's own text.</summary>
+    public double SpeedFontSize => Math.Max(12, Math.Round(ClockFontSize * 0.6));
 
     [ObservableProperty]
     public partial string TrainsText { get; private set; } = string.Empty;
@@ -306,6 +322,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
 
         ClockText = StatusText.Clock(clock, new SimTime((int)Math.Floor(now ?? 0)));
+        SimClockText = StatusText.ClockTime(clock, new SimTime((int)Math.Floor(now ?? 0)));
         SpeedText = _frozenNow is not null ? "paused" : StatusText.Speed(clock);
         IsFollowing = Navigator.IsFollowing;
         Transport?.Tick();
@@ -321,6 +338,12 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     /// <summary>The tooltip for a path under the cursor.</summary>
     public HoverInfo? Describe(GraphHit hit) => Scene is { } scene ? GraphHover.Describe(hit, scene, Snapshot) : null;
+
+    /// <summary>
+    /// The tooltip for what is under the mouse (#12): a line, a conflict (with its top suggestion once worked out), a
+    /// block or speed restriction, a note or a label.
+    /// </summary>
+    public HoverInfo? Describe(GraphTarget target) => Scene is { } scene ? GraphHover.Describe(target, scene, Snapshot, TopSuggestionFor) : null;
 
     /// <summary>A click on the graph: select the train hit, or clear the selection on the background.</summary>
     public void SelectPath(GraphHit? hit)

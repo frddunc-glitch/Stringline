@@ -68,6 +68,7 @@ public sealed class MainViewModelTests
         var now = await app.Ui.Run(() => vm.Tick());
         now.Should().BeGreaterThan(SimTime.Parse("05:52").Seconds);
         (await app.Ui.Run(() => vm.ClockText)).Should().StartWith("Sim 0");
+        (await app.Ui.Run(() => (vm.ClockText, vm.SimClockText))).Should().Match<(string Status, string Toolbar)>(c => c.Status == "Sim " + c.Toolbar);
 
         // Hover and select a train's actual line.
         await app.Ui.Run(() =>

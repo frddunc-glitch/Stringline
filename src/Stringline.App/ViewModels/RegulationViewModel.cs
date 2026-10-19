@@ -42,7 +42,7 @@ internal sealed record RegulationRowViewModel(
             : r.Behind.Count > 0 ? $"Behind {Names(r.Behind)}"
             : r.IsAdded ? "Added"
             : string.Empty;
-        // Whole minutes late (or early), as railway delay minutes go; under a minute is right time.
+        // Whole minutes late (or early), as railway delay minutes go; under a minute is on time.
         var delay = r.DelaySeconds is { } d && Math.Abs(d) >= SimTime.SecondsPerMinute
             ? string.Create(CultureInfo.InvariantCulture, $"{(d > 0 ? "+" : "−")}{Math.Abs(d) / SimTime.SecondsPerMinute}")
             : string.Empty;

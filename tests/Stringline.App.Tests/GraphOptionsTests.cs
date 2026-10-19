@@ -68,7 +68,7 @@ public sealed class GraphOptionsTests
         await using var app = new TestApp();
         var vm = app.ViewModel;
         await ReplayWaterloo(app);
-        var bands = new[] { DelayBands.RightTime, DelayBands.Slight, DelayBands.Late, DelayBands.VeryLate, DelayBands.Unknown };
+        var bands = new[] { DelayBands.OnTime, DelayBands.Slight, DelayBands.Late, DelayBands.VeryLate, DelayBands.Unknown };
 
         await app.Ui.Run(() => vm.ColourMode = GraphColourMode.Delay);
         await app.Ui.WaitUntil(() => vm.Scene?.InLayer(GraphLayer.Actual).All(p => bands.Contains(p.Colour)) == true, "actuals in band colours");
@@ -77,7 +77,7 @@ public sealed class GraphOptionsTests
         {
             var bandHex = bands.Select(b => b.ToString()).ToHashSet();
             vm.Trains.Rows.Should().OnlyContain(r => bandHex.Contains(r.Colour));
-            vm.Trains.Rows.Where(r => r.DelayMinutes is <= 0).Should().OnlyContain(r => r.Colour == DelayBands.RightTime.ToString() || r.IsUnmatched);
+            vm.Trains.Rows.Where(r => r.DelayMinutes is <= 0).Should().OnlyContain(r => r.Colour == DelayBands.OnTime.ToString() || r.IsUnmatched);
         });
     }
 

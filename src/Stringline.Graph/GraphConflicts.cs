@@ -1,3 +1,4 @@
+using System.Globalization;
 using Stringline.Core;
 using Stringline.Network;
 using Stringline.Planning;
@@ -106,16 +107,44 @@ public static class GraphConflicts
         return best;
     }
 
-    /// <summary>The tooltip: what clashes, where and when, the delay to resolve it and the knock-on.</summary>
-    public static HoverInfo Describe(GraphConflict conflict, GraphScene scene)
+    /// <summary>
+    /// The conflict whose highlight is under a point (#12), the smallest first so a short clash inside a long one can
+    /// still be pointed at; of equal ones the last drawn. Null if none.
+    /// </summary>
+    public static GraphConflict? HighlightAt(GraphScene scene, GraphViewport viewport, ScreenPoint point)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(viewport);
+        GraphConflict? best = null;
+        var bestArea = double.MaxValue;
+        foreach (var c in scene.Conflicts)
+        {
+            var rect = RectOf(c, viewport);
+            var area = rect.Width * rect.Height;
+            if (rect.Contains(point) && area <= bestArea)
+            {
+                (best, bestArea) = (c, area);
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// The tooltip (#12): the kind and what clashes, the trains, where and when, the delay to resolve it, the knock-on,
+    /// and the best suggestion if one has been worked out, else how to get one.
+    /// </summary>
+    /// <param name="suggestion">The top suggestion for this conflict, worded, if the suggestions panel has one.</param>
+    public static HoverInfo Describe(GraphConflict conflict, GraphScene scene, string? suggestion = null)
     {
         ArgumentNullException.ThrowIfNull(conflict);
         ArgumentNullException.ThrowIfNull(scene);
         var c = conflict.Conflict;
         var lines = new List<HoverLine>
         {
+            new("Trains", TrainsOf(c)),
             new("Where", c.To is { } to && to != c.Where ? $"{NameOf(scene, c.Where)} – {NameOf(scene, to)}" : NameOf(scene, c.Where)),
-            new("When", c.When.ToString()),
+            new("When", c.End > c.Start ? $"{c.When} (clash {c.Start.ToString("H", CultureInfo.InvariantCulture)}–{c.End.ToString("H", CultureInfo.InvariantCulture)})" : c.When.ToString()),
             new("Resolve", $"delay {c.HeadcodeA} {PlanText.Duration(c.SeveritySeconds)}"),
         };
         if (c.KnockOnSeconds >= SimTime.SecondsPerMinute)
@@ -123,8 +152,17 @@ public static class GraphConflicts
             lines.Add(new HoverLine("Knock-on", $"{c.HeadcodeA} {PlanText.Duration(c.KnockOnSeconds)} late by the forecast"));
         }
 
+        lines.Add(suggestion is { Length: > 0 } best ? new HoverLine("Suggest", best) : new HoverLine("Tip", "Click to focus it and see suggestions"));
         return new HoverInfo($"{KindName(c.Kind)}: {c.Summary}", lines);
     }
+
+    /// <summary>"2B02 gives way to 1A01", "1A01 held by block B1", or the one train.</summary>
+    private static string TrainsOf(Conflict c) => c.Kind switch
+    {
+        ConflictKind.Disruption => $"{c.HeadcodeA} held by block {c.DisruptionId}",
+        _ when c.HeadcodeB is not null || c.B is not null => $"{c.HeadcodeA} gives way to {c.HeadcodeB?.Value ?? c.B?.Value}",
+        _ => c.HeadcodeA.Value,
+    };
 
     /// <summary>"Headway", "Single line", "Platform"…</summary>
     public static string KindName(ConflictKind kind) => kind switch

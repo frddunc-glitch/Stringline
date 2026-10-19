@@ -53,7 +53,7 @@ Performance target: 500 trains × 40 points = 20k events → well under 50 ms in
 - **Tracks side by side.** The profile gives one track each way on a double line, but Waterloo's main line is four tracks. A section is therefore given at least as many tracks each way as the WTT uses at once. Booked runs are put on tracks in entry order: a run entering or leaving within a minute of the last on a track, or overtaking it, takes another track. A following train takes whichever track lets it go soonest.
 - **Holding.** A held train waits at its departure point: a pass there becomes a stop. A train already on its way (its departure is actual) is not held, but still occupies the sections.
 - **Left out:** cancelled trains, and trains not seen whose plan ended before the session started. A train whose forecast throws is `Unavailable` (logged) and the rest carry on.
-- **Drawn** (Fred): the forecast layer shows running trains, from their latest actual, and trains not started whose forecast is a minute or more off the plan. On-time future trains show only their plan. Under a minute is right time, as railway delay minutes go: the shortest dwells often differ from the WTT's half-minute bookings by seconds.
+- **Drawn** (Fred): the forecast layer shows running trains, from their latest actual, and trains not started whose forecast is a minute or more off the plan. On-time future trains show only their plan. Under a minute is on time, as railway delay minutes go: the shortest dwells often differ from the WTT's half-minute bookings by seconds.
 - **Measured** (`benchmarks/ --quick`, Release, Waterloo 1 768 trains / 7 834 points half way through the 4× recording): 10 ms independent, 23 ms with the interaction pass (both passes run).
 
 ## 3. Conflict detection

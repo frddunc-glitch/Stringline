@@ -11,6 +11,7 @@
     <views:NotNullToVisibilityConverter x:Key="NotNull" />
     <views:StatusLightBrushConverter x:Key="LightBrush" />
     <views:InfoSeverityBrushConverter x:Key="InfoBrush" />
+    <views:DelayWordsConverter x:Key="DelayWords" />
     <Style TargetType="Button" x:Key="ToolButton">
       <Setter Property="Padding" Value="8,2" />
       <Setter Property="Margin" Value="2,0" />
@@ -37,6 +38,10 @@
       <Setter Property="HorizontalAlignment" Value="Right" />
       <Setter Property="Margin" Value="2,0" />
     </Style>
+    <!-- A delay in whole minutes (+3, 0, −1), with its tooltip in words: "3 min late", "On time", "1 min early" (#11). -->
+    <Style TargetType="TextBlock" x:Key="DelayCell" BasedOn="{StaticResource RightCell}">
+      <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}, Converter={StaticResource DelayWords}}" />
+    </Style>
     <Style TargetType="TextBlock" x:Key="TrimCell">
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
       <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
@@ -55,86 +60,97 @@
   </Window.InputBindings>
 
   <DockPanel>
-    <Menu DockPanel.Dock="Top">
-      <MenuItem Header="_Session">
-        <MenuItem Header="_Connect to SimSig…" InputGestureText="F5" Command="{Binding ConnectCommand}" />
-        <MenuItem Header="Open _replay…" InputGestureText="Ctrl+O" Command="{Binding OpenReplayCommand}" />
-        <MenuItem Header="_Disconnect" Command="{Binding DisconnectCommand}" />
-        <Separator />
-        <MenuItem Header="Re_sume saved session…" Command="{Binding ResumeSessionCommand}" />
-        <MenuItem Header="Re_view saved session…" Command="{Binding ReviewSessionCommand}" />
-        <Separator />
-        <MenuItem Header="_Record to file" IsCheckable="False" IsChecked="{Binding IsRecording, Mode=OneWay}" Command="{Binding ToggleRecordingCommand}" />
-        <Separator />
-        <MenuItem Header="_Export graph as PNG…" InputGestureText="Ctrl+E" Command="{Binding ExportPngCommand}" CommandParameter="1" />
-        <MenuItem Header="Export graph as PNG at _2× size…" Command="{Binding ExportPngCommand}" CommandParameter="2" />
-        <MenuItem Header="Export graph as _PDF (A3 landscape)…" InputGestureText="Ctrl+P" Command="{Binding ExportPdfCommand}" CommandParameter="a3" />
-        <MenuItem Header="Export graph as PDF (A_4 landscape)…" Command="{Binding ExportPdfCommand}" CommandParameter="a4" />
-        <MenuItem Header="Export graph as PDF (_view size)…" Command="{Binding ExportPdfCommand}" CommandParameter="view" />
-        <Separator />
-        <MenuItem Header="Export _delay table as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="points" />
-        <MenuItem Header="Export _train delays as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="trains" />
-        <Separator />
-        <MenuItem Header="E_xit" Click="OnExit" />
-      </MenuItem>
-      <MenuItem Header="_Timetable">
-        <MenuItem Header="_Load timetable…" InputGestureText="Ctrl+T" Command="{Binding LoadTimetableCommand}" />
-        <MenuItem Header="Show import _warnings" Command="{Binding ShowWarningsCommand}" />
-      </MenuItem>
-      <MenuItem Header="P_rofile">
-        <MenuItem Header="_Edit profile…" Command="{Binding EditProfileCommand}" />
-        <MenuItem Header="_Open profile file" Command="{Binding OpenProfileFileCommand}" />
-        <MenuItem Header="_Reload profile" Command="{Binding ReloadProfileCommand}" />
-        <Separator />
-        <MenuItem Header="Re_generate corridors…" Command="{Binding RegenerateCorridorsCommand}" />
-      </MenuItem>
-      <MenuItem Header="_View">
-        <MenuItem Header="_Follow now" InputGestureText="Space" Command="{Binding FollowCommand}" />
-        <Separator />
-        <MenuItem Header="_1 hour" Command="{Binding ZoomCommand}" CommandParameter="1" />
-        <MenuItem Header="_3 hours" Command="{Binding ZoomCommand}" CommandParameter="3" />
-        <MenuItem Header="_6 hours" Command="{Binding ZoomCommand}" CommandParameter="6" />
-        <MenuItem Header="_Whole corridor" Command="{Binding ShowFullCorridorCommand}" />
-        <Separator />
-        <MenuItem Header="Show _WTT" IsCheckable="True" IsChecked="{Binding ShowWtt}" />
-        <MenuItem Header="Show _actual" IsCheckable="True" IsChecked="{Binding ShowActual}" />
-        <MenuItem Header="Show _forecast" IsCheckable="True" IsChecked="{Binding ShowForecast}" />
-        <MenuItem Header="Show _disruptions and notes" IsCheckable="True" IsChecked="{Binding ShowDisruptions}" />
-        <MenuItem Header="Show co_nflicts" IsCheckable="True" IsChecked="{Binding ShowConflicts}" />
-        <MenuItem Header="Forecast _knock-on from other trains" IsCheckable="True" IsChecked="{Binding ForecastKnockOn}"
-                  ToolTip="Hold trains in the forecast for headways and single lines, so a late train delays the ones behind it" />
-        <MenuItem Header="Colour by _delay" IsCheckable="True" IsChecked="{Binding ColourByDelay}" />
-        <MenuItem Header="_Vertical (time down)" IsCheckable="True" IsChecked="{Binding IsVertical}" />
-        <Separator />
-        <MenuItem Header="_Clear selection" Command="{Binding ClearSelectionCommand}" />
-        <Separator />
-        <MenuItem Header="_Panels">
-          <MenuItem Header="_Train list" IsCheckable="True" IsChecked="{Binding Layout.ShowTrainList}" />
-          <MenuItem Header="_Side panel" IsCheckable="True" IsChecked="{Binding Layout.ShowSidePanel}" />
-          <MenuItem Header="T_abs (conflicts, regulation, delays, history)" IsCheckable="True" IsChecked="{Binding Layout.ShowTabs}"
-                    IsEnabled="{Binding Layout.ShowSidePanel}" />
+    <DockPanel DockPanel.Dock="Top" Background="{Binding Background, ElementName=MainMenu}">
+      <!-- The sim clock (#13) at the menu row's right, where there is room at any width; its size from Settings ▸ Display -->
+      <Border x:Name="SimClock" DockPanel.Dock="Right" Padding="10,0,8,0"
+              VerticalAlignment="Center" ToolTip="Sim time and speed. Settings ▸ Display sets the size.">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="{Binding SimClockText}" FontFamily="Consolas" FontWeight="Bold" FontSize="{Binding ClockFontSize}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding SpeedText}" Foreground="#616161" Margin="8,0,0,0" VerticalAlignment="Center"
+                     FontSize="{Binding SpeedFontSize}" />
+        </StackPanel>
+      </Border>
+      <Menu x:Name="MainMenu">
+        <MenuItem Header="_Session">
+          <MenuItem Header="_Connect to SimSig…" InputGestureText="F5" Command="{Binding ConnectCommand}" />
+          <MenuItem Header="Open _replay…" InputGestureText="Ctrl+O" Command="{Binding OpenReplayCommand}" />
+          <MenuItem Header="_Disconnect" Command="{Binding DisconnectCommand}" />
+          <Separator />
+          <MenuItem Header="Re_sume saved session…" Command="{Binding ResumeSessionCommand}" />
+          <MenuItem Header="Re_view saved session…" Command="{Binding ReviewSessionCommand}" />
+          <Separator />
+          <MenuItem Header="_Record to file" IsCheckable="False" IsChecked="{Binding IsRecording, Mode=OneWay}" Command="{Binding ToggleRecordingCommand}" />
+          <Separator />
+          <MenuItem Header="_Export graph as PNG…" InputGestureText="Ctrl+E" Command="{Binding ExportPngCommand}" CommandParameter="1" />
+          <MenuItem Header="Export graph as PNG at _2× size…" Command="{Binding ExportPngCommand}" CommandParameter="2" />
+          <MenuItem Header="Export graph as _PDF (A3 landscape)…" InputGestureText="Ctrl+P" Command="{Binding ExportPdfCommand}" CommandParameter="a3" />
+          <MenuItem Header="Export graph as PDF (A_4 landscape)…" Command="{Binding ExportPdfCommand}" CommandParameter="a4" />
+          <MenuItem Header="Export graph as PDF (_view size)…" Command="{Binding ExportPdfCommand}" CommandParameter="view" />
+          <Separator />
+          <MenuItem Header="Export _delay table as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="points" />
+          <MenuItem Header="Export _train delays as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="trains" />
+          <Separator />
+          <MenuItem Header="E_xit" Click="OnExit" />
         </MenuItem>
-        <MenuItem Header="R_eset layout" Command="{Binding Layout.ResetLayoutCommand}"
-                  ToolTip="Show every panel again at its first size" />
-        <Separator />
-        <MenuItem Header="_Settings…" InputGestureText="Ctrl+," Command="{Binding ShowSettingsCommand}" />
-      </MenuItem>
-      <MenuItem Header="_Plan">
-        <MenuItem Header="{Binding UndoHeader}" InputGestureText="Ctrl+Z" Command="{Binding UndoCommand}" />
-        <MenuItem Header="{Binding RedoHeader}" InputGestureText="Ctrl+Y" Command="{Binding RedoCommand}" />
-        <Separator />
-        <MenuItem Header="Reset selected train to _WTT" Command="{Binding ResetSelectedCommand}" />
-        <MenuItem Header="_Cancel or reinstate selected train" Command="{Binding CancelSelectedCommand}" />
-        <MenuItem Header="Cl_one selected train as ad-hoc…" Command="{Binding CloneSelectedCommand}" />
-        <MenuItem Header="_Link selected live train to WTT train…" Command="{Binding LinkSelectedCommand}" />
-      </MenuItem>
-      <MenuItem Header="_Help">
-        <MenuItem Header="_Getting started (online)" Command="{Binding OpenHelpCommand}" />
-        <MenuItem Header="Open _log folder" Command="{Binding OpenLogFolderCommand}" />
-        <Separator />
-        <MenuItem Header="_About Stringline" Click="OnAbout" />
-      </MenuItem>
-    </Menu>
+        <MenuItem Header="_Timetable">
+          <MenuItem Header="_Load timetable…" InputGestureText="Ctrl+T" Command="{Binding LoadTimetableCommand}" />
+          <MenuItem Header="Show import _warnings" Command="{Binding ShowWarningsCommand}" />
+        </MenuItem>
+        <MenuItem Header="P_rofile">
+          <MenuItem Header="_Edit profile…" Command="{Binding EditProfileCommand}" />
+          <MenuItem Header="_Open profile file" Command="{Binding OpenProfileFileCommand}" />
+          <MenuItem Header="_Reload profile" Command="{Binding ReloadProfileCommand}" />
+          <Separator />
+          <MenuItem Header="Re_generate corridors…" Command="{Binding RegenerateCorridorsCommand}" />
+        </MenuItem>
+        <MenuItem Header="_View">
+          <MenuItem Header="_Follow now" InputGestureText="Space" Command="{Binding FollowCommand}" />
+          <Separator />
+          <MenuItem Header="_1 hour" Command="{Binding ZoomCommand}" CommandParameter="1" />
+          <MenuItem Header="_3 hours" Command="{Binding ZoomCommand}" CommandParameter="3" />
+          <MenuItem Header="_6 hours" Command="{Binding ZoomCommand}" CommandParameter="6" />
+          <MenuItem Header="_Whole corridor" Command="{Binding ShowFullCorridorCommand}" />
+          <Separator />
+          <MenuItem Header="Show _WTT" IsCheckable="True" IsChecked="{Binding ShowWtt}" />
+          <MenuItem Header="Show _actual" IsCheckable="True" IsChecked="{Binding ShowActual}" />
+          <MenuItem Header="Show _forecast" IsCheckable="True" IsChecked="{Binding ShowForecast}" />
+          <MenuItem Header="Show _disruptions and notes" IsCheckable="True" IsChecked="{Binding ShowDisruptions}" />
+          <MenuItem Header="Show co_nflicts" IsCheckable="True" IsChecked="{Binding ShowConflicts}" />
+          <MenuItem Header="Forecast _knock-on from other trains" IsCheckable="True" IsChecked="{Binding ForecastKnockOn}"
+                    ToolTip="Hold trains in the forecast for headways and single lines, so a late train delays the ones behind it" />
+          <MenuItem Header="Colour by _delay" IsCheckable="True" IsChecked="{Binding ColourByDelay}" />
+          <MenuItem Header="_Vertical (time down)" IsCheckable="True" IsChecked="{Binding IsVertical}" />
+          <Separator />
+          <MenuItem Header="_Clear selection" Command="{Binding ClearSelectionCommand}" />
+          <Separator />
+          <MenuItem Header="_Panels">
+            <MenuItem Header="_Train list" IsCheckable="True" IsChecked="{Binding Layout.ShowTrainList}" />
+            <MenuItem Header="_Side panel" IsCheckable="True" IsChecked="{Binding Layout.ShowSidePanel}" />
+            <MenuItem Header="T_abs (conflicts, regulation, delays, history)" IsCheckable="True" IsChecked="{Binding Layout.ShowTabs}"
+                      IsEnabled="{Binding Layout.ShowSidePanel}" />
+          </MenuItem>
+          <MenuItem Header="R_eset layout" Command="{Binding Layout.ResetLayoutCommand}"
+                    ToolTip="Show every panel again at its first size" />
+          <Separator />
+          <MenuItem Header="_Settings…" InputGestureText="Ctrl+," Command="{Binding ShowSettingsCommand}" />
+        </MenuItem>
+        <MenuItem Header="_Plan">
+          <MenuItem Header="{Binding UndoHeader}" InputGestureText="Ctrl+Z" Command="{Binding UndoCommand}" />
+          <MenuItem Header="{Binding RedoHeader}" InputGestureText="Ctrl+Y" Command="{Binding RedoCommand}" />
+          <Separator />
+          <MenuItem Header="Reset selected train to _WTT" Command="{Binding ResetSelectedCommand}" />
+          <MenuItem Header="_Cancel or reinstate selected train" Command="{Binding CancelSelectedCommand}" />
+          <MenuItem Header="Cl_one selected train as ad-hoc…" Command="{Binding CloneSelectedCommand}" />
+          <MenuItem Header="_Link selected live train to WTT train…" Command="{Binding LinkSelectedCommand}" />
+        </MenuItem>
+        <MenuItem Header="_Help">
+          <MenuItem Header="_Getting started (online)" Command="{Binding OpenHelpCommand}" />
+          <MenuItem Header="Open _log folder" Command="{Binding OpenLogFolderCommand}" />
+          <Separator />
+          <MenuItem Header="_About Stringline" Click="OnAbout" />
+        </MenuItem>
+      </Menu>
+    </DockPanel>
 
     <!-- Toolbar: session, corridor tabs, layers, zoom -->
     <Border DockPanel.Dock="Top" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="4,3" Background="#FAFAFA">
@@ -153,7 +169,7 @@
           <Separator Margin="6,0" />
           <Button Style="{StaticResource ToolButton}" Content="Timetable…" Command="{Binding LoadTimetableCommand}" ToolTip="Load the sim's timetable (Ctrl+T)" />
         </StackPanel>
-        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+        <StackPanel x:Name="ToolbarRight" Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
           <CheckBox Content="WTT" IsChecked="{Binding ShowWtt}" Margin="6,0" VerticalAlignment="Center" />
           <CheckBox Content="Actual" IsChecked="{Binding ShowActual}" Margin="6,0" VerticalAlignment="Center" />
           <CheckBox Content="Forecast" IsChecked="{Binding ShowForecast}" Margin="6,0" VerticalAlignment="Center"
@@ -164,7 +180,7 @@
                     ToolTip="Red rings where a train must give way: headways, single lines, platforms, blocks and run times. Click one, or pick it in the Conflicts list, to focus it." />
           <TextBlock Text="Colour:" Margin="8,0,4,0" VerticalAlignment="Center" />
           <ComboBox Width="84" ItemsSource="{Binding ColourModes}" SelectedItem="{Binding ColourMode}" VerticalAlignment="Center"
-                    ToolTip="Colour actual lines by train category, or by delay band (green right time, amber 1–5 min, orange 6–15, red over 15)" />
+                    ToolTip="Colour actual lines by train category, or by delay band (green on time or early, amber 1–5 min late, orange 6–15, red over 15)" />
           <ToggleButton Margin="6,0,2,0" Padding="8,2" Content="⇅ Vertical" IsChecked="{Binding IsVertical}" ToolTip="Time down the graph, the corridor across" />
           <Separator Margin="6,0" />
           <Button Style="{StaticResource ToolButton}" Content="1h" Command="{Binding ZoomCommand}" CommandParameter="1" />
@@ -317,7 +333,7 @@
             </DataGridTemplateColumn>
             <DataGridTextColumn Header="Train" Binding="{Binding Headcode}" Width="Auto" MinWidth="44" FontWeight="SemiBold" />
             <DataGridTextColumn Header="Delay" Binding="{Binding DelayText}" Width="Auto" MinWidth="40"
-                                HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                                HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource DelayCell}" />
             <DataGridTextColumn Header="Last at" Binding="{Binding LastLocation}" Width="*" MinWidth="50" ElementStyle="{StaticResource TrimCell}" />
             <DataGridTextColumn Header="Time" Binding="{Binding LastSeenText}" Width="Auto" MinWidth="40" />
             <DataGridTextColumn Header="WTT" Binding="{Binding StatusText}" Width="Auto" MinWidth="40" />
@@ -452,7 +468,7 @@
                 <DataGridTextColumn Header="Actual" Binding="{Binding ActualText}" Width="Auto" MinWidth="40" IsReadOnly="True" />
                 <DataGridTextColumn Header="Forecast" Binding="{Binding ForecastText}" Width="Auto" MinWidth="40" IsReadOnly="True" Foreground="#1565C0" />
                 <DataGridTextColumn Header="Delay" Binding="{Binding DelayText}" Width="Auto" MinWidth="36" IsReadOnly="True"
-                                    HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                                    HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource DelayCell}" />
               </DataGrid.Columns>
             </DataGrid>
             <TextBlock Text="Select a train on the graph or in the list to see its schedule. Drag its line to retime it, or right-click it for more."
@@ -572,7 +588,7 @@
                   <DataGridTextColumn Header="Plat" Binding="{Binding Platform}" Width="Auto" MinWidth="30" />
                   <DataGridTextColumn Header="Fcst" Binding="{Binding Forecast}" Width="Auto" MinWidth="40" />
                   <DataGridTextColumn Header="Late" Binding="{Binding Delay}" Width="Auto" MinWidth="32"
-                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource DelayCell}" />
                   <DataGridTextColumn Header="Order" Binding="{Binding Order}" Width="*" MinWidth="60" ElementStyle="{StaticResource TrimCell}" />
                 </DataGrid.Columns>
               </DataGrid>
@@ -613,14 +629,14 @@
                   <DataGridTextColumn Header="State" Binding="{Binding State}" Width="Auto" MinWidth="40" />
                   <DataGridTextColumn Header="Latest" Binding="{Binding Latest}" Width="3*" MinWidth="50" ElementStyle="{StaticResource TrimCell}" />
                   <DataGridTextColumn Header="Late" Binding="{Binding LatestDelay}" Width="Auto" MinWidth="32"
-                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource DelayCell}" />
                   <DataGridTextColumn Header="Worst" Binding="{Binding WorstDelay}" Width="Auto" MinWidth="36"
-                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource DelayCell}" />
                   <DataGridTextColumn Header="At" Binding="{Binding WorstAt}" Width="2*" MinWidth="40" ElementStyle="{StaticResource TrimCell}" />
                   <DataGridTemplateColumn Header="Final" Width="Auto" MinWidth="34" HeaderStyle="{StaticResource RightHeader}">
                     <DataGridTemplateColumn.CellTemplate>
                       <DataTemplate>
-                        <TextBlock x:Name="Final" Text="{Binding FinalDelay}" HorizontalAlignment="Right" Margin="2,0" />
+                        <TextBlock x:Name="Final" Text="{Binding FinalDelay}" Style="{StaticResource DelayCell}" />
                         <DataTemplate.Triggers>
                           <DataTrigger Binding="{Binding FinalIsForecast}" Value="True">
                             <Setter TargetName="Final" Property="Foreground" Value="#1565C0" />
@@ -651,9 +667,9 @@
                   <DataGridTextColumn Header="Actual" Binding="{Binding Actual}" Width="Auto" MinWidth="40" />
                   <DataGridTextColumn Header="Forecast" Binding="{Binding Forecast}" Width="Auto" MinWidth="40" Foreground="#1565C0" />
                   <DataGridTextColumn Header="vs WTT" Binding="{Binding WttDelay}" Width="Auto" MinWidth="36"
-                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource DelayCell}" />
                   <DataGridTextColumn Header="vs plan" Binding="{Binding PlanDelay}" Width="Auto" MinWidth="36"
-                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource DelayCell}" />
                 </DataGrid.Columns>
               </DataGrid>
             </Grid>

@@ -104,6 +104,18 @@ internal sealed partial class TrainListViewModel : ObservableObject
     };
 
     /// <summary>
+    /// A delay cell's text (<see cref="FormatDelay"/>) in words, for its tooltip (#11): "3 min late", "On time" or
+    /// "1 min early". Null for an empty cell or other text.
+    /// </summary>
+    public static string? DelayWords(string? text)
+    {
+        var t = text?.Trim().Replace('−', '-');
+        return int.TryParse(t, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var minutes)
+            ? Graph.GraphHover.FormatDelay(minutes * SimTime.SecondsPerMinute)
+            : null;
+    }
+
+    /// <summary>
     /// Colour each row's swatch as the graph colours the train: by category, or by the band of its current delay.
     /// Takes effect at the next <see cref="Update"/>.
     /// </summary>

@@ -76,6 +76,33 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public async Task The_sim_clock_size_is_chosen_in_display_and_kept()
+    {
+        await using var app = new TestApp(s => s with { ClockSize = ClockSize.Huge }, root: _root.FullName);
+        var vm = app.ViewModel;
+        (await app.Ui.Run(() => (vm.ClockSize, vm.ClockFontSize, vm.SpeedFontSize))).Should().Be((ClockSize.Huge, 36d, 22d));
+        (await app.Ui.Run(() => vm.SimClockText)).Should().Be("—", "no clock yet");
+        var changed = new List<string?>();
+        await app.Ui.Run(() => vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName));
+        app.Dialogs.Settings = s =>
+        {
+            s.ClockSizes.Should().Equal(ClockSize.Normal, ClockSize.Large, ClockSize.Huge);
+            s.ClockSize.Should().Be(ClockSize.Huge);
+            s.RestoreDefaultsCommand.Execute(null);
+            s.ClockSize.Should().Be(ClockSize.Normal);
+            s.ClockSize = ClockSize.Large;
+            return true;
+        };
+
+        await app.Ui.Run(() => vm.ShowSettingsCommand.Execute(null));
+
+        (await app.Ui.Run(() => (vm.ClockFontSize, vm.SpeedFontSize))).Should().Be((24d, 14d));
+        changed.Should().Contain([nameof(MainViewModel.ClockFontSize), nameof(MainViewModel.SpeedFontSize)]);
+        app.Settings.Load().ClockSize.Should().Be(ClockSize.Large);
+        File.ReadAllText(app.Paths.Settings).Should().Contain("\"clockSize\": \"Large\"", "saved by name, so the file reads well");
+    }
+
+    [Fact]
     public async Task A_restarted_app_starts_with_the_saved_numbers_and_folders()
     {
         var sessions = Path.Combine(_root.FullName, "elsewhere");

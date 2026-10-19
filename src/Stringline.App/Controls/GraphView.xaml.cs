@@ -89,17 +89,14 @@ public partial class GraphView : UserControl
         set => SetValue(NavigatorProperty, value);
     }
 
-    /// <summary>Builds the tooltip for a path under the cursor.</summary>
-    public Func<GraphHit, HoverInfo?>? Describer { get; set; }
+    /// <summary>
+    /// Builds the tooltip for what is under the cursor (#12): a conflict's ring, a note, a train line, a conflict's
+    /// highlight, a block or speed restriction, or a location's label (<see cref="GraphHitTester.TargetAt"/>).
+    /// </summary>
+    public Func<GraphTarget, HoverInfo?>? Describer { get; set; }
 
-    /// <summary>Builds the tooltip for a note or disruption under the cursor, when no line is.</summary>
-    public Func<ScreenPoint, HoverInfo?>? AnnotationDescriber { get; set; }
-
-    /// <summary>Builds the tooltip for a conflict's ring under the cursor (S14); it comes before a line's.</summary>
-    public Func<ScreenPoint, HoverInfo?>? ConflictDescriber { get; set; }
-
-    /// <summary>A click: true if a conflict's ring took it (S14), so it does not select the line under it.</summary>
-    public Func<ScreenPoint, bool>? ConflictClicker { get; set; }
+    /// <summary>A click: true if a conflict's ring or highlight took it (S14, #12), so it does not select a line or clear the selection.</summary>
+    public Func<GraphTarget?, bool>? ConflictClicker { get; set; }
 
     /// <summary>Edits trains by dragging and gives the right-click menu; without one, presses only pan.</summary>
     internal IGraphEditor? Editor { get; set; }
@@ -255,7 +252,7 @@ public partial class GraphView : UserControl
         ReleaseMouseCapture();
         Cursor = null;
         var up = e.GetPosition(Surface);
-        if (wasClick && ConflictClicker?.Invoke(new ScreenPoint(up.X, up.Y)) != true)
+        if (wasClick && ConflictClicker?.Invoke(TargetAt(up)) != true)
         {
             PathClicked?.Invoke(this, HitTest(up));
         }
@@ -379,29 +376,41 @@ public partial class GraphView : UserControl
             return null;
         }
 
+        return IndexFor(scene, nav).HitTest(new ScreenPoint(p.X, p.Y));
+    }
+
+    private GraphHitIndex IndexFor(GraphScene scene, GraphNavigator nav)
+    {
         if (_hitIndex?.IsFor(scene, nav.Viewport) != true)
         {
             _hitIndex = GraphHitIndex.Build(scene, nav.Viewport);
         }
 
-        return _hitIndex.HitTest(new ScreenPoint(p.X, p.Y));
+        return _hitIndex;
+    }
+
+    /// <summary>What is under a point, using the same hit-test grid as <see cref="HitTest"/>.</summary>
+    private GraphTarget? TargetAt(Point p)
+    {
+        if (Scene is not { } scene || Navigator is not { } nav)
+        {
+            return null;
+        }
+
+        return GraphHitTester.TargetAt(scene, nav.Viewport, new ScreenPoint(p.X, p.Y), IndexFor(scene, nav));
     }
 
     private void UpdateTip(Point p)
     {
-        if (ConflictDescriber?.Invoke(new ScreenPoint(p.X, p.Y)) is { } conflict)
+        if (TargetAt(p) is not { } target || Describer?.Invoke(target) is not { } info)
         {
-            // A conflict: keyed by its heading, which names it.
-            if (_annotationTip != conflict.Heading)
-            {
-                _tipFor = null;
-                _annotationTip = conflict.Heading;
-                TipHeading.Text = conflict.Heading;
-                TipLines.ItemsSource = conflict.Lines;
-            }
+            HideTip();
+            return;
         }
-        else if (HitTest(p) is { } hit && Describer?.Invoke(hit) is { } info)
+
+        if (target.Hit is { } hit)
         {
+            // A train line: keyed by the timing point described.
             var key = (hit.Path.Key, hit.NearestVertex);
             if (_tipFor != key)
             {
@@ -411,21 +420,13 @@ public partial class GraphView : UserControl
                 TipLines.ItemsSource = info.Lines;
             }
         }
-        else if (AnnotationDescriber?.Invoke(new ScreenPoint(p.X, p.Y)) is { } about)
+        else if (_annotationTip != info.Heading)
         {
-            // A note or disruption: keyed by its heading, which names it.
-            if (_annotationTip != about.Heading)
-            {
-                _tipFor = null;
-                _annotationTip = about.Heading;
-                TipHeading.Text = about.Heading;
-                TipLines.ItemsSource = about.Lines;
-            }
-        }
-        else
-        {
-            HideTip();
-            return;
+            // A conflict, note, disruption or label: keyed by its heading, which names it.
+            _tipFor = null;
+            _annotationTip = info.Heading;
+            TipHeading.Text = info.Heading;
+            TipLines.ItemsSource = info.Lines;
         }
 
         Tip.HorizontalOffset = p.X + 16;

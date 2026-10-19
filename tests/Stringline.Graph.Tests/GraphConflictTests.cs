@@ -139,12 +139,61 @@ public sealed class GraphConflictTests
         var info = GraphConflicts.Describe(scene.Conflicts[1], scene);
 
         info.Heading.Should().Be("Headway: 2B02 too close behind 1A01");
+        info.ValueOf("Trains").Should().Be("2B02 gives way to 1A01");
         info.ValueOf("Where").Should().Be("Charlie – B");
-        info.ValueOf("When").Should().Be("07:12:00");
+        info.ValueOf("When").Should().Be("07:12:00 (clash 07:08–07:16)");
         info.ValueOf("Resolve").Should().Be("delay 2B02 2 min 30 s");
         info.ValueOf("Knock-on").Should().Be("2B02 2 min 30 s late by the forecast");
+        info.ValueOf("Tip").Should().Be("Click to focus it and see suggestions", "no suggestion has been worked out");
         GraphConflicts.Describe(scene.Conflicts[0], scene).ValueOf("Knock-on").Should().BeNull("there is none");
         GraphConflicts.Describe(scene.Conflicts[0], scene).Heading.Should().Be("Platform: 2B02 due in platform 1 before 1A01 clears it");
+    }
+
+    [Fact]
+    public void The_tooltip_gives_the_top_suggestion_once_worked_out()
+    {
+        var scene = Scene();
+
+        var info = GraphConflicts.Describe(scene.Conflicts[1], scene, "Hold 2B02 at Charlie until 07:15 (+3 min)");
+
+        info.ValueOf("Suggest").Should().Be("Hold 2B02 at Charlie until 07:15 (+3 min)");
+        info.ValueOf("Tip").Should().BeNull();
+    }
+
+    [Fact]
+    public void The_tooltip_names_a_block_and_a_lone_train()
+    {
+        var scene = Scene();
+        var block = new GraphConflict(Headway with { Kind = ConflictKind.Disruption, B = null, HeadcodeB = null, DisruptionId = "B1" }, TwoThirds, Third, TwoThirds);
+        var alone = new GraphConflict(Headway with { Kind = ConflictKind.Unrealistic, B = null, HeadcodeB = null, Start = Headway.When, End = Headway.When }, TwoThirds, Third, TwoThirds);
+
+        GraphConflicts.Describe(block, scene).ValueOf("Trains").Should().Be("2B02 held by block B1");
+        GraphConflicts.Describe(alone, scene).ValueOf("Trains").Should().Be("2B02");
+        GraphConflicts.Describe(alone, scene).ValueOf("When").Should().Be("07:12:00", "the clash has no length");
+    }
+
+    [Theory]
+    [InlineData(GraphOrientation.Horizontal)]
+    [InlineData(GraphOrientation.Vertical)]
+    public void The_mouse_finds_a_highlight_away_from_its_ring(GraphOrientation orientation)
+    {
+        var view = View(orientation);
+        var scene = Scene();
+
+        GraphConflicts.HighlightAt(scene, view, view.ToScreen(T("07:15"), 0.5))!.Id.Should().Be("H:2B02:1A01:C");
+        GraphConflicts.HighlightAt(scene, view, view.ToScreen(T("07:10"), 1))!.Id.Should().Be("P:2B02:1A01:D:1", "the platform's band at D");
+        GraphConflicts.HighlightAt(scene, view, view.ToScreen(T("07:25"), 0.5)).Should().BeNull();
+    }
+
+    [Fact]
+    public void Of_overlapping_highlights_the_smaller_is_found()
+    {
+        var view = View();
+        var wide = Headway with { Id = "wide", Where = new Tiploc("A"), To = new Tiploc("D"), Start = SimTime.Parse("07:00"), End = SimTime.Parse("07:25") };
+        var scene = Scene(new ConflictSet([Headway, wide]));
+
+        GraphConflicts.HighlightAt(scene, view, view.ToScreen(T("07:15"), 0.5))!.Id.Should().Be("H:2B02:1A01:C");
+        GraphConflicts.HighlightAt(scene, view, view.ToScreen(T("07:02"), 0.5))!.Id.Should().Be("wide");
     }
 
     // Drawing

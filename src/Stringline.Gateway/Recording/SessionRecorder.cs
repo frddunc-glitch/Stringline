@@ -6,7 +6,7 @@ namespace Stringline.Gateway.Recording;
 /// <summary>
 /// Records a live connection to <c>.sslog</c> on demand (the app's Record toggle, CON-6): feed it every frame and
 /// connection change, and start or stop writing at any time, from any thread. It tracks the sim clock even while not
-/// recording, so the first frames of a recording started mid-session are stamped with the right time.
+/// recording, so the first frames of a recording started mid-session are stamped with the correct time.
 /// </summary>
 public sealed class SessionRecorder : IDisposable
 {

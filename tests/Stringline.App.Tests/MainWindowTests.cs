@@ -146,6 +146,37 @@ public sealed class MainWindowTests
     }
 
     [Theory]
+    [InlineData("Normal")]
+    [InlineData("Huge")]
+    public async Task The_sim_clock_and_the_whole_toolbar_fit_at_1280(string size)
+    {
+        await using var app = new TestApp(s => s with { ClockSize = Enum.Parse<ClockSize>(size) }, wpf: true);
+        var vm = await Replay(app);
+
+        await app.Ui.Run(() =>
+        {
+            var window = Show(vm, 1280, 720);
+            try
+            {
+                var content = (FrameworkElement)window.Content;
+                Rect BoundsOf(FrameworkElement e) => e.TransformToAncestor(content).TransformBounds(new Rect(e.RenderSize));
+                var (clock, toolbar) = (BoundsOf(window.SimClock), BoundsOf(window.ToolbarRight));
+
+                clock.Right.Should().BeLessThanOrEqualTo(content.ActualWidth + 0.5, "the clock is not cut off");
+                toolbar.Right.Should().BeLessThanOrEqualTo(content.ActualWidth + 0.5, "the toolbar's last button is not pushed off");
+                toolbar.Left.Should().BeGreaterThanOrEqualTo(0);
+                clock.Bottom.Should().BeLessThanOrEqualTo(toolbar.Top + 0.5, "the clock is in the menu row, above the toolbar");
+                Descendants<TextBlock>(window.SimClock).First().Text.Should().MatchRegex(@"^\d\d:\d\d:\d\d$", "the replay's clock");
+                Save(window, $"main-clock-{size}.png");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Theory]
     [InlineData(1280, 720)]
     [InlineData(2560, 1440)]
     public async Task The_panels_keep_their_share_as_the_window_changes_size(int width, int height)

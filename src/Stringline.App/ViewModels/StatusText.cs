@@ -42,9 +42,23 @@ internal static class StatusText
         };
     }
 
+    /// <summary>What a clock shows before the sim's first clock message.</summary>
+    public const string NoTime = "—";
+
     /// <summary>"Sim 09:14:32", or a dash before the first clock.</summary>
-    public static string Clock(SimClockReading clock, SimTime now) =>
-        clock.HasTime ? "Sim " + now.ToString("T", CultureInfo.InvariantCulture) : "Sim —";
+    public static string Clock(SimClockReading clock, SimTime now) => "Sim " + ClockTime(clock, now);
+
+    /// <summary>"09:14:32" (a day marker after midnight, as <see cref="SimTime"/> writes it), or a dash before the first clock.</summary>
+    public static string ClockTime(SimClockReading clock, SimTime now) =>
+        clock.HasTime ? now.ToString("T", CultureInfo.InvariantCulture) : NoTime;
+
+    /// <summary>The toolbar clock's font size for each setting (#13): the toolbar's text is 12.</summary>
+    public static double ClockFontSize(ClockSize size) => size switch
+    {
+        ClockSize.Large => 24,
+        ClockSize.Huge => 36,
+        _ => 16,
+    };
 
     /// <summary>"×4", "×1.5", "max", "paused", or empty before the first clock.</summary>
     public static string Speed(SimClockReading clock)
