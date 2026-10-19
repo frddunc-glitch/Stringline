@@ -93,6 +93,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         InitSessions();
         _settings = settingsStore.Load();
         InitSuggestions();
+        InitReports();
         Snapshot = engine.Current;
         // Read them all first: setting any saves the view settings, which would overwrite the others.
         var (byDelay, vertical, knockOn) = (_settings.ColourByDelay, _settings.VerticalGraph, _settings.ForecastKnockOn);
@@ -298,6 +299,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         IsFollowing = Navigator.IsFollowing;
         Transport?.Tick();
         TickStore();
+        UpdateDelays();
         if (IsRecording)
         {
             UpdateRecording();
@@ -551,46 +553,13 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
         var factor = double.TryParse(scale, NumberStyles.Float, CultureInfo.InvariantCulture, out var s) ? Math.Clamp(s, 1, 4) : 1;
         var now = NowSeconds is { } seconds ? new SimTime((int)Math.Floor(seconds)) : scene.Now;
-        var folder = _settings.LastExportFolder is { Length: > 0 } last && Directory.Exists(last) ? last : _paths.Exports;
-        if (_dialogs.PickSaveFile("Export the graph as PNG", FileFilters.Png, Path.Combine(folder, ExportName(scene, now))) is not { } path)
+        var viewport = Navigator.Viewport;
+        var selection = Selection;
+        SaveExport("Export the graph as PNG", FileFilters.Png, ExportName(scene.CorridorId, now, ".png"), "the graph", path =>
         {
-            return;
-        }
-
-        try
-        {
-            byte[] png;
-            using (var renderer = new SkiaGraphRenderer())
-            {
-                png = renderer.RenderPng(scene with { Now = now }, Navigator.Viewport, Selection, (float)factor);
-            }
-
-            File.WriteAllBytes(path, png);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            ShowInfo(InfoSeverity.Error, $"Cannot export the graph: {ex.Message}");
-            return;
-        }
-
-        _settings = _settings with { LastExportFolder = Path.GetDirectoryName(path) };
-        _settingsStore.Save(_settings);
-        ShowInfo(InfoSeverity.Info, $"Exported the graph to {path}.");
-    }
-
-    /// <summary>A file name for an export, e.g. <c>waterloo-main-0700.png</c>.</summary>
-    private string ExportName(GraphScene scene, SimTime? now)
-    {
-        var area = Profile?.AreaId is { Length: > 0 } a ? a : "graph";
-        var invalid = Path.GetInvalidFileNameChars();
-        var safe = new string([.. $"{area}-{scene.CorridorId}".Select(c => invalid.Contains(c) || c == ' ' ? '_' : c)]);
-        if (now is not { } t)
-        {
-            return safe + ".png";
-        }
-
-        var day = ((t.Seconds % SimTime.SecondsPerDay) + SimTime.SecondsPerDay) % SimTime.SecondsPerDay;
-        return string.Create(CultureInfo.InvariantCulture, $"{safe}-{day / SimTime.SecondsPerHour:00}{day % SimTime.SecondsPerHour / SimTime.SecondsPerMinute:00}.png");
+            using var renderer = new SkiaGraphRenderer();
+            File.WriteAllBytes(path, renderer.RenderPng(scene with { Now = now }, viewport, selection, (float)factor));
+        });
     }
 
     private void SaveViewSettings()
@@ -779,6 +748,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         UpdateConflicts();
         UpdateSuggestions();
         Regulation.Update(snapshot);
+        UpdateDelays();
         Trains.Update(snapshot, Profile);
         TrainsText = snapshot.Trains.Count == 0 ? string.Empty : StatusText.Trains(snapshot.Matches);
         if (snapshot.AreaId is { Length: > 0 } area)
@@ -924,6 +894,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         try
         {
             Trains.Selected = uid is null ? null : Trains.Find(uid);
+            Delays.Selected = train is { } id ? Delays.Find(id) : null;
         }
         finally
         {

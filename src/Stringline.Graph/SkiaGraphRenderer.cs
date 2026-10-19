@@ -91,6 +91,40 @@ public sealed class SkiaGraphRenderer : IDisposable
         return data.ToArray();
     }
 
+    /// <summary>
+    /// Renders to a one-page vector PDF (GR-10, S17): the viewport's time and corridor range laid out to fill
+    /// <paramref name="page"/> (A3 landscape unless given) inside its margins. Text is real text in the embedded fonts.
+    /// </summary>
+    /// <param name="title">The document title in the PDF's properties, if any.</param>
+    public byte[] RenderPdf(GraphScene scene, GraphViewport viewport, GraphSelection? selection = null, PdfPage? page = null, string? title = null)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(viewport);
+        page ??= PdfPage.A3Landscape;
+        var fitted = page.Fit(viewport);
+        var metadata = SKDocumentPdfMetadata.Default;
+        metadata.Title = title ?? scene.Title;
+        metadata.Creator = "Stringline";
+        metadata.Producer = "Stringline (SkiaSharp)";
+        using var stream = new MemoryStream();
+        using (var document = SKDocument.CreatePdf(stream, metadata) ?? throw new InvalidOperationException("Cannot create a PDF document."))
+        {
+            var canvas = document.BeginPage(page.Width, page.Height);
+            if (page.Margin > 0)
+            {
+                canvas.Clear(ToSk(Theme.Background));
+            }
+
+            canvas.Translate(page.Margin, page.Margin);
+            canvas.ClipRect(new SKRect(0, 0, fitted.Width, fitted.Height));
+            Render(canvas, scene, fitted, selection, tiles: false);
+            document.EndPage();
+            document.Close();
+        }
+
+        return stream.ToArray();
+    }
+
     /// <param name="selection">A selected train to draw heavier while the rest dims, if any.</param>
     /// <param name="ghosts">
     /// Paths to draw over everything as a translucent preview, such as where a train being dragged would run (S12).

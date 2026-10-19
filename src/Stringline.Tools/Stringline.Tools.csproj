@@ -12,6 +12,7 @@
     <ProjectReference Include="..\Stringline.Timetable\Stringline.Timetable.csproj" />
     <ProjectReference Include="..\Stringline.Network\Stringline.Network.csproj" />
     <ProjectReference Include="..\Stringline.Graph\Stringline.Graph.csproj" />
+    <ProjectReference Include="..\Stringline.Persistence\Stringline.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>

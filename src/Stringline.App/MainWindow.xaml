@@ -20,6 +20,7 @@
     <KeyBinding Key="O" Modifiers="Ctrl" Command="{Binding OpenReplayCommand}" />
     <KeyBinding Key="T" Modifiers="Ctrl" Command="{Binding LoadTimetableCommand}" />
     <KeyBinding Key="E" Modifiers="Ctrl" Command="{Binding ExportPngCommand}" CommandParameter="1" />
+    <KeyBinding Key="P" Modifiers="Ctrl" Command="{Binding ExportPdfCommand}" CommandParameter="a3" />
     <KeyBinding Key="Z" Modifiers="Ctrl" Command="{Binding UndoCommand}" />
     <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCommand}" />
     <KeyBinding Key="Z" Modifiers="Ctrl+Shift" Command="{Binding RedoCommand}" />
@@ -39,6 +40,12 @@
         <Separator />
         <MenuItem Header="_Export graph as PNG…" InputGestureText="Ctrl+E" Command="{Binding ExportPngCommand}" CommandParameter="1" />
         <MenuItem Header="Export graph as PNG at _2× size…" Command="{Binding ExportPngCommand}" CommandParameter="2" />
+        <MenuItem Header="Export graph as _PDF (A3 landscape)…" InputGestureText="Ctrl+P" Command="{Binding ExportPdfCommand}" CommandParameter="a3" />
+        <MenuItem Header="Export graph as PDF (A_4 landscape)…" Command="{Binding ExportPdfCommand}" CommandParameter="a4" />
+        <MenuItem Header="Export graph as PDF (_view size)…" Command="{Binding ExportPdfCommand}" CommandParameter="view" />
+        <Separator />
+        <MenuItem Header="Export _delay table as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="points" />
+        <MenuItem Header="Export _train delays as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="trains" />
         <Separator />
         <MenuItem Header="E_xit" Click="OnExit" />
       </MenuItem>
@@ -523,6 +530,91 @@
                 </ListView.View>
               </ListView>
             </DockPanel>
+          </TabItem>
+          <!-- Delay table (SES-2, S17) -->
+          <TabItem Header="Delays">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="3*" />
+                <RowDefinition Height="5" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="2*" />
+              </Grid.RowDefinitions>
+              <DockPanel Grid.Row="0" Margin="6,4">
+                <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="CSV by train…" Command="{Binding ExportDelaysCommand}" CommandParameter="trains"
+                        ToolTip="Save one row per train (where it is, its worst and final delay) as CSV." />
+                <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="points"
+                        ToolTip="Save the delay table, one row per train and timing point, as CSV." />
+                <TextBlock Text="Sort" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <ComboBox x:Name="DelaySort" ItemsSource="{Binding Delays.Options, Mode=OneTime}" SelectedItem="{Binding Delays.Sort}" MinWidth="100" />
+                <CheckBox Content="All trains" IsChecked="{Binding Delays.ShowAll}" VerticalAlignment="Center" Margin="8,0,0,0"
+                          ToolTip="List every train in the plan, not only those seen." />
+              </DockPanel>
+              <TextBlock Grid.Row="1" Text="{Binding Delays.Summary}" Foreground="#757575" Margin="6,0,6,4" TextWrapping="Wrap"
+                         ToolTip="Delays are whole minutes against the WTT (against the plan for ad-hoc trains). Blue final delays are forecasts." />
+              <ListView Grid.Row="2" x:Name="DelayTrains" ItemsSource="{Binding Delays.Trains}" SelectedItem="{Binding Delays.Selected}" BorderThickness="0,1,0,0">
+                <ListView.ItemContainerStyle>
+                  <Style TargetType="ListViewItem">
+                    <Setter Property="ToolTip" Value="{Binding Tip}" />
+                  </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.View>
+                  <GridView>
+                    <GridViewColumn Header="Train" DisplayMemberBinding="{Binding Headcode}" Width="52" />
+                    <GridViewColumn Header="State" DisplayMemberBinding="{Binding State}" Width="72" />
+                    <GridViewColumn Header="Latest" DisplayMemberBinding="{Binding Latest}" Width="130" />
+                    <GridViewColumn Header="Late" DisplayMemberBinding="{Binding LatestDelay}" Width="38" />
+                    <GridViewColumn Header="Worst" DisplayMemberBinding="{Binding WorstDelay}" Width="44" />
+                    <GridViewColumn Header="At" DisplayMemberBinding="{Binding WorstAt}" Width="100" />
+                    <GridViewColumn Header="Final" Width="44">
+                      <GridViewColumn.CellTemplate>
+                        <DataTemplate>
+                          <TextBlock x:Name="Final" Text="{Binding FinalDelay}" />
+                          <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding FinalIsForecast}" Value="True">
+                              <Setter TargetName="Final" Property="Foreground" Value="#1565C0" />
+                            </DataTrigger>
+                          </DataTemplate.Triggers>
+                        </DataTemplate>
+                      </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                  </GridView>
+                </ListView.View>
+              </ListView>
+              <GridSplitter Grid.Row="3" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#EEEEEE" />
+              <TextBlock Grid.Row="4" Text="{Binding Delays.PointsHeading}" FontWeight="SemiBold" Margin="6,2" TextTrimming="CharacterEllipsis" />
+              <ListView Grid.Row="5" x:Name="DelayPoints" ItemsSource="{Binding Delays.Points}" BorderThickness="0,1,0,0">
+                <ListView.ItemContainerStyle>
+                  <Style TargetType="ListViewItem">
+                    <Setter Property="ToolTip" Value="{Binding Tiploc}" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding Runs}" Value="False">
+                        <Setter Property="Foreground" Value="#9E9E9E" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.View>
+                  <GridView>
+                    <GridViewColumn Header="Location" DisplayMemberBinding="{Binding Location}" Width="120" />
+                    <GridViewColumn Header="WTT" DisplayMemberBinding="{Binding Booked}" Width="80" />
+                    <GridViewColumn Header="Plan" DisplayMemberBinding="{Binding Planned}" Width="80" />
+                    <GridViewColumn Header="Actual" DisplayMemberBinding="{Binding Actual}" Width="80" />
+                    <GridViewColumn Header="Forecast" Width="80">
+                      <GridViewColumn.CellTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Forecast}" Foreground="#1565C0" />
+                        </DataTemplate>
+                      </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn Header="vs WTT" DisplayMemberBinding="{Binding WttDelay}" Width="48" />
+                    <GridViewColumn Header="vs plan" DisplayMemberBinding="{Binding PlanDelay}" Width="48" />
+                  </GridView>
+                </ListView.View>
+              </ListView>
+            </Grid>
           </TabItem>
           <TabItem Header="History">
             <DockPanel>

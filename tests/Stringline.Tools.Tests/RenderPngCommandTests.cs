@@ -171,5 +171,24 @@ public sealed class RenderPngCommandTests : IDisposable
         state.Trains.Should().NotBeEmpty();
     }
 
+    [Fact]
+    public async Task Writes_a_PDF_when_the_output_ends_in_pdf()
+    {
+        var (exit, output, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo4x), "--at", "07:00", Out("graph.pdf"));
+
+        exit.Should().Be(0, error);
+        output.Should().StartWith("Wrote graph.pdf (A3 landscape): main ");
+        var pdf = System.Text.Encoding.Latin1.GetString(File.ReadAllBytes(Out("graph.pdf")));
+        pdf.Should().StartWith("%PDF-").And.Contain("/MediaBox [0 0 1191 842]");
+
+        (exit, output, error) = await Run("--wtt", Waterloo, "--page", "a4", Out("a4.pdf"));
+        exit.Should().Be(0, error);
+        output.Should().StartWith("Wrote a4.pdf (A4 landscape): ");
+
+        (exit, _, error) = await Run("--wtt", Waterloo, "--page", "letter", Out("bad.pdf"));
+        exit.Should().Be(2);
+        error.Should().Contain("--page 'letter' is not a page");
+    }
+
     public void Dispose() => _dir.Delete(recursive: true);
 }

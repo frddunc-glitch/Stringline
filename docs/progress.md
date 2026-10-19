@@ -977,6 +977,77 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - Review starts at speed Max if that was the last replay speed. Pick a slower speed before pressing Play to watch the plan change.
 - A session whose timetable was changed mid-session resumes on the last timetable only. Its edits before the change are dropped (Reset).
 
+## 2026-10-19 — S17: Reporting and exports
+
+### Done
+- **Portable parts (tested on Linux):**
+  - Planning:
+    - **`DelayReport`** (SES-2): every train's WTT, plan, and actual or forecast times at each timing point, with the delay against the WTT and against the plan, and per train its state, latest point, worst actual delay and final delay. Built through `TrainSchedule`, so it agrees with the detail panel. Filter: trains seen (the default) or all.
+    - **`DelayReportCsv`**: one row per train and point, or one per train. RFC 4180, UTF-8 with a byte order mark.
+  - Graph: **`SkiaGraphRenderer.RenderPdf`** (GR-10) and **`PdfPage`** (A3 landscape, A4 landscape, view size). The view's time and corridor range is laid out afresh inside 10 mm margins, giving a one-page vector PDF with the fonts embedded.
+  - Tools:
+    - **`stringline report`** writes the CSV from a recording, or from a saved session with its plan edits as they stood at `--at` (or where a replay session had got to).
+    - `render-png` (now also `render`) writes a PDF when the output ends in `.pdf` (`--page a3|a4|view`).
+    - Tools now references Persistence.
+- **App:**
+  - A **Delays tab** between Regulation and History. It lists trains, worst offenders first, and can sort five ways or list all trains. Below that are the selected train's points (WTT, plan, actual, forecast, delay against the WTT and the plan). The row and the graph selection follow each other. The table is worked out only while the tab is shown, at most once a second for live updates. See `05-…md` §11.
+  - Session menu:
+    - Export graph as PDF (A3 landscape, Ctrl+P; A4 landscape; view size).
+    - Export delay table as CSV… and Export train delays as CSV… (also as buttons on the tab).
+    - All exports share one save path: the last folder, an error report and a name like `{area}-delays-{HHmm}.csv`.
+- **Tests:**
+  - Planning +16 (229):
+    - seen and all;
+    - actual then forecast delays;
+    - a train standing at a stop;
+    - against the WTT and the plan after a re-plan;
+    - clones and cancelled trains;
+    - short termination;
+    - both CSVs (exact text, quoting, day marker, activity);
+    - Waterloo 4× at the end: every working that reported at its plan's points is listed, and the CSV is well-formed.
+  - Graph +8 (207): A3 by default with the fonts embedded and the title; A4 and view sizes; fitting; page names.
+  - Tools +5 (62): `report` from a recording, by train and all trains, from a replay session with an edit before and after its position, and bad arguments; `render` to PDF.
+  - App +3 (107), on Waterloo:
+    - the Delays tab (not worked out while hidden, order, selection both ways, sorting keeping the selection, all trains);
+    - CSV export;
+    - PDF export on A3 and A4.
+  - Totals: 1 382 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 140, Planning 229, Persistence 11, Graph 207, Tools 62, App 107).
+    - Green on Windows (Debug).
+    - Green on Linux (`sdk:10.0` container, portable filter, Release). Skia's PDF backend works with the Linux native assets.
+- **Tried for real:**
+  - `render` to an A3 PDF of Waterloo at 07:00. It looks right: vector lines, text that can be selected, margins.
+  - `report` at 07:00: 97 trains, 420 rows. The run found intermediate stops booked with only a departure labelled "start"; this is fixed and tested.
+  - The app on the Waterloo 4× replay, driven through UI Automation and screenshotted. The Delays tab listed 202 workings seen, worst first, and the app closed cleanly. Picking a row in the app was only driven by the view-model tests.
+
+### Decisions
+- **Fred's choices:**
+  - **WTT, plan and forecast** in one table, with actual and forecast marked.
+  - **A Delays tab** (not a window).
+  - **PDF of the current view, fitted to the page**, one page.
+  - **A3 landscape is a PDF page preset**; printing is from the PDF reader, with no Print command.
+- **Where a delay is measured:**
+  - at the departure or pass, or at the arrival where nothing departs (a destination), the same rule as the forecaster's;
+  - a train standing at a stop is measured at its arrival until it leaves, so its delay there is actual, not forecast.
+- **Delay is against the WTT** (against the plan for an ad-hoc copy). The delay against the plan sits beside it.
+- **"Worst"** is the greatest actual delay. **"Final"** is the delay at the last point the train runs to, actual or forecast.
+- **The PDF is laid out at the page size**, one point per view pixel, rather than scaling a screen-sized picture, so text stays at its screen size (about 11 pt) on A3.
+- **The CSV gives delays in seconds** and times as `HH:mm:ss`, so a spreadsheet can work with them. It has a byte order mark so Excel reads accented names.
+- **Trains are listed per working** (plan train), not per live uid, as the plan has them. So "202 trains seen" at Waterloo counts workings, while the train list shows 128 live trains.
+
+### Next
+- S18: packaging (single-file publish, icon, settings page, About, README).
+- The regulation list could be exported or printed the same way (S15's note).
+- A multi-page PDF of a time range (e.g. a whole shift, N hours a page) if wanted; `PdfPage.Fit` and `RenderPdf` are the base for it.
+
+### Known issues
+- **Not tried by hand.** 👤 Fred:
+  - open the Delays tab while signalling and say whether the columns and the worst-offenders order help;
+  - open a CSV in Excel;
+  - print an A3 PDF and check the text size and line weights on paper.
+- The Delays tab is in the lower side panel, which is short by default. Drag the splitter above the tabs to give it room.
+- A train that has not reported anywhere on its plan is not "seen", even if it is in the sim at a signal; "All trains" shows it.
+- `report --session` uses a profile generated from the WTT unless `--profile` is given, so its forecast sections can differ from the app's saved profile.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

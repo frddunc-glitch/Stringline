@@ -33,7 +33,7 @@ internal sealed partial class MainViewModel
     /// <summary>The regulation list (a tab beside the conflicts; Fred).</summary>
     public RegulationViewModel Regulation { get; } = new();
 
-    /// <summary>The tab shown under the train detail: 0 conflicts, 1 regulation, 2 history.</summary>
+    /// <summary>The tab shown under the train detail: 0 conflicts, 1 regulation, 2 delays, 3 history.</summary>
     [ObservableProperty]
     public partial int SideTab { get; set; }
 

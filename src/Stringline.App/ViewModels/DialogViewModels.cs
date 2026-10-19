@@ -13,6 +13,8 @@ internal static class FileFilters
     public const string Recording = "Stringline recordings (*.sslog)|*.sslog|All files (*.*)|*.*";
     public const string Png = "PNG images (*.png)|*.png";
 
+    public const string Pdf = "PDF documents (*.pdf)|*.pdf";
+
     public const string Session = "Stringline sessions (*.stringline)|*.stringline|All files (*.*)|*.*";
 
     public const string Csv = "CSV files (*.csv)|*.csv|Text files (*.txt)|*.txt|All files (*.*)|*.*";

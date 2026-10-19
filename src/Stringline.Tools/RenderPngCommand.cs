@@ -13,14 +13,15 @@ using Stringline.Timetable.Live;
 namespace Stringline.Tools;
 
 /// <summary>
-/// <c>stringline render-png</c>: draw one corridor's train graph to a PNG, from a WTT and optionally a recording
-/// played up to the chosen time, with the same renderer the app uses.
+/// <c>stringline render-png</c> (or <c>render</c>): draw one corridor's train graph to a PNG, or to a PDF when the output
+/// ends in <c>.pdf</c> (S17), from a WTT and optionally a recording played up to the chosen time, with the same renderer
+/// the app uses.
 /// </summary>
 internal static class RenderPngCommand
 {
     public static Command Create()
     {
-        var output = new Argument<FileInfo>("output") { Description = "The PNG file to write." };
+        var output = new Argument<FileInfo>("output") { Description = "The PNG file to write, or a PDF if it ends in .pdf." };
         var wtt = new Option<FileInfo>("--wtt") { Description = "The SimSig timetable (.wtt).", Required = true };
         var log = new Option<FileInfo?>("--log") { Description = "A recording (.sslog) to draw actuals from, played up to --at." };
         var profile = new Option<FileInfo?>("--profile") { Description = "A profile JSON (corridors, names, colours). Default: generated from the WTT." };
@@ -36,12 +37,14 @@ internal static class RenderPngCommand
         var noForecast = new Option<bool>("--no-forecast") { Description = "Leave out the forecast layer (drawn with --log)." };
         var noKnockOn = new Option<bool>("--no-knock-on") { Description = "Forecast each train on its own, without knock-on delay from the others." };
         var noConflicts = new Option<bool>("--no-conflicts") { Description = "Leave out the conflict marks (found with --log, unless --no-forecast)." };
+        var page = new Option<string>("--page") { Description = "PDF page: a3 (landscape), a4 (landscape) or view (--width × --height points).", DefaultValueFactory = _ => "a3" };
         var verbose = new Option<bool>("--verbose") { Description = "Debug logging." };
 
-        var command = new Command("render-png", "Draw a corridor's train graph (WTT, actuals and forecast) to a PNG.")
+        var command = new Command("render-png", "Draw a corridor's train graph (WTT, actuals and forecast) to a PNG, or a PDF.")
         {
-            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, vertical, colour, noForecast, noKnockOn, noConflicts, verbose,
+            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, vertical, colour, noForecast, noKnockOn, noConflicts, page, verbose,
         };
+        command.Aliases.Add("render");
 
         command.SetAction((parse, cancellationToken) => RunAsync(
             new Settings(parse.GetValue(output)!, parse.GetValue(wtt)!, parse.GetValue(log), parse.GetValue(profile), parse.GetValue(corridor),
@@ -52,6 +55,7 @@ internal static class RenderPngCommand
                 NoForecast = parse.GetValue(noForecast),
                 NoKnockOn = parse.GetValue(noKnockOn),
                 NoConflicts = parse.GetValue(noConflicts),
+                Page = parse.GetValue(page) ?? "a3",
             },
             parse.InvocationConfiguration.Output,
             parse.InvocationConfiguration.Error,
@@ -86,6 +90,11 @@ internal static class RenderPngCommand
 
         /// <summary>Leave out the conflict marks.</summary>
         public bool NoConflicts { get; init; }
+
+        /// <summary>The PDF page by name (<see cref="PdfPage.Parse"/>), for a <c>.pdf</c> output.</summary>
+        public string Page { get; init; } = "a3";
+
+        public bool IsPdf => Output.Extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <returns>0 on success, 2 on bad arguments or a file that cannot be read or written.</returns>
@@ -106,6 +115,12 @@ internal static class RenderPngCommand
         if (settings.Hours is <= 0 or > 48 || settings.NowAt is < 0 or > 1 || settings.Width is < 200 or > 16384 || settings.Height is < 150 or > 16384)
         {
             await error.WriteLineAsync("--hours must be in (0, 48], --now-at in [0, 1], --width 200–16384 and --height 150–16384.").ConfigureAwait(false);
+            return 2;
+        }
+
+        if (settings.IsPdf && PdfPage.Parse(settings.Page, GraphViewport.Create(0, 3600, settings.Width, settings.Height)) is null)
+        {
+            await error.WriteLineAsync($"--page '{settings.Page}' is not a page (a3, a4 or view).").ConfigureAwait(false);
             return 2;
         }
 
@@ -182,15 +197,16 @@ internal static class RenderPngCommand
         var viewport = GraphViewport.Around(now.Value, (int)Math.Round(settings.Hours * SimTime.SecondsPerHour), settings.Width, settings.Height, settings.NowAt,
             orientation: settings.Vertical ? GraphOrientation.Vertical : GraphOrientation.Horizontal);
 
-        byte[] png;
+        byte[] bytes;
+        var pdfPage = settings.IsPdf ? PdfPage.Parse(settings.Page, viewport) : null;
         using (var renderer = new SkiaGraphRenderer())
         {
-            png = renderer.RenderPng(scene, viewport);
+            bytes = pdfPage is null ? renderer.RenderPng(scene, viewport) : renderer.RenderPdf(scene, viewport, page: pdfPage, title: $"{profile.Name ?? profile.AreaId} – {corridor.Name}");
         }
 
         try
         {
-            await File.WriteAllBytesAsync(settings.Output.FullName, png, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(settings.Output.FullName, bytes, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -200,7 +216,7 @@ internal static class RenderPngCommand
 
         var visible = scene.Paths.Count(p => viewport.Overlaps(p.TimeMin, p.TimeMax, p.AxisMin, p.AxisMax));
         await output.WriteLineAsync(
-            $"Wrote {settings.Output.Name}: {corridor.Id} ({corridor.Name}), {viewport.TimeStart.ToSimTime()}–{viewport.TimeEnd.ToSimTime()}, " +
+            $"Wrote {settings.Output.Name}{(pdfPage is null ? string.Empty : $" ({pdfPage.Name})")}: {corridor.Id} ({corridor.Name}), {viewport.TimeStart.ToSimTime()}–{viewport.TimeEnd.ToSimTime()}, " +
             $"now {now}, {visible} paths in view ({scene.InLayer(GraphLayer.Actual).Count()} actual, {scene.InLayer(GraphLayer.Forecast).Count()} forecast in all)" +
             (conflicts is null ? "." : $", {scene.Conflicts.Count} of {conflicts.Count} conflicts on this corridor.")).ConfigureAwait(false);
         return 0;
@@ -209,29 +225,31 @@ internal static class RenderPngCommand
     /// <summary>Plays a recording through <see cref="LiveState"/> until the first clock or movement after <paramref name="until"/>.</summary>
     internal static LiveState Play(SslogRecording recording, Core.Timetables.WorkingTimetable tt, SimTime? until, ILoggerFactory loggerFactory, CancellationToken cancellationToken)
     {
-        var state = new LiveState(tt, logger: loggerFactory.CreateLogger<LiveState>());
         var parser = new MessageParser(loggerFactory.CreateLogger<MessageParser>());
-        foreach (var message in recording.Messages)
+        var state = new LiveState(tt, logger: loggerFactory.CreateLogger<LiveState>());
+        Play(state, recording.Messages.SelectMany(m => parser.Parse(m.ToGatewayMessage())), until, cancellationToken);
+        return state;
+    }
+
+    /// <summary>Applies events to <paramref name="state"/> until the first clock or movement after <paramref name="until"/>.</summary>
+    internal static void Play(LiveState state, IEnumerable<GatewayEvent> events, SimTime? until, CancellationToken cancellationToken)
+    {
+        foreach (var e in events)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            foreach (var e in parser.Parse(message.ToGatewayMessage()))
+            var time = e switch
             {
-                var time = e switch
-                {
-                    ClockEvent c => c.Clock,
-                    TrainLocationEvent m => m.Time,
-                    _ => (SimTime?)null,
-                };
-                if (until is not null && time > until && !(e is ClockEvent { Clock.Seconds: 0 }))
-                {
-                    return state;
-                }
-
-                state.Apply(e);
+                ClockEvent c => c.Clock,
+                TrainLocationEvent m => m.Time,
+                _ => (SimTime?)null,
+            };
+            if (until is not null && time > until && !(e is ClockEvent { Clock.Seconds: 0 }))
+            {
+                return;
             }
-        }
 
-        return state;
+            state.Apply(e);
+        }
     }
 
     private static SimTime ToSimTime(this double seconds) => new((int)Math.Round(seconds));

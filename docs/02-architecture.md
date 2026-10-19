@@ -103,7 +103,7 @@ GraphScene           // per corridor, world coordinates (sim seconds, axis 0..1)
 GraphSceneBuilder    // pure: GraphSceneRequest(profile, corridor, timetable?, plan?, live trains, forecast?, now, ColourMode) → GraphScene; WTT, plan (S10: modified trains and clones; S12: cancelled ones grey with end crosses; PlanPaths for ghosts), actual and forecast (S11: Forecast.Drawn, on from the latest actual) layers
 DelayBands           // S9: GraphColourMode (Category | Delay); band of a delay (≤0 / 1–5 / 6–15 / >15 min) and its colour
 TimeGrid             // tick spacing from zoom (5 min / 30 min at a 3 h view), hour lines heaviest
-SkiaGraphRenderer    // Render(SKCanvas, scene, viewport, selection?), RenderPng(…, scale); pooled paints, culling by path bounds, headcode labels; GraphTheme, GraphFonts (embedded Noto Sans)
+SkiaGraphRenderer    // Render(SKCanvas, scene, viewport, selection?), RenderPng(…, scale), S17: RenderPdf(…, PdfPage (A3/A4 landscape or view size; Fit lays the view out inside its margins), title); pooled paints, culling by path bounds, headcode labels; GraphTheme, GraphFonts (embedded Noto Sans)
   ProjectedPathCache //   S9: SKPaths projected once per zoom, drawn translated while panning; a new scene re-projects only changed paths and reports where drawing changed
   PathTileCache      //   S9: the unselected lines as 256 px device tiles; panning blits, a live update redraws the tiles under changed trains (05-…md §7)
   LabelGrid          //   S9: uniform grid of placed label rectangles for the overlap check
@@ -129,6 +129,7 @@ IPlanCommand         // S10: ShiftTrain, SetDwell, ChangePlatform, ChangeLine, S
 MinRunTable          // S10: fastest booked run per location pair (either way, less allowances)
 TrainSchedule        // S12, pure: PlanSnapshot + train → ScheduleRows (WTT, plan, actual, forecast, delay; edits marked) for the detail panel
 PlanHistory          // S10: Done (oldest first) and Undone (next redo first) PlanHistoryEntry(Command, Description, Warnings)
+DelayReport          // S17, pure: PlanSnapshot + filter (Seen | All) → DelayReportTrain[] (state, latest, worst, final) of DelayReportPoints (WTT, plan, actual or forecast, delay vs WTT and vs plan) via TrainSchedule; DelayReportCsv writes points or trains as CSV (SES-2)
 TrainDelays          // actual − booked at a timing point (arrive vs arrival, else departure); Current(live) = latest booked point of the current working
 
 // Stringline.Planning (S16): PlanStep(Kind Execute|Undo|Redo|Reset, Command?, Description?, SimTime?, At); PlanningEngine.PlanStepped (every history change, in order) and RestorePlan(steps); PlanLog.Fold(steps) → done/undone, PlanLog.By(steps, now) for review

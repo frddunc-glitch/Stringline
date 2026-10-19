@@ -13,6 +13,7 @@ internal static class Program
         root.Subcommands.Add(MatchCommand.Create());
         root.Subcommands.Add(CorridorsCommand.Create());
         root.Subcommands.Add(RenderPngCommand.Create());
+        root.Subcommands.Add(ReportCommand.Create());
 
         return root.Parse(args).InvokeAsync();
     }

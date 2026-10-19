@@ -34,7 +34,8 @@ C# / .NET 10 LTS. WPF + CommunityToolkit.Mvvm for the shell; SkiaSharp for the g
 - Inspect a WTT: `dotnet run --project src/Stringline.Tools -- wtt-dump t.wtt [--train 1A23] [--warnings]`. The WTT corpus test reads every `.wtt` under `STRINGLINE_WTT_CORPUS` (default `C:\Users\Public\Documents\SimSig\Timetables`; skipped if absent).
 - Match a recording to its WTT: `dotnet run --project src/Stringline.Tools -- match --wtt t.wtt --log x.sslog [--all]` (lists unmatched workings; `--all` lists every one).
 - Propose corridors: `dotnet run --project src/Stringline.Tools -- corridors t.wtt [--edges] [--top 6] [--min-trains 2] [--profile out.json]` (sections, min run times, derived axis, single-line hints; `--profile` writes a starter profile).
-- Render PNG: `dotnet run --project src/Stringline.Tools -- render-png --wtt t.wtt --log x.sslog --corridor main --at 09:00 --hours 3 [--vertical] [--colour delay] [--no-forecast] [--no-knock-on] [--no-conflicts] out.png`
+- Render PNG or PDF: `dotnet run --project src/Stringline.Tools -- render-png --wtt t.wtt --log x.sslog --corridor main --at 09:00 --hours 3 [--vertical] [--colour delay] [--no-forecast] [--no-knock-on] [--no-conflicts] out.png` (an `out.pdf` writes a PDF; `--page a3|a4|view`, default A3 landscape).
+- Delay table CSV: `dotnet run --project src/Stringline.Tools -- report (--log x.sslog --wtt t.wtt | --session s.stringline) [--at 09:00] [--all] [--by-train] out.csv` (a session brings its plan edits).
 - Graph benchmarks (GR-9 budget: 500 trains / 6 h < 33 ms a frame): `dotnet run -c Release --project benchmarks/Stringline.Benchmarks -- --quick` (seconds) or `-- --filter "*" --job short` (BenchmarkDotNet).
 - Run the app (Windows): `dotnet run --project src/Stringline.App -- [--wtt t.wtt] [--replay x.sslog --speed 8|max --start 07:30] [--resume|--review s.stringline]`. App logs go to `%LOCALAPPDATA%\Stringline\logs`; sessions autosave to `Documents\Stringline\sessions`.
 
