@@ -753,6 +753,7 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - **Severity in the list is in whole minutes, rounded up** ("3 min"), or in seconds under a minute. The exact delay is in the tooltip.
 
 ### Next
+- **S14a: profile editor** (added to the plan after S14). The app had no way to change a sim's profile (COR-2 and COR-5 were never scheduled), and a timetable with no sim ID got an unsaved profile that could not be changed even by hand. See `07-…md`.
 - S15: suggestions per conflict.
   - `Conflict.PointIndex` is A's point where it meets the clash (or the point it runs from into it): the natural place to hold. `SeveritySeconds` is the hold.
   - Re-run the forecaster and `ConflictDetector` for each candidate. That takes about 35 ms on Waterloo in Release; limiting it to a time horizon, or to the trains involved, would make several candidates cheap.

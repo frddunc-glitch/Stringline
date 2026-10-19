@@ -77,6 +77,21 @@ Each session is sized for one focused Claude Code sitting (roughly 1–3 hours o
 ### S14 — Conflict detection
 - All kinds in `06-…md` §3; conflicts panel; red markers; click-to-focus. Tests per kind on golden scenarios.
 
+### S14a — Profile editor 🪟 (edit logic portable)
+Covers COR-2 and COR-5, which S6 left to "a simple editor" (`00-…md` §4.4) that no session had built: until now a profile could only be changed by hand-editing its JSON.
+- **Edit model (portable, `Stringline.Network.Profiles`):** immutable edits on `StringlineProfile`. They cover:
+  - the sim name and location display names;
+  - corridors: add from a generated candidate or from scratch, remove, rename, reorder tabs;
+  - each corridor's locations: add, remove, reorder, distance (km, or derived), platform overrides;
+  - sections: tracks, direction (Up/Down/bi-directional/single line), default headway;
+  - category styles: colour, line style, priority.
+  - Every edit is validated with the same rules as `ProfileJson` (no duplicate IDs or locations, sections match locations, every section has a track), so an invalid profile is never saved. "Regenerate corridors" uses `CorridorGenerator` and asks before replacing hand-tuned ones.
+- **Location names CSV import** (`04-…md` §1): `TIPLOC,name`, tolerant of a header row and quoting; unknown TIPLOCs are reported, not fatal.
+- **App:** a Profile menu with Edit profile…, Open profile file, Reload profile (re-read and redraw without reloading the WTT) and Regenerate corridors. The editor window has tabs for General (name, location names, CSV import), Corridors (locations and sections) and Categories, with a preview of the selected corridor's axis. Apply or OK saves through `ProfileStore`, then rebuilds the forecast network, corridor tabs and scene through the existing load path. The working plan, disruptions and selection are kept, and a removed corridor's tab closes. The view-model must not touch WPF types.
+- **No sim ID:** a timetable without an area ID currently gets an unsaved `"unknown"` profile that cannot be changed at all. Let the user name the sim, then save its profile under that name.
+- **Tests:** each edit and its validation; CSV import; round trip edit → save → load → `Refresh` keeps the edits; App tests driving the editor view-model on Waterloo (rename a location, reorder a corridor, change a headway and see the forecast use it).
+- **Done when:** a profile can be changed fully in the app without touching its JSON, and the graph redraws with the change.
+
 ### S15 — Suggestion engine
 - Candidate generation, scoring with forecaster, top-3 with preview/apply as composite command. Regulation list view.
 
@@ -101,7 +116,7 @@ Each session is sized for one focused Claude Code sitting (roughly 1–3 hours o
 S1 → S2 → S3 ─┬→ S5 → S7 → S8 → S9
        S4 ────┤       ↑
        S6 ────┘───────┘
-S8 → S10 → S11 → S12 → S13 → S14 → S15 → S16 → S17 → S18 → (S19–S21)
+S8 → S10 → S11 → S12 → S13 → S14 → S14a → S15 → S16 → S17 → S18 → (S19–S21)
 ```
 S4 and S6 can run in parallel with S2–S3 (separate worktrees/sessions).
 
