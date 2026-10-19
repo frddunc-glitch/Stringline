@@ -38,6 +38,16 @@ jobs:
       - name: Build
         run: dotnet build ${{ matrix.solution }} --no-restore -warnaserror -c Release
 
+      # The hosted runner's desktop is 1024x768, and Windows caps a window at about the screen's size, so the WPF
+      # tests' 1280- and 1400-wide windows came out 1050 wide. Give them a full-HD screen.
+      - name: Screen resolution
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Add-Type -AssemblyName System.Windows.Forms
+          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+
       - name: Test
         run: dotnet test ${{ matrix.solution }} --no-build -c Release --logger trx --results-directory TestResults
 

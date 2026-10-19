@@ -70,6 +70,11 @@ jobs:
           else { $v = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1 }
           "version=$v" >> $env:GITHUB_OUTPUT
 
+      # The runner's 1024x768 desktop caps the WPF tests' windows at about 1050 wide (see ci.yml).
+      - name: Screen resolution
+        if: steps.check.outputs.skip != 'true'
+        run: Set-DisplayResolution -Width 1920 -Height 1080 -Force
+
       - name: Test
         if: steps.check.outputs.skip != 'true'
         run: dotnet test Stringline.sln -c Release -warnaserror
