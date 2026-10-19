@@ -13,6 +13,8 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <ApplicationIcon>Assets\stringline.ico</ApplicationIcon>
     <Description>A live electronic train graph for SimSig</Description>
+    <!-- For the screen lookup's Win32 callback (MainWindow.Layout.cs). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!-- Single-file, self-contained publish (S18): build/publish.ps1 passes -r win-x64 -p:PublishSingleFile=true. -->

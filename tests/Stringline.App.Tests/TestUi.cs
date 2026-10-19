@@ -16,17 +16,47 @@ internal sealed class TestUiThread : SynchronizationContext, IUiDispatcher, IDis
 {
     private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> _queue = [];
     private readonly Thread _thread;
+    private readonly System.Windows.Threading.Dispatcher? _dispatcher;
 
-    public TestUiThread()
+    /// <param name="wpf">Run a WPF dispatcher on an STA thread instead, so windows can be shown over the view models.</param>
+    public TestUiThread(bool wpf = false)
     {
-        _thread = new Thread(Loop) { IsBackground = true, Name = "Test UI" };
+        if (!wpf)
+        {
+            _thread = new Thread(Loop) { IsBackground = true, Name = "Test UI" };
+            _thread.Start();
+            return;
+        }
+
+        using var ready = new ManualResetEventSlim();
+        System.Windows.Threading.Dispatcher? dispatcher = null;
+        _thread = new Thread(() =>
+        {
+            dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+            SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext(dispatcher));
+            ready.Set();
+            System.Windows.Threading.Dispatcher.Run();
+        }) { IsBackground = true, Name = "Test WPF UI" };
+        _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
+        ready.Wait();
+        _dispatcher = dispatcher;
     }
 
     public void Post(Action action) => Post(_ => action(), null);
 
     public override void Post(SendOrPostCallback d, object? state)
     {
+        if (_dispatcher is { } dispatcher)
+        {
+            if (!dispatcher.HasShutdownStarted)
+            {
+                dispatcher.BeginInvoke(d, state);
+            }
+
+            return;
+        }
+
         try
         {
             _queue.Add((d, state));
@@ -87,6 +117,7 @@ internal sealed class TestUiThread : SynchronizationContext, IUiDispatcher, IDis
 
     public void Dispose()
     {
+        _dispatcher?.InvokeShutdown();
         _queue.CompleteAdding();
         _thread.Join(TimeSpan.FromSeconds(5));
         _queue.Dispose();
@@ -202,8 +233,10 @@ internal sealed class TestApp : IAsyncDisposable
 
     /// <param name="root">Another app's folder, to start the app again over its files (S16: resume); that app cleans it up.</param>
     /// <param name="logging">The app's log level control, as the app passes it; none by default.</param>
-    public TestApp(Func<AppSettings, AppSettings>? settings = null, string? root = null, AppLogging? logging = null)
+    /// <param name="wpf">Run the UI thread as a WPF dispatcher, to show the main window (#2, #9).</param>
+    public TestApp(Func<AppSettings, AppSettings>? settings = null, string? root = null, AppLogging? logging = null, bool wpf = false)
     {
+        Ui = new TestUiThread(wpf);
         _ownsRoot = root is null;
         _root = root is null ? Directory.CreateTempSubdirectory("stringline-app-") : new DirectoryInfo(root);
         Root = _root.FullName;
@@ -230,7 +263,7 @@ internal sealed class TestApp : IAsyncDisposable
             logging)).GetAwaiter().GetResult();
     }
 
-    public TestUiThread Ui { get; } = new();
+    public TestUiThread Ui { get; }
 
     /// <summary>The folder everything is kept under.</summary>
     public string Root { get; }

@@ -32,7 +32,10 @@ internal sealed partial class MainViewModel
 
     partial void OnShowDisruptionsChanged(bool value) => RequestScene();
 
-    /// <summary>The tooltip for a note or disruption under the cursor, when no train line is.</summary>
+    /// <summary>
+    /// The tooltip for a note or disruption under the cursor, when no train line is, or for a location's label in the
+    /// margin (its full name and TIPLOC, #3).
+    /// </summary>
     public HoverInfo? DescribeAt(ScreenPoint at)
     {
         if (Scene is not { } scene)
@@ -43,6 +46,7 @@ internal sealed partial class MainViewModel
         var view = Navigator.Viewport;
         return GraphAnnotations.NoteAt(scene, view, at) is { } note ? GraphAnnotations.Describe(note, scene)
             : GraphAnnotations.DisruptionAt(scene, view, at) is { } disruption ? GraphAnnotations.Describe(disruption, scene)
+            : GraphLabels.LocationAt(scene, view, at) is { } location ? GraphLabels.Describe(location)
             : null;
     }
 

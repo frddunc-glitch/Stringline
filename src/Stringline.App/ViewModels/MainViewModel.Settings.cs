@@ -17,7 +17,7 @@ internal sealed partial class MainViewModel
     internal AppPaths Paths => _paths;
 
     /// <summary>The settings as the window should show them, with the view's own values up to date.</summary>
-    private AppSettings CurrentSettings => _settings with { ForecastKnockOn = ForecastKnockOn, SuggestCancellations = SuggestionPanel.AllowCancellation };
+    private AppSettings CurrentSettings => _settings with { ForecastKnockOn = ForecastKnockOn, SuggestCancellations = SuggestionPanel.AllowCancellation, Layout = Layout.Current };
 
     [RelayCommand]
     private void ShowSettings()

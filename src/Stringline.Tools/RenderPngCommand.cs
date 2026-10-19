@@ -194,8 +194,9 @@ internal static class RenderPngCommand
             Forecast = forecast,
             Conflicts = conflicts,
         });
+        var orientation = settings.Vertical ? GraphOrientation.Vertical : GraphOrientation.Horizontal;
         var viewport = GraphViewport.Around(now.Value, (int)Math.Round(settings.Hours * SimTime.SecondsPerHour), settings.Width, settings.Height, settings.NowAt,
-            orientation: settings.Vertical ? GraphOrientation.Vertical : GraphOrientation.Horizontal);
+            GraphLabels.MarginsFor(orientation, scene.Locations), orientation);
 
         byte[] bytes;
         var pdfPage = settings.IsPdf ? PdfPage.Parse(settings.Page, viewport) : null;

@@ -19,7 +19,7 @@ public sealed class SkiaGraphRenderer : IDisposable
     public const float MinLabelSegmentPixels = 24;
 
     /// <summary>Height of the title band at the top of the surface.</summary>
-    private const float TitleBand = 24;
+    private const float TitleBand = (float)GraphLabels.TitleBand;
 
     private readonly Dictionary<(Colour Colour, GraphLayer Layer, bool Dim, bool Cancelled, LineStyle Style), SKPaint> _pathPaints = [];
     private readonly Dictionary<(Colour Colour, float Width), SKPaint> _strokes = [];
@@ -672,6 +672,7 @@ public sealed class SkiaGraphRenderer : IDisposable
         var low = (float)viewport.AxisOrigin;
         var high = (float)(viewport.AxisOrigin + viewport.AxisLength);
         var lastEnd = float.NegativeInfinity;
+        var room = (float)GraphLabels.RoomIn(viewport); // names longer than this are shortened (#3); the hover has them in full
         if (vertical)
         {
             canvas.Save();
@@ -688,6 +689,8 @@ public sealed class SkiaGraphRenderer : IDisposable
 
             var hasTiploc = !string.Equals(location.Name, location.Tiploc.Code, StringComparison.Ordinal);
             var font = location.IsStation ? _stationFont : _locationFont;
+            var name = GraphLabels.Fit(location.Name, font, room);
+            var tiploc = hasTiploc ? GraphLabels.Fit(location.Tiploc.Code, _tiplocFont, room) : null;
             var tiplocOffset = 4 + _tiplocFont.Size + 1;
             if (vertical)
             {
@@ -696,10 +699,10 @@ public sealed class SkiaGraphRenderer : IDisposable
                 canvas.Save();
                 canvas.Translate(at, plot.Top - 6);
                 canvas.RotateDegrees(-90);
-                canvas.DrawText(location.Name, 0, 4, SKTextAlign.Left, font, Fill(Theme.Text));
-                if (hasTiploc)
+                canvas.DrawText(name, 0, 4, SKTextAlign.Left, font, Fill(Theme.Text));
+                if (tiploc is not null)
                 {
-                    canvas.DrawText(location.Tiploc.Code, 0, tiplocOffset, SKTextAlign.Left, _tiplocFont, Fill(Theme.MutedText));
+                    canvas.DrawText(tiploc, 0, tiplocOffset, SKTextAlign.Left, _tiplocFont, Fill(Theme.MutedText));
                 }
 
                 canvas.Restore();
@@ -709,10 +712,10 @@ public sealed class SkiaGraphRenderer : IDisposable
                 var right = plot.Left - 6;
                 var y = Crisp(at);
                 canvas.DrawLine(right + 2, y, plot.Left, y, Stroke(Theme.Border, 1));
-                canvas.DrawText(location.Name, right, at + 4, SKTextAlign.Right, font, Fill(Theme.Text));
-                if (hasTiploc)
+                canvas.DrawText(name, right, at + 4, SKTextAlign.Right, font, Fill(Theme.Text));
+                if (tiploc is not null)
                 {
-                    canvas.DrawText(location.Tiploc.Code, right, at + tiplocOffset, SKTextAlign.Right, _tiplocFont, Fill(Theme.MutedText));
+                    canvas.DrawText(tiploc, right, at + tiplocOffset, SKTextAlign.Right, _tiplocFont, Fill(Theme.MutedText));
                 }
             }
 

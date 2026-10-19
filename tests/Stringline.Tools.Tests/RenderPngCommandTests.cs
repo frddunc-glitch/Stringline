@@ -63,11 +63,16 @@ public sealed class RenderPngCommandTests : IDisposable
         using var bitmap = SKBitmap.Decode(Out());
         (bitmap.Width, bitmap.Height).Should().Be((700, 1000));
 
-        // The now line runs across, ⅓ of the way down the plot.
-        var view = Graph.GraphViewport.Around(SimTime.FromClock(7, 0), 7200, 700, 1000, orientation: Graph.GraphOrientation.Vertical);
-        var y = (int)Math.Floor(view.TimeToPixel(SimTime.FromClock(7, 0).Seconds));
-        var reds = Enumerable.Range((int)view.PlotLeft + 5, (int)view.PlotWidth - 10).Count(x => bitmap.GetPixel(x, y) is { Red: > 180, Green: < 120 });
-        reds.Should().BeGreaterThan((int)(view.PlotWidth * 0.8));
+        // The now line runs across, ⅓ of the way down the plot, whose top margin fits the location names (#3).
+        var margins = Graph.GraphMargins.DefaultVertical;
+        var width = 700 - margins.Left - margins.Right;
+        var y = Enumerable.Range(0, 1000).Single(y =>
+            Enumerable.Range((int)margins.Left + 5, (int)width - 10).Count(x => bitmap.GetPixel(x, y) is { Red: > 180, Green: < 120 }) > width * 0.8);
+        var bottom = 1000 - margins.Bottom;
+        var top = ((3 * (y + 0.5)) - bottom) / 2;
+        top.Should().BeInRange(
+            Graph.GraphLabels.MarginsFor(Graph.GraphOrientation.Vertical, Graph.GraphLabels.MinRoom).Top - 2,
+            Graph.GraphLabels.MarginsFor(Graph.GraphOrientation.Vertical, Graph.GraphLabels.MaxRoom).Top + 2);
     }
 
     [Fact]

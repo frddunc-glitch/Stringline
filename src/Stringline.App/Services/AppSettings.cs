@@ -80,6 +80,9 @@ internal sealed record AppSettings
 
     public const int DefaultLogRetentionDays = 14;
 
+    /// <summary>The main window's panels, splitters and place (#9).</summary>
+    public WindowLayout Layout { get; init; } = new();
+
     /// <summary>Saved sessions last saved more than this many days ago are deleted at start-up; never when null.</summary>
     public int? DeleteSessionsAfterDays { get; init; }
 

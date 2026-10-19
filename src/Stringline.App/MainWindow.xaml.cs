@@ -41,6 +41,7 @@ public partial class MainWindow : Window
                 ConflictsList.ScrollIntoView(selected);
             }
         };
+        InitLayout();
         _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Render, (_, _) => Graph.SetNow(viewModel.Tick()), Dispatcher);
         Loaded += (_, _) =>
         {
@@ -60,6 +61,8 @@ public partial class MainWindow : Window
         // Stop the session (and any recording) cleanly before closing.
         e.Cancel = true;
         _timer.Stop();
+        CaptureLayout();
+        _viewModel.SaveLayout();
         try
         {
             await _viewModel.DisposeAsync();

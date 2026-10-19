@@ -19,12 +19,20 @@
 │ Status: ● Connected Waterloo | Sim 09:14:32 ×4 | 212 trains (3 unmatched) | 2 conflicts │
 └───────────────────────────────────────────────────────────────────────────────────────┘
 ```
-Panels are dockable later; v1 uses a fixed three-column layout with a splitter.
+Panels are dockable later; v1 uses three columns with splitters.
+
+**Resizing (S23, #9; Fred: keep share).** The train list, graph and side panel are star-sized: the window keeps their proportions as it changes size, so the graph (the biggest share) grows most. Each has a least width (train list 270 px, graph 300, side panel 450, `WindowLayout.Min…`), at which every list in it still fits (#2), so a splitter cannot push a panel below it or off the window (window at least 1050 × 520). The side panel splits into the train detail and the tabs (2 : 1), and the Conflicts tab into the list and its suggestions, with their own splitter (Fred; 200 px at first, at least 60).
+- **Hiding.** A double-click on the splitter beside the train list or the side panel hides that panel, and again shows it; on the splitter under the train detail it hides the tabs (Fred), and the train detail takes their room. View ▸ Panels has the same three switches. A hidden panel's room goes to the graph, and it comes back at its old share. A splitter beside a hidden panel does not drag.
+- **Remembered.** The shares (as pixel sizes last seen, used as star weights), the switches, the suggestions' height and the window's place, size and maximised state are saved in settings (`AppSettings.Layout`) when the window closes, and restored at the next start. A window whose screen has gone is centred on the primary screen, shrunk to fit; one partly off its screen is pulled back so its title bar can be grabbed (`WindowPlacement.OnScreen`).
+- **View ▸ Reset layout** shows every panel at its first share, leaving the window where it is.
+- **Lists (#2).** Every list and grid in the panels (train list, train detail, Conflicts, Regulation, Delays, History) has one star-sized text column (location, "last at", order) that trims with an ellipsis and shows the whole text in a tooltip; numbers and times are sized to their content, and delays right-aligned. A horizontal scroll bar appears only below the least width. The Regulation and Delays lists are `DataGrid`s now (they were `GridView`s with fixed widths, whose last column fell past the panel's edge).
+- S21's split and multi-board views will extend this; S23 does the single view only.
 
 ## 2. Graph conventions (train control diagram style)
 - Time on the horizontal axis by default (ViziRail/TCD style); a toggle swaps axes (S9). **Vertical** (Fred, S9): time runs down, the corridor across with its Up end on the left; times are labelled down the left and location names, rotated to read upwards, along the top.
 - The corridor's Up end (its first location) is at the top, so Down trains slope down to the right (Fred, S7). The axis is padded 4% above the first and below the last location.
 - Location axis labels: display name + TIPLOC; stations with platforms bold; loops shown as a double tick.
+- **Label margin (S23, #3).** The left margin (the top one when vertical) is sized to the widest label, its name or TIPLOC, between 90 and 260 px of room (`GraphLabels`); a forty-character name fits. A longer one is shortened with an ellipsis. Hovering over a label shows its full name, TIPLOC and platforms, and a reminder that Profile ▸ Edit profile can give it a shorter name for good. PNG and PDF exports (the app's and `render-png`'s) use the same margin.
 - Minor grid every 5 min, major every 30 min with labels; hour lines heavier.
 - Down trains slope one way, Up the other — direction is implicit in the slope.
 - Stops draw as horizontal segments at the location; pass points as vertices.

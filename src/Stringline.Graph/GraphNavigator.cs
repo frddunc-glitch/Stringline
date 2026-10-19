@@ -30,6 +30,7 @@ public sealed class GraphNavigator
     private const int WheelNotch = 120;
 
     private ScreenPoint? _dragFrom;
+    private double? _labelRoom;
 
     public GraphNavigator(int width = 800, int height = 600, int spanSeconds = 3 * 3600, double nowFraction = 1.0 / 3)
     {
@@ -225,8 +226,26 @@ public sealed class GraphNavigator
     {
         if (orientation != Viewport.Orientation)
         {
-            Set(Viewport.WithOrientation(orientation));
+            Set(Viewport.WithOrientation(orientation, _labelRoom is { } room ? GraphLabels.MarginsFor(orientation, room) : null));
         }
+    }
+
+    /// <summary>
+    /// Size the label margin to these locations' names (#3, <see cref="GraphLabels.RoomFor"/>), in this orientation and
+    /// any later one. Nothing moves unless the room changes.
+    /// </summary>
+    public void FitLabels(IEnumerable<GraphLocation> locations) => FitLabels(GraphLabels.RoomFor(locations));
+
+    /// <summary>Size the label margin for labels needing <paramref name="room"/> pixels (from <see cref="GraphLabels.RoomFor"/>).</summary>
+    public void FitLabels(double room)
+    {
+        if (room == _labelRoom)
+        {
+            return;
+        }
+
+        _labelRoom = room;
+        Set(Viewport with { Margins = GraphLabels.MarginsFor(Viewport.Orientation, room) });
     }
 
     public void EndDrag() => _dragFrom = null;

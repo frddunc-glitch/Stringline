@@ -97,6 +97,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         InitConflicts();
         InitSessions();
         _settings = settingsStore.Load();
+        Layout = new LayoutViewModel(_settings.Layout);
         _paths = paths.WithFolders(_settings);
         InitSuggestions();
         InitReports();
@@ -121,6 +122,9 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     }
 
     public GraphNavigator Navigator { get; } = new();
+
+    /// <summary>The window's panels and splitters (#9).</summary>
+    public LayoutViewModel Layout { get; }
 
     public TrainListViewModel Trains { get; } = new();
 
@@ -569,6 +573,16 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         });
     }
 
+    /// <summary>Remember the window's layout (<see cref="Layout"/>) for next time; the window calls this as it closes.</summary>
+    public void SaveLayout()
+    {
+        if (_settings.Layout != Layout.Current)
+        {
+            _settings = _settings with { Layout = Layout.Current };
+            _settingsStore.Save(_settings);
+        }
+    }
+
     private void SaveViewSettings()
     {
         var byDelay = ColourMode == GraphColourMode.Delay;
@@ -853,13 +867,18 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _building = true;
         _sceneDirty = false;
         var planVersion = Snapshot.PlanVersion;
-        _ = Task.Run(() => GraphSceneBuilder.Build(request)).ContinueWith(
+        _ = Task.Run(() =>
+        {
+            var scene = GraphSceneBuilder.Build(request);
+            return (Scene: scene, LabelRoom: GraphLabels.RoomFor(scene.Locations));
+        }).ContinueWith(
             t => _ui.Post(() =>
             {
                 _building = false;
                 if (t.IsCompletedSuccessfully)
                 {
-                    Scene = t.Result;
+                    Navigator.FitLabels(t.Result.LabelRoom);
+                    Scene = t.Result.Scene;
                     SceneBuiltFor(planVersion);
                 }
                 else if (t.Exception is { } ex)

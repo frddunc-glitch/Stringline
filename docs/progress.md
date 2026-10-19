@@ -1196,6 +1196,45 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
   Then set the `SIGN_PFX_BASE64` and `SIGN_PFX_PASSWORD` secrets.
 - 17. A profile made from a *different* timetable of the same sim keeps that timetable's title as its name, so the title can read "Old WTT – New WTT". Clear the sim name in Profile ▸ Edit profile if you see this. Is that good enough, or should a name equal to *any* WTT title count as unset?
 
+## 2026-10-20 — S23: Panel layout, resizing and long names (#2, #3, #9)
+
+### Done
+- **#2 Columns cut off.** The cause was fixed column widths that, added up, were wider than the panel: the Delays trains list needed 497 px in a 490 px panel, the delay points 553, and the train detail's Delay column (36 px) was narrower than its own header. Every list in the panels now has one star-sized text column, which trims with an ellipsis and has a tooltip, and its numbers sized to their content and right-aligned (`PanelGrid`, `RightCell`, `TrimCell` styles in `MainWindow.xaml`). Regulation and both Delays lists are `DataGrid`s now, not fixed-width `GridView`s. The conflict rows share their Time, Trains and Severity widths (`SharedSizeGroup`).
+- **#3 Long location names.** New `GraphLabels` (Graph, portable) sizes the label margin to the widest name or TIPLOC, between 90 and 260 px of room, in both orientations. `GraphNavigator.FitLabels` keeps that room when the graph turns. The renderer shortens a name that is still too long with an ellipsis. Hovering over a label shows the full name, TIPLOC and platforms, and the hint that Profile ▸ Edit profile can shorten it (also in the README). The app's PNG and PDF exports use the navigator's viewport, so they get the same margin; `render-png` works it out too.
+- **#9 Resizing.** The three columns are star-sized and keep their shares as the window changes size. Their least widths are set so every list fits (`WindowLayout.Min…`). Double-clicking a splitter, or View ▸ Panels, hides and shows the train list, the side panel, or the tabs under the train detail. The suggestions get their own splitter. View ▸ Reset layout puts everything back. The layout and the window's place, size and maximised state are saved on closing (`AppSettings.Layout`) and restored, back onto a screen that is still there (`WindowPlacement.OnScreen`, with the screens from `EnumDisplayMonitors`). `LayoutViewModel` holds the rules; `MainWindow.Layout.cs` only moves WPF.
+- **Tests:**
+  - `GraphLabelsTests`: the room, the ellipsis, the hover in both orientations, the navigator, and three snapshots (a 40-character name horizontal and vertical, and a longer one shortened).
+  - `LayoutTests`: the switches, Reset, damaged settings, window placement on gone or partly-off screens, and save and load (also through the settings window).
+  - `MainWindowTests` drives the real main window over a Waterloo replay, on a WPF test dispatcher (`TestUiThread(wpf: true)`):
+    - at the panels' least width, no list in any tab scrolls sideways or squeezes a column below its content;
+    - at 1280×720 and 2560×1440 the panels keep their share. The content is laid out at the exact size inside a canvas, because Windows keeps a window no bigger than the screen;
+    - hiding, a restart, and Reset layout.
+    With `STRINGLINE_WINDOW_SHOTS` set, it saves PNGs and a `lists.txt` of the column widths.
+  - The `render-png` vertical test now finds the now line, not the old fixed margin.
+- Totals: 1 435 (Core 259, Architecture 9, Gateway 207, Timetable 163, Network 140, Planning 231, Persistence 12, Graph 221, Tools 63, App 130). Green on Windows (Debug). Not run on Linux this session, though the Graph and Tools changes are portable.
+
+### Decisions
+- **Keep share (Fred).** The panels grow and shrink with the window in proportion, not at a fixed pixel width.
+- **A double-click on the train detail's splitter hides the tabs (Fred).** The train detail takes their room.
+- **Suggestions get a splitter (Fred)**, in place of the 240 px cap.
+- **Least widths come from measurement**, not guesses: the train list needs 265 px and the train detail 440 px with a vertical scroll bar. So the least widths are 270 and 450 px, and the window is at least 1050 × 520 px (it was 800 × 480).
+- **A hidden panel's room goes to the graph**, and a splitter next to a hidden panel does not drag. Hidden panels keep their share at the current scale, so showing one brings it back as it was.
+- **DataGrid squeezes Auto columns to their MinWidth before it scrolls**: that is what clipped "08:03:58" to "08:03:5". The window test therefore checks every column against its content as well as the scroll extent.
+- **The label room is clamped to 90–260 px.** A forty-character name in the bold station font measures 255 px, so it shows in full.
+- **Unsafe code is allowed in the App only**, for the `EnumDisplayMonitors` callback (`LibraryImport` with a function pointer).
+
+### Next
+- S24: wording, tooltips and the clock (#11, #12, #13).
+
+### Known issues
+- **Not tried by hand.** 👤 Fred:
+  - drag the splitters and double-click them;
+  - unplug a second monitor between runs;
+  - check that maximised comes back on the right screen.
+  Mixed-DPI monitors are scaled by the system DPI, so a window saved on a screen with a different scale may come back slightly offset.
+- The corridor tabs in the toolbar still wrap into two rows at 1280 px (as before S23). S25 reviews the toolbar.
+- The View menu repeats some access keys (W, F, A), as before; S25 checks them.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

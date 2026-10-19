@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Stringline.App.Controls"
         xmlns:views="clr-namespace:Stringline.App.Views"
-        Title="{Binding Title}" Icon="pack://application:,,,/Stringline;component/Assets/stringline.ico" Height="860" Width="1600" MinWidth="800" MinHeight="480"
+        xmlns:services="clr-namespace:Stringline.App.Services"
+        Title="{Binding Title}" Icon="pack://application:,,,/Stringline;component/Assets/stringline.ico" Height="860" Width="1600" MinWidth="1050" MinHeight="520"
         UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
@@ -13,6 +14,32 @@
     <Style TargetType="Button" x:Key="ToolButton">
       <Setter Property="Padding" Value="8,2" />
       <Setter Property="Margin" Value="2,0" />
+    </Style>
+    <!-- The side panels' lists (#2): one star-sized text column each, numbers sized to their content and right-aligned. -->
+    <Style TargetType="DataGrid" x:Key="PanelGrid">
+      <Setter Property="AutoGenerateColumns" Value="False" />
+      <Setter Property="IsReadOnly" Value="True" />
+      <Setter Property="CanUserAddRows" Value="False" />
+      <Setter Property="CanUserSortColumns" Value="False" />
+      <Setter Property="CanUserReorderColumns" Value="False" />
+      <Setter Property="CanUserResizeRows" Value="False" />
+      <Setter Property="SelectionMode" Value="Single" />
+      <Setter Property="HeadersVisibility" Value="Column" />
+      <Setter Property="GridLinesVisibility" Value="None" />
+      <Setter Property="RowHeaderWidth" Value="0" />
+      <Setter Property="AlternatingRowBackground" Value="#FAFAFA" />
+      <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+    </Style>
+    <Style TargetType="DataGridColumnHeader" x:Key="RightHeader">
+      <Setter Property="HorizontalContentAlignment" Value="Right" />
+    </Style>
+    <Style TargetType="TextBlock" x:Key="RightCell">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="Margin" Value="2,0" />
+    </Style>
+    <Style TargetType="TextBlock" x:Key="TrimCell">
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
     </Style>
   </Window.Resources>
   <Window.InputBindings>
@@ -80,6 +107,15 @@
         <MenuItem Header="_Vertical (time down)" IsCheckable="True" IsChecked="{Binding IsVertical}" />
         <Separator />
         <MenuItem Header="_Clear selection" Command="{Binding ClearSelectionCommand}" />
+        <Separator />
+        <MenuItem Header="_Panels">
+          <MenuItem Header="_Train list" IsCheckable="True" IsChecked="{Binding Layout.ShowTrainList}" />
+          <MenuItem Header="_Side panel" IsCheckable="True" IsChecked="{Binding Layout.ShowSidePanel}" />
+          <MenuItem Header="T_abs (conflicts, regulation, delays, history)" IsCheckable="True" IsChecked="{Binding Layout.ShowTabs}"
+                    IsEnabled="{Binding Layout.ShowSidePanel}" />
+        </MenuItem>
+        <MenuItem Header="R_eset layout" Command="{Binding Layout.ResetLayoutCommand}"
+                  ToolTip="Show every panel again at its first size" />
         <Separator />
         <MenuItem Header="_Settings…" InputGestureText="Ctrl+," Command="{Binding ShowSettingsCommand}" />
       </MenuItem>
@@ -235,21 +271,23 @@
       </DockPanel>
     </Border>
 
-    <!-- Train list | graph | detail and history -->
-    <Grid>
+    <!-- Train list | graph | detail and tabs. Columns and rows are star-sized so they keep their share as the window
+         changes size (#9); the window applies the saved layout and hides panels in code (MainWindow.Layout.cs). -->
+    <Grid x:Name="Panels">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="330" MinWidth="180" />
-        <ColumnDefinition Width="5" />
-        <ColumnDefinition Width="*" MinWidth="300" />
-        <ColumnDefinition Width="5" />
-        <ColumnDefinition Width="490" MinWidth="240" />
+        <ColumnDefinition x:Name="TrainListColumn" Width="330*" MinWidth="{x:Static services:WindowLayout.MinTrainListWidth}" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition x:Name="GraphColumn" Width="780*" MinWidth="{x:Static services:WindowLayout.MinGraphWidth}" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition x:Name="SideColumn" Width="490*" MinWidth="{x:Static services:WindowLayout.MinSideWidth}" />
       </Grid.ColumnDefinitions>
 
-      <DockPanel Grid.Column="0" DataContext="{Binding Trains}">
+      <DockPanel x:Name="TrainListPanel" Grid.Column="0" DataContext="{Binding Trains}">
         <StackPanel DockPanel.Dock="Top" Margin="6,6,6,4">
           <DockPanel>
             <TextBlock Text="Trains" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding Summary}" Foreground="#757575" Margin="8,0,0,0" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Summary}" Foreground="#757575" Margin="8,0,0,0" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Summary}" />
           </DockPanel>
           <DockPanel Margin="0,4,0,0">
             <ComboBox DockPanel.Dock="Right" Width="90" Margin="4,0,0,0" ItemsSource="{Binding SortOptions}" SelectedItem="{Binding Sort}" ToolTip="Sort by" />
@@ -257,10 +295,8 @@
           </DockPanel>
           <CheckBox Content="Not matched only" IsChecked="{Binding UnmatchedOnly}" Margin="0,4,0,0" />
         </StackPanel>
-        <DataGrid x:Name="TrainGrid" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}" AutoGenerateColumns="False"
-                  IsReadOnly="True" CanUserSortColumns="False" CanUserAddRows="False" SelectionMode="Single" HeadersVisibility="Column"
-                  GridLinesVisibility="None" RowHeaderWidth="0" BorderThickness="0,1,0,0" MouseDoubleClick="OnTrainDoubleClick"
-                  EnableRowVirtualization="True" AlternatingRowBackground="#FAFAFA">
+        <DataGrid x:Name="TrainGrid" Style="{StaticResource PanelGrid}" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}"
+                  BorderThickness="0,1,0,0" MouseDoubleClick="OnTrainDoubleClick" EnableRowVirtualization="True">
           <DataGrid.RowStyle>
             <Style TargetType="DataGridRow">
               <Style.Triggers>
@@ -272,29 +308,26 @@
             </Style>
           </DataGrid.RowStyle>
           <DataGrid.Columns>
-            <DataGridTemplateColumn Width="10">
+            <DataGridTemplateColumn Width="10" CanUserResize="False">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate>
                   <Rectangle Width="4" Fill="{Binding Colour}" Margin="1,1" />
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
-            <DataGridTextColumn Header="Train" Binding="{Binding Headcode}" Width="52" FontWeight="SemiBold" />
-            <DataGridTextColumn Header="Delay" Binding="{Binding DelayText}" Width="42">
-              <DataGridTextColumn.ElementStyle>
-                <Style TargetType="TextBlock">
-                  <Setter Property="HorizontalAlignment" Value="Right" />
-                </Style>
-              </DataGridTextColumn.ElementStyle>
-            </DataGridTextColumn>
-            <DataGridTextColumn Header="Last at" Binding="{Binding LastLocation}" Width="*" />
-            <DataGridTextColumn Header="Time" Binding="{Binding LastSeenText}" Width="60" />
-            <DataGridTextColumn Header="WTT" Binding="{Binding StatusText}" Width="62" />
+            <DataGridTextColumn Header="Train" Binding="{Binding Headcode}" Width="Auto" MinWidth="44" FontWeight="SemiBold" />
+            <DataGridTextColumn Header="Delay" Binding="{Binding DelayText}" Width="Auto" MinWidth="40"
+                                HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+            <DataGridTextColumn Header="Last at" Binding="{Binding LastLocation}" Width="*" MinWidth="50" ElementStyle="{StaticResource TrimCell}" />
+            <DataGridTextColumn Header="Time" Binding="{Binding LastSeenText}" Width="Auto" MinWidth="40" />
+            <DataGridTextColumn Header="WTT" Binding="{Binding StatusText}" Width="Auto" MinWidth="40" />
           </DataGrid.Columns>
         </DataGrid>
       </DockPanel>
 
-      <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="#EEEEEE" />
+      <GridSplitter x:Name="TrainListSplitter" DragStarted="OnSplitterDragStarted" Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="#EEEEEE"
+                    ToolTip="Drag to resize the train list; double-click to hide or show it"
+                    MouseDoubleClick="OnSplitterDoubleClick" DragCompleted="OnSplitterDragCompleted" />
 
       <Grid Grid.Column="2">
         <controls:GraphView x:Name="Graph" Scene="{Binding Scene}" Selection="{Binding Selection}" Navigator="{Binding Navigator}" Ghosts="{Binding Ghosts}" Draft="{Binding DraftDisruption}">
@@ -304,16 +337,19 @@
           </controls:GraphView.InputBindings>
         </controls:GraphView>
         <TextBlock Text="{Binding Placeholder}" Visibility="{Binding Placeholder, Converter={StaticResource NotNull}}"
-                   HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="15" Foreground="#757575" IsHitTestVisible="False" />
+                   HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="15" Foreground="#757575" IsHitTestVisible="False"
+                   TextWrapping="Wrap" TextAlignment="Center" Margin="12" />
       </Grid>
 
-      <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="#EEEEEE" />
+      <GridSplitter x:Name="SideSplitter" DragStarted="OnSplitterDragStarted" Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="#EEEEEE"
+                    ToolTip="Drag to resize the side panel; double-click to hide or show it"
+                    MouseDoubleClick="OnSplitterDoubleClick" DragCompleted="OnSplitterDragCompleted" />
 
-      <Grid Grid.Column="4">
+      <Grid x:Name="SidePanel" Grid.Column="4">
         <Grid.RowDefinitions>
-          <RowDefinition Height="2*" MinHeight="140" />
-          <RowDefinition Height="5" />
-          <RowDefinition Height="*" MinHeight="90" />
+          <RowDefinition x:Name="DetailRow" Height="2*" MinHeight="{x:Static services:WindowLayout.MinDetailHeight}" />
+          <RowDefinition Height="Auto" />
+          <RowDefinition x:Name="TabsRow" Height="*" MinHeight="{x:Static services:WindowLayout.MinTabsHeight}" />
         </Grid.RowDefinitions>
 
         <!-- Train detail (RP-1) -->
@@ -328,20 +364,19 @@
             </DockPanel>
             <TextBlock Text="{Binding Detail.Description}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail.Description}" Margin="0,2,0,0"
                        Visibility="{Binding Detail.Description, Converter={StaticResource NotNull}}" />
-            <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding Detail.Heading, Converter={StaticResource NotNull}}">
-              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,0" Content="Reset to WTT" Command="{Binding ResetSelectedCommand}"
+            <WrapPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding Detail.Heading, Converter={StaticResource NotNull}}">
+              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,2" Content="Reset to WTT" Command="{Binding ResetSelectedCommand}"
                       ToolTip="Put the train back as the WTT books it" />
-              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,0" Content="{Binding CancelSelectedText}" Command="{Binding CancelSelectedCommand}" />
-              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,0" Content="Clone…" Command="{Binding CloneSelectedCommand}"
+              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,2" Content="{Binding CancelSelectedText}" Command="{Binding CancelSelectedCommand}" />
+              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,2" Content="Clone…" Command="{Binding CloneSelectedCommand}"
                       ToolTip="Copy the train's plan as an ad-hoc train with a new headcode" />
-              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,0" Content="Link…" Command="{Binding LinkSelectedCommand}"
+              <Button Style="{StaticResource ToolButton}" Margin="0,0,4,2" Content="Link…" Command="{Binding LinkSelectedCommand}"
                       ToolTip="Link the live train to a WTT train by hand" />
-            </StackPanel>
+            </WrapPanel>
           </StackPanel>
           <Grid>
-            <DataGrid x:Name="ScheduleGrid" ItemsSource="{Binding Detail.Rows}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
-                      CanUserSortColumns="False" CanUserReorderColumns="False" SelectionMode="Single" SelectionUnit="Cell" HeadersVisibility="Column"
-                      GridLinesVisibility="None" RowHeaderWidth="0" BorderThickness="0,1,0,0" AlternatingRowBackground="#FAFAFA"
+            <DataGrid x:Name="ScheduleGrid" Style="{StaticResource PanelGrid}" ItemsSource="{Binding Detail.Rows}" IsReadOnly="False"
+                      CanUserDeleteRows="False" SelectionUnit="Cell" BorderThickness="0,1,0,0"
                       Visibility="{Binding Detail.HasTrain, Converter={StaticResource BoolToVisibility}}">
               <DataGrid.Resources>
                 <!-- Passes are italic; edited times bold. A stop's arrival is on its top line, its departure on the bottom. -->
@@ -389,7 +424,7 @@
                     </Style>
                   </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
-                <DataGridTextColumn Header="Plat" Binding="{Binding PlatformText}" Width="36">
+                <DataGridTextColumn Header="Plat" Binding="{Binding PlatformText}" Width="Auto" MinWidth="30">
                   <DataGridTextColumn.ElementStyle>
                     <Style TargetType="TextBlock">
                       <Style.Triggers>
@@ -400,7 +435,7 @@
                     </Style>
                   </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
-                <DataGridTextColumn Header="Line" Binding="{Binding LineText}" Width="36">
+                <DataGridTextColumn Header="Line" Binding="{Binding LineText}" Width="Auto" MinWidth="30">
                   <DataGridTextColumn.ElementStyle>
                     <Style TargetType="TextBlock">
                       <Style.Triggers>
@@ -411,18 +446,13 @@
                     </Style>
                   </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
-                <DataGridTextColumn Header="WTT" Binding="{Binding WttText}" Width="Auto" MinWidth="44" IsReadOnly="True" Foreground="#757575" ElementStyle="{StaticResource Passes}" />
-                <DataGridTextColumn Header="Plan arr" Binding="{Binding PlanArriveText}" Width="Auto" MinWidth="50" ElementStyle="{StaticResource PlanArrive}" />
-                <DataGridTextColumn Header="Plan dep" Binding="{Binding PlanDepartText}" Width="Auto" MinWidth="50" ElementStyle="{StaticResource PlanDepart}" />
-                <DataGridTextColumn Header="Actual" Binding="{Binding ActualText}" Width="Auto" MinWidth="50" IsReadOnly="True" />
-                <DataGridTextColumn Header="Forecast" Binding="{Binding ForecastText}" Width="Auto" MinWidth="56" IsReadOnly="True" Foreground="#1565C0" />
-                <DataGridTextColumn Header="Delay" Binding="{Binding DelayText}" Width="36" IsReadOnly="True">
-                  <DataGridTextColumn.ElementStyle>
-                    <Style TargetType="TextBlock">
-                      <Setter Property="HorizontalAlignment" Value="Right" />
-                    </Style>
-                  </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
+                <DataGridTextColumn Header="WTT" Binding="{Binding WttText}" Width="Auto" MinWidth="40" IsReadOnly="True" Foreground="#757575" ElementStyle="{StaticResource Passes}" />
+                <DataGridTextColumn Header="Plan arr" Binding="{Binding PlanArriveText}" Width="Auto" MinWidth="40" ElementStyle="{StaticResource PlanArrive}" />
+                <DataGridTextColumn Header="Plan dep" Binding="{Binding PlanDepartText}" Width="Auto" MinWidth="40" ElementStyle="{StaticResource PlanDepart}" />
+                <DataGridTextColumn Header="Actual" Binding="{Binding ActualText}" Width="Auto" MinWidth="40" IsReadOnly="True" />
+                <DataGridTextColumn Header="Forecast" Binding="{Binding ForecastText}" Width="Auto" MinWidth="40" IsReadOnly="True" Foreground="#1565C0" />
+                <DataGridTextColumn Header="Delay" Binding="{Binding DelayText}" Width="Auto" MinWidth="36" IsReadOnly="True"
+                                    HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
               </DataGrid.Columns>
             </DataGrid>
             <TextBlock Text="Select a train on the graph or in the list to see its schedule. Drag its line to retime it, or right-click it for more."
@@ -431,17 +461,53 @@
           </Grid>
         </DockPanel>
 
-        <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#EEEEEE" />
+        <GridSplitter x:Name="TabsSplitter" DragStarted="OnSplitterDragStarted" Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#EEEEEE"
+                      ToolTip="Drag to resize; double-click to hide or show the tabs"
+                      MouseDoubleClick="OnSplitterDoubleClick" DragCompleted="OnSplitterDragCompleted" />
 
-        <!-- Conflicts (FC-4, S14) and edit history (RP-7), as tabs (Fred) -->
-        <TabControl Grid.Row="2" BorderThickness="0,1,0,0" Padding="0" SelectedIndex="{Binding SideTab}">
+        <!-- Conflicts (FC-4, S14), regulation, delays and edit history (RP-7), as tabs (Fred) -->
+        <TabControl x:Name="SideTabs" Grid.Row="2" BorderThickness="0,1,0,0" Padding="0" SelectedIndex="{Binding SideTab}">
           <TabItem Header="{Binding ConflictList.Header}">
-            <DockPanel>
-              <TextBlock DockPanel.Dock="Top" Text="{Binding ConflictList.Summary}" Foreground="#757575" Margin="6,4"
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" MinHeight="40" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition x:Name="SuggestionsRow" Height="0" />
+              </Grid.RowDefinitions>
+              <TextBlock Grid.Row="0" Text="{Binding ConflictList.Summary}" Foreground="#757575" Margin="6,4" TextTrimming="CharacterEllipsis"
                          ToolTip="Clashes still to come, on every corridor, by the forecast without knock-on. Pick one to show it on the graph and see suggestions." />
-              <!-- Suggestions for the picked conflict (FC-5, S15) -->
-              <Border x:Name="SuggestionsPanel" DockPanel.Dock="Bottom" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Background="#FAFAFA"
-                      MaxHeight="240" Visibility="{Binding SuggestionPanel.IsVisible, Converter={StaticResource BoolToVisibility}}">
+              <ListBox x:Name="ConflictsList" Grid.Row="1" ItemsSource="{Binding ConflictList.Rows}" SelectedItem="{Binding ConflictList.Selected}"
+                       BorderThickness="0,1,0,0" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                       Grid.IsSharedSizeScope="True">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ToolTip="{Binding Tip}">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="ConflictTime" />
+                        <ColumnDefinition Width="*" MinWidth="60" />
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="ConflictTrains" />
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="ConflictSeverity" />
+                      </Grid.ColumnDefinitions>
+                      <Border Grid.Column="0" Background="#FDECEA" BorderBrush="#E51A1A" BorderThickness="1" CornerRadius="2" Margin="0,1,6,1"
+                              ToolTip="{Binding Kind}">
+                        <TextBlock Text="{Binding Badge}" Foreground="#B71C1C" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                      </Border>
+                      <TextBlock Grid.Column="1" Text="{Binding Time}" FontFamily="Consolas" VerticalAlignment="Center" Margin="0,0,8,0" />
+                      <TextBlock Grid.Column="2" Text="{Binding Where}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0" />
+                      <TextBlock Grid.Column="3" Text="{Binding Trains}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                      <TextBlock Grid.Column="4" Text="{Binding Severity}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,0" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <!-- Suggestions for the picked conflict (FC-5, S15), under their own splitter (Fred) -->
+              <GridSplitter x:Name="SuggestionsSplitter" Grid.Row="2" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#EEEEEE"
+                            ToolTip="Drag to give the suggestions more or less room" DragCompleted="OnSplitterDragCompleted"
+                            Visibility="{Binding SuggestionPanel.IsVisible, Converter={StaticResource BoolToVisibility}}" />
+              <Border x:Name="SuggestionsPanel" Grid.Row="3" Background="#FAFAFA"
+                      Visibility="{Binding SuggestionPanel.IsVisible, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel Margin="6,4">
                   <DockPanel DockPanel.Dock="Top">
                     <CheckBox DockPanel.Dock="Right" Content="Allow cancelling" IsChecked="{Binding SuggestionPanel.AllowCancellation}" VerticalAlignment="Center"
@@ -474,31 +540,7 @@
                   </ScrollViewer>
                 </DockPanel>
               </Border>
-              <ListBox x:Name="ConflictsList" ItemsSource="{Binding ConflictList.Rows}" SelectedItem="{Binding ConflictList.Selected}"
-                       BorderThickness="0,1,0,0" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                <ListBox.ItemTemplate>
-                  <DataTemplate>
-                    <Grid ToolTip="{Binding Tip}">
-                      <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="32" />
-                        <ColumnDefinition Width="58" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="100" />
-                        <ColumnDefinition Width="52" />
-                      </Grid.ColumnDefinitions>
-                      <Border Grid.Column="0" Background="#FDECEA" BorderBrush="#E51A1A" BorderThickness="1" CornerRadius="2" Margin="0,1,6,1"
-                              ToolTip="{Binding Kind}">
-                        <TextBlock Text="{Binding Badge}" Foreground="#B71C1C" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                      </Border>
-                      <TextBlock Grid.Column="1" Text="{Binding Time}" FontFamily="Consolas" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="2" Text="{Binding Where}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,6,0" />
-                      <TextBlock Grid.Column="3" Text="{Binding Trains}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="4" Text="{Binding Severity}" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                    </Grid>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
-            </DockPanel>
+            </Grid>
           </TabItem>
           <!-- Regulation list (RP-9, S15) -->
           <TabItem Header="Regulation">
@@ -511,9 +553,9 @@
               </DockPanel>
               <TextBlock DockPanel.Dock="Top" Text="{Binding Regulation.Summary}" Foreground="#757575" Margin="6,0,6,4" TextWrapping="Wrap"
                          ToolTip="Movements still to come here, in the order of the working plan. Bold amber rows are out of WTT order." />
-              <ListView x:Name="RegulationList" ItemsSource="{Binding Regulation.Rows}" BorderThickness="0,1,0,0">
-                <ListView.ItemContainerStyle>
-                  <Style TargetType="ListViewItem">
+              <DataGrid x:Name="RegulationList" Style="{StaticResource PanelGrid}" ItemsSource="{Binding Regulation.Rows}" BorderThickness="0,1,0,0">
+                <DataGrid.RowStyle>
+                  <Style TargetType="DataGridRow">
                     <Setter Property="ToolTip" Value="{Binding Tip}" />
                     <Style.Triggers>
                       <DataTrigger Binding="{Binding OutOfOrder}" Value="True">
@@ -522,19 +564,18 @@
                       </DataTrigger>
                     </Style.Triggers>
                   </Style>
-                </ListView.ItemContainerStyle>
-                <ListView.View>
-                  <GridView>
-                    <GridViewColumn Header="Plan" DisplayMemberBinding="{Binding Time}" Width="56" />
-                    <GridViewColumn Header="Train" DisplayMemberBinding="{Binding Headcode}" Width="48" />
-                    <GridViewColumn Header="Does" DisplayMemberBinding="{Binding Move}" Width="96" />
-                    <GridViewColumn Header="Plat" DisplayMemberBinding="{Binding Platform}" Width="36" />
-                    <GridViewColumn Header="Fcst" DisplayMemberBinding="{Binding Forecast}" Width="56" />
-                    <GridViewColumn Header="Late" DisplayMemberBinding="{Binding Delay}" Width="36" />
-                    <GridViewColumn Header="Order" DisplayMemberBinding="{Binding Order}" Width="120" />
-                  </GridView>
-                </ListView.View>
-              </ListView>
+                </DataGrid.RowStyle>
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="Plan" Binding="{Binding Time}" Width="Auto" MinWidth="40" />
+                  <DataGridTextColumn Header="Train" Binding="{Binding Headcode}" Width="Auto" MinWidth="40" />
+                  <DataGridTextColumn Header="Does" Binding="{Binding Move}" Width="Auto" MinWidth="50" />
+                  <DataGridTextColumn Header="Plat" Binding="{Binding Platform}" Width="Auto" MinWidth="30" />
+                  <DataGridTextColumn Header="Fcst" Binding="{Binding Forecast}" Width="Auto" MinWidth="40" />
+                  <DataGridTextColumn Header="Late" Binding="{Binding Delay}" Width="Auto" MinWidth="32"
+                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                  <DataGridTextColumn Header="Order" Binding="{Binding Order}" Width="*" MinWidth="60" ElementStyle="{StaticResource TrimCell}" />
+                </DataGrid.Columns>
+              </DataGrid>
             </DockPanel>
           </TabItem>
           <!-- Delay table (SES-2, S17) -->
@@ -543,10 +584,10 @@
               <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="3*" />
+                <RowDefinition Height="3*" MinHeight="40" />
                 <RowDefinition Height="5" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="2*" />
+                <RowDefinition Height="2*" MinHeight="40" />
               </Grid.RowDefinitions>
               <DockPanel Grid.Row="0" Margin="6,4">
                 <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="CSV by train…" Command="{Binding ExportDelaysCommand}" CommandParameter="trains"
@@ -560,40 +601,41 @@
               </DockPanel>
               <TextBlock Grid.Row="1" Text="{Binding Delays.Summary}" Foreground="#757575" Margin="6,0,6,4" TextWrapping="Wrap"
                          ToolTip="Delays are whole minutes against the WTT (against the plan for ad-hoc trains). Blue final delays are forecasts." />
-              <ListView Grid.Row="2" x:Name="DelayTrains" ItemsSource="{Binding Delays.Trains}" SelectedItem="{Binding Delays.Selected}" BorderThickness="0,1,0,0">
-                <ListView.ItemContainerStyle>
-                  <Style TargetType="ListViewItem">
+              <DataGrid Grid.Row="2" x:Name="DelayTrains" Style="{StaticResource PanelGrid}" ItemsSource="{Binding Delays.Trains}" SelectedItem="{Binding Delays.Selected}"
+                        BorderThickness="0,1,0,0">
+                <DataGrid.RowStyle>
+                  <Style TargetType="DataGridRow">
                     <Setter Property="ToolTip" Value="{Binding Tip}" />
                   </Style>
-                </ListView.ItemContainerStyle>
-                <ListView.View>
-                  <GridView>
-                    <GridViewColumn Header="Train" DisplayMemberBinding="{Binding Headcode}" Width="52" />
-                    <GridViewColumn Header="State" DisplayMemberBinding="{Binding State}" Width="72" />
-                    <GridViewColumn Header="Latest" DisplayMemberBinding="{Binding Latest}" Width="130" />
-                    <GridViewColumn Header="Late" DisplayMemberBinding="{Binding LatestDelay}" Width="38" />
-                    <GridViewColumn Header="Worst" DisplayMemberBinding="{Binding WorstDelay}" Width="44" />
-                    <GridViewColumn Header="At" DisplayMemberBinding="{Binding WorstAt}" Width="100" />
-                    <GridViewColumn Header="Final" Width="44">
-                      <GridViewColumn.CellTemplate>
-                        <DataTemplate>
-                          <TextBlock x:Name="Final" Text="{Binding FinalDelay}" />
-                          <DataTemplate.Triggers>
-                            <DataTrigger Binding="{Binding FinalIsForecast}" Value="True">
-                              <Setter TargetName="Final" Property="Foreground" Value="#1565C0" />
-                            </DataTrigger>
-                          </DataTemplate.Triggers>
-                        </DataTemplate>
-                      </GridViewColumn.CellTemplate>
-                    </GridViewColumn>
-                  </GridView>
-                </ListView.View>
-              </ListView>
+                </DataGrid.RowStyle>
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="Train" Binding="{Binding Headcode}" Width="Auto" MinWidth="40" />
+                  <DataGridTextColumn Header="State" Binding="{Binding State}" Width="Auto" MinWidth="40" />
+                  <DataGridTextColumn Header="Latest" Binding="{Binding Latest}" Width="3*" MinWidth="50" ElementStyle="{StaticResource TrimCell}" />
+                  <DataGridTextColumn Header="Late" Binding="{Binding LatestDelay}" Width="Auto" MinWidth="32"
+                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                  <DataGridTextColumn Header="Worst" Binding="{Binding WorstDelay}" Width="Auto" MinWidth="36"
+                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                  <DataGridTextColumn Header="At" Binding="{Binding WorstAt}" Width="2*" MinWidth="40" ElementStyle="{StaticResource TrimCell}" />
+                  <DataGridTemplateColumn Header="Final" Width="Auto" MinWidth="34" HeaderStyle="{StaticResource RightHeader}">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock x:Name="Final" Text="{Binding FinalDelay}" HorizontalAlignment="Right" Margin="2,0" />
+                        <DataTemplate.Triggers>
+                          <DataTrigger Binding="{Binding FinalIsForecast}" Value="True">
+                            <Setter TargetName="Final" Property="Foreground" Value="#1565C0" />
+                          </DataTrigger>
+                        </DataTemplate.Triggers>
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
+                </DataGrid.Columns>
+              </DataGrid>
               <GridSplitter Grid.Row="3" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#EEEEEE" />
               <TextBlock Grid.Row="4" Text="{Binding Delays.PointsHeading}" FontWeight="SemiBold" Margin="6,2" TextTrimming="CharacterEllipsis" />
-              <ListView Grid.Row="5" x:Name="DelayPoints" ItemsSource="{Binding Delays.Points}" BorderThickness="0,1,0,0">
-                <ListView.ItemContainerStyle>
-                  <Style TargetType="ListViewItem">
+              <DataGrid Grid.Row="5" x:Name="DelayPoints" Style="{StaticResource PanelGrid}" ItemsSource="{Binding Delays.Points}" BorderThickness="0,1,0,0">
+                <DataGrid.RowStyle>
+                  <Style TargetType="DataGridRow">
                     <Setter Property="ToolTip" Value="{Binding Tiploc}" />
                     <Style.Triggers>
                       <DataTrigger Binding="{Binding Runs}" Value="False">
@@ -601,25 +643,19 @@
                       </DataTrigger>
                     </Style.Triggers>
                   </Style>
-                </ListView.ItemContainerStyle>
-                <ListView.View>
-                  <GridView>
-                    <GridViewColumn Header="Location" DisplayMemberBinding="{Binding Location}" Width="120" />
-                    <GridViewColumn Header="WTT" DisplayMemberBinding="{Binding Booked}" Width="80" />
-                    <GridViewColumn Header="Plan" DisplayMemberBinding="{Binding Planned}" Width="80" />
-                    <GridViewColumn Header="Actual" DisplayMemberBinding="{Binding Actual}" Width="80" />
-                    <GridViewColumn Header="Forecast" Width="80">
-                      <GridViewColumn.CellTemplate>
-                        <DataTemplate>
-                          <TextBlock Text="{Binding Forecast}" Foreground="#1565C0" />
-                        </DataTemplate>
-                      </GridViewColumn.CellTemplate>
-                    </GridViewColumn>
-                    <GridViewColumn Header="vs WTT" DisplayMemberBinding="{Binding WttDelay}" Width="48" />
-                    <GridViewColumn Header="vs plan" DisplayMemberBinding="{Binding PlanDelay}" Width="48" />
-                  </GridView>
-                </ListView.View>
-              </ListView>
+                </DataGrid.RowStyle>
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="*" MinWidth="60" ElementStyle="{StaticResource TrimCell}" />
+                  <DataGridTextColumn Header="WTT" Binding="{Binding Booked}" Width="Auto" MinWidth="40" />
+                  <DataGridTextColumn Header="Plan" Binding="{Binding Planned}" Width="Auto" MinWidth="40" />
+                  <DataGridTextColumn Header="Actual" Binding="{Binding Actual}" Width="Auto" MinWidth="40" />
+                  <DataGridTextColumn Header="Forecast" Binding="{Binding Forecast}" Width="Auto" MinWidth="40" Foreground="#1565C0" />
+                  <DataGridTextColumn Header="vs WTT" Binding="{Binding WttDelay}" Width="Auto" MinWidth="36"
+                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                  <DataGridTextColumn Header="vs plan" Binding="{Binding PlanDelay}" Width="Auto" MinWidth="36"
+                                      HeaderStyle="{StaticResource RightHeader}" ElementStyle="{StaticResource RightCell}" />
+                </DataGrid.Columns>
+              </DataGrid>
             </Grid>
           </TabItem>
           <TabItem Header="History">
@@ -630,7 +666,7 @@
                 <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="↶ Undo" Command="{Binding UndoCommand}"
                         ToolTip="{Binding UndoTip}" ToolTipService.ShowOnDisabled="True" />
                 <TextBlock Text="Edit history" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding History.Summary}" Foreground="#757575" Margin="8,0,0,0" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding History.Summary}" Foreground="#757575" Margin="8,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </DockPanel>
               <ListBox x:Name="HistoryList" ItemsSource="{Binding History.Entries}" BorderThickness="0,1,0,0" HorizontalContentAlignment="Stretch"
                        ScrollViewer.HorizontalScrollBarVisibility="Disabled">
