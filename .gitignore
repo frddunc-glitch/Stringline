@@ -484,3 +484,8 @@ $RECYCLE.BIN/
 # Stringline: payware-sim recordings and WTTs never go in git
 local-fixtures/
 *.received.*
+
+# Release builds go on GitHub Releases, never in git
+Stringline-*.zip
+stringline-*.zip
+*-setup.exe

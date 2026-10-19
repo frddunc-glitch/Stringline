@@ -1048,6 +1048,87 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - A train that has not reported anywhere on its plan is not "seen", even if it is in the sim at a signal; "All trains" shows it.
 - `report --session` uses a profile generated from the WTT unless `--profile` is given, so its forecast sections can differ from the app's saved profile.
 
+## 2026-10-19 — S18: Packaging
+
+### Done
+- **Settings window** (View ▸ Settings…, Ctrl+,; `SettingsViewModel`, `Views/SettingsWindow`). Fred chose all four groups:
+  - **Forecast and conflicts:** knock-on, default dwell and turnaround, "possibly stopped" time, platform margin, least conflict shown.
+  - **Suggestions:** allow cancellations, and the four penalties in minutes (question 11's numbers can now be tried in the app).
+  - **Folders:** timetables, sessions, recordings and exports. Blank means the default.
+  - **Logging and housekeeping:** Debug logging, days of logs kept, Open log folder, and deleting old saved sessions.
+  - Values are checked together on OK and the window stays open with the reason. Restore defaults resets every tab.
+- **Applying settings** (`MainViewModel.Settings.cs`):
+  - The engine takes new forecast and conflict options at once. `PlanningEngine.SetForecast` gained `ConflictOptions`, which were fixed at construction before.
+  - Suggestions are worked out again with the new penalties. Their cache key is now the whole `SuggestionOptions`.
+  - Folders apply to the next save (`AppPaths.WithFolders`), and the log level changes at once (`AppLogging`, a Serilog level switch).
+- **Session housekeeping** (`SessionCatalogue.DeleteOlderThan`):
+  - It runs at start-up when turned on, and asks first when the setting is turned on.
+  - It never deletes the newest session, the one being written or one named with `--resume`/`--review`. The WAL side files go too.
+- **Logging:**
+  - Settings are read before the logger is made, for the level and the retention.
+  - Each run's first line gives the version, commit, OS, runtime and whether it is the single-file build.
+  - Exceptions are now logged from every thread and from unobserved tasks, not only the UI thread.
+  - The app's own lines carry its name.
+- **About window** (`Views/AboutWindow`, `AboutInfo`):
+  - the icon, version and commit;
+  - the GPLv3 §5(d) notices (copyright, no warranty, licence link, source link);
+  - View licence (the GPL embedded as a resource) and Copy version;
+  - credits for every shipped component, and the SimSig disclaimer.
+  - `THIRD-PARTY-NOTICES.md` holds the same credits. Help also gained Getting started (online) and Open log folder.
+- **Icon** (Fred: train-graph lines):
+  - `AppIcon` in Stringline.Graph draws it at 9 sizes from 16 to 256 px into a PNG-frame `.ico`. `stringline icon out.ico [--png dir]` writes it.
+  - It is used for the exe, the main window, the About window and the installer.
+  - Below 32 px it shows only the two stepped trains, because with the fast train as well it read as an X in a box.
+- **Packaging** (Fred: an installer too):
+  - `build/publish.ps1` makes a single-file, self-contained, compressed win-x64 `Stringline.exe` (78 MB, native libraries inside), zipped with LICENSE, notices, OFL and README.
+  - `-Installer` adds `Stringline-x.y.z-setup.exe` from Inno Setup 6 (`installer/Stringline.iss`): per user, no admin, Start menu, optional desktop icon, Windows 10 2004+ x64.
+  - `.github/workflows/release.yml` runs on `v*` tags: test, publish, draft GitHub release. Run by hand, it uploads the files as artifacts.
+- **README:** user-facing first: installing (SmartScreen note), turning on the gateway, connecting (payware login), timetables, reading and re-planning, settings, where files are kept, troubleshooting, command line. The developer sections follow, plus publishing.
+- **Tests:**
+  - Planning +1 (230): conflict options changed while running.
+  - Persistence +1 (12): deleting old sessions.
+  - Graph +3 (210): the icon's sizes, PNGs, `.ico` and the committed file.
+  - Tools +1 (63): `icon`.
+  - App +10 (117):
+    - settings applied, saved and in the engine;
+    - restart with saved settings;
+    - bad values and Cancel;
+    - Restore defaults, Browse and Open logs;
+    - housekeeping at start-up and on turning it on;
+    - the About notices, version and embedded licence;
+    - every shipped package credited;
+    - the Settings and About windows load every tab with no binding errors. Set `STRINGLINE_WINDOW_SHOTS` to a folder to save them as PNGs.
+  - Totals: 1 398 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 140, Planning 230, Persistence 12, Graph 210, Tools 63, App 117). Green on Windows (Debug), and on Linux (`sdk:10.0` container, portable filter, Release: 1 281).
+- **Tried for real:**
+  - `publish.ps1 -Installer` built the zip and the installer.
+  - The published exe started, logged "single-file" with the commit, and closed cleanly.
+  - The installer installed silently for the current user into a temporary folder with its Start-menu shortcut, and uninstalled cleanly.
+  - The Settings tabs and the About window were rendered to PNG and checked by eye.
+  - Inno Setup 6.7.3 was installed on Fred's PC with winget (Fred agreed).
+
+### Decisions
+- **Settings are applied on OK, not live.** The view menu's switches (knock-on, cancellations) stay in their places too; both write the same settings.
+- **Penalties are shown in minutes**, as the README and question 11 talk about them; they are kept in weighted seconds.
+- **Log retention takes effect at the next start**: Serilog's file sink fixes it when the logger is made. The level changes at once.
+- **Housekeeping never deletes the newest session.** It also asks before the first delete, because deleting files is not undoable.
+- **Only the exe ships in the zip** (fonts are embedded), plus the notices. The `stringline` CLI is not in the release; developers run it from source.
+- **The installer is per user and unsigned.** It needs no admin rights. SmartScreen will warn until the files are code-signed (see questions).
+- **The icon is drawn in code** so it can be changed by editing `AppIcon`, not a binary. A test checks the committed `.ico` has every size.
+- **`AboutInfo.IsSingleFile`** uses the empty `Assembly.Location` of a single-file app on purpose (IL3000 suppressed there).
+
+### Next
+- S19 (opt-in assist), S20 (optimiser), S21 (multi-corridor views): optional extensions.
+- Code signing, if releases go public (see questions).
+- A session browser in place of the file picker (S16's note) would sit well beside the housekeeping setting.
+
+### Known issues
+- **Not tried by hand.** 👤 Fred:
+  - run the installer normally (not silently) and check the wizard, Start menu entry and first start;
+  - open Settings, change a margin or penalty while signalling, and check the conflicts and suggestions follow;
+  - push a test tag (e.g. `v0.1.0-rc1`) to check the Release workflow on GitHub's runner. It installs Inno Setup with Chocolatey if the image lacks it; that path has not run yet.
+- The README's gateway steps are from the design notes ("turn on Interface Gateway in the options before starting the sim"), not from a fresh look at SimSig's Loader. Check the wording matches SimSig.
+- The release draft notes are GitHub's generated ones. Edit them before publishing.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
@@ -1078,3 +1159,7 @@ New from S14a:
 New from S15:
 11. Are the suggestion **penalties** right: 2 min for a platform or line change, 30 min for terminating short, 60 min for cancelling (all weighted like delay)? They are in `SuggestionOptions`.
 12. Should suggestions **hold a train at a signal** (e.g. outside a junction), which SimSig can do but the WTT does not time? That would give suggestions for trains already on their way.
+
+New from S18:
+13. **Code signing:** unsigned downloads get a SmartScreen warning. Is that acceptable for now, or should releases be signed (a certificate costs money; SignPath offers free signing for open-source projects)?
+14. Does the README's "Turn on the Interface Gateway" step match what SimSig's Loader calls it now?

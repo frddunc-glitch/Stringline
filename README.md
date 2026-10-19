@@ -3,9 +3,9 @@
 [![CI](https://github.com/frddunc-glitch/Stringline/actions/workflows/ci.yml/badge.svg)](https://github.com/frddunc-glitch/Stringline/actions/workflows/ci.yml)
 [![Licence: GPL v3](https://img.shields.io/badge/licence-GPL--3.0--or--later-blue.svg)](LICENSE)
 
-A live electronic train graph (time–distance) for [SimSig](https://www.simsig.co.uk/). It connects to a running simulation through the SimSig Interface Gateway and lets you re-plan late services around delays and disruptions, in the style of ViziRail's ETG.
+A live electronic train graph (time–distance) for [SimSig](https://www.simsig.co.uk/). It connects to a running simulation through the SimSig Interface Gateway and lets you re-plan late services around delays and disruptions, in the style of an Electronic Train Graph.
 
-**Status:** early development (version 0.x). See `docs/07-implementation-plan.md` for the roadmap and `docs/progress.md` for where things stand.
+**Status:** early development (version 0.1.0).
 
 ## Installing
 
