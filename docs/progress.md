@@ -1350,6 +1350,57 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
   - The Colour box is now a **By delay** toggle.
   - Forecast knock-on and Clear selection are now in **Plan**.
 
+## 2026-10-20 — S26: TRIMS-style grips for drag re-planning (#10)
+
+### Done
+- **Why dragging "did not work as expected"** (found in the code and shown by `GraphGripTests.The_selected_line_is_found_under_its_forecast`):
+  - **The main cause.** Over a running train, its forecast line is drawn on top of its WTT (or plan) line wherever it runs to time. The hit test prefers any non-WTT layer by 2 px, so a press there hit the forecast. `PlanDrag.Begin` refuses forecast lines *with no reason*, so the graph panned and nothing was said. On an on-time train, no part of the run still to go could be dragged.
+  - **The tolerance.** 5 px on a 1 px (WTT) or 2 px (selected WTT) line made the line hard to catch.
+  - **Alt.** An Alt+press that did not start a drag (wrong train, a refused point) left Alt to open the menu bar on release, and the next keys went to the menu.
+  - **Clamps.** The now line, latest report and minimum run stopped a drag with the reason only in the status bar, so the line seemed to stick.
+- **Grips** (`GraphGrips`, Graph, portable). On the selected train's plan line, or its WTT line if not re-planned:
+  - a square at each timing point (drag = `ShiftTrain` from there; no Alt needed);
+  - a bar at each stop's departure end (drag = `SetDwell`; none at the end of the run);
+  - a round handle on the first stretch of the run still to go (drag = `ShiftTrain` from the next point not reached).
+  Movable grips are filled in the line's colour; locked ones are hollow grey, with the reason `PlanDrag` would give (passed, standing at the platform, left, cancelled, finished). The grip under the mouse is larger, and the picked one has a blue ring. Grips are hit first (7 px), then the selected train's own line (6 px), even under its forecast.
+- **`PlanDrag`:**
+  - `Begin(GraphGrip, …)` and `Start(snapshot, train, kind, index, now)`, so grips, nudges and the lock reasons share one set of rules;
+  - `Nudge(seconds)`;
+  - the preview's `Time` and `Label` ("07:15:30 (+3 min) · stopped: now").
+  An arrived point now says "drag its departure instead".
+- **Renderer:** `Render(…, grips)` draws the grips over everything on the plot. While dragging it draws only the dragged grip, where it has got to, with its label; both turn red at a limit.
+- **Shell:**
+  - The cursor changes over a grip or the selected line (↔, ↕ when vertical, ⊘ when locked). The status bar names the action (`MainViewModel.GripHint`, shown over `EditStatus` as `EditStatusText`), and the tooltip says what the grip does or why it is locked.
+  - A click on a grip picks it, and a grip dragged stays picked. The arrow keys along the time axis nudge it by 15 s (Shift: 1 min).
+  - A drag on the line's body gets the time label too, at the press.
+  - Alt+press never opens the menu.
+- **Docs:** `05-…md` §3 (gestures and "Built in S26"), the plan, README.
+- **Tests:**
+  - `GraphGripTests` (22): which grips and where; plan versus WTT line; locks and their reasons; hit testing in both orientations and out of view; the cause above; each grip kind's drag; the clamp label; nudges and their limits; the tooltip; drawing (filled versus hollow, the dragged grip and label, the ring).
+  - `GripEditingTests` (6, App, Waterloo): select → hover hint → grip drag → `ShiftTrain` from the grip's point → undo; a bar → `SetDwell`; click and nudge twice (+15 s, +1 min) → two edits → undo; a cancelled train's grips locked with their reason; a press on the selected line drags its body with a label.
+- Totals: 1 503 (Core 259, Architecture 10, Gateway 207, Timetable 163, Network 140, Planning 231, Persistence 12, Graph 258, Tools 63, App 160). Green on Windows (Debug), and on Linux (`sdk:10.0` container, portable filter, Release: 1 343).
+
+### Decisions
+- **Fred:**
+  - the handle and the whole line drag the body;
+  - a click picks a grip, and each nudge is one edit;
+  - passed points are hollow grey squares.
+- **Grips use the scene's lines.** With the WTT layer off, a train not yet re-planned has no grips, because its editable line is not drawn. Grips are not drawn on a line that is not there.
+- **The forecast and actual lines still pan.** A press on the selected train's own line wins over its forecast. Elsewhere, a forecast that has drifted from the plan is not an edit handle, because moving the plan does not move the forecast one for one.
+- **Nudges use the engine's latest plan** (`PlanningEngine.Current`), not the UI's snapshot, so a quick run of `SetDwell` nudges (absolute times) adds up. Nudges pressed while one is being made are added together into the next edit.
+- **A locked grip neither drags nor pans** when pressed, because the user aimed at it. Its reason goes in the status bar.
+- **No bar at the end of the run.** A WTT may time a departure at a train's last point (it forms its next working), but that bar would only ever be locked.
+
+### Next
+- S27: sim-aware headways (#7). S28's guide can now describe the grips.
+
+### Known issues
+- **Not tried by hand.** 👤 Fred:
+  - on a live sim, select a running train and drag its squares, bars and handle, including near the now line;
+  - nudge with the arrow keys, in both orientations;
+  - hold an arrow key down: each repeat is an edit, so the history fills quickly. Say if a held key should be one edit.
+- Grips on a train that leaves the corridor and comes back are on each visit's line. The handle is on the first stretch in view.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

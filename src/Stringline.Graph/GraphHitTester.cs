@@ -72,6 +72,13 @@ public static class GraphHitTester
     public static GraphHit? HitTest(GraphScene scene, GraphViewport viewport, ScreenPoint point, double tolerance = DefaultTolerance)
     {
         ArgumentNullException.ThrowIfNull(scene);
+        return HitTest(scene.Paths, viewport, point, tolerance);
+    }
+
+    /// <summary>The nearest of <paramref name="paths"/> at a pixel, as <see cref="HitTest(GraphScene, GraphViewport, ScreenPoint, double)"/> finds it.</summary>
+    public static GraphHit? HitTest(IEnumerable<GraphPath> paths, GraphViewport viewport, ScreenPoint point, double tolerance = DefaultTolerance)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(viewport);
         if (!viewport.IsInPlot(point))
         {
@@ -85,7 +92,7 @@ public static class GraphHitTester
 
         GraphHit? best = null;
         var bestScore = double.PositiveInfinity;
-        foreach (var path in scene.Paths)
+        foreach (var path in paths)
         {
             if (path.TimeMax < time - dt || path.TimeMin > time + dt)
             {

@@ -131,10 +131,11 @@ public sealed class SkiaGraphRenderer : IDisposable
     /// They are drawn directly each frame, not cached, so they can change on every mouse move.
     /// </param>
     /// <param name="draft">A block or restriction being drawn with B+drag (S13), outlined over everything.</param>
-    public void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection = null, IReadOnlyList<GraphPath>? ghosts = null, GraphDisruption? draft = null) =>
-        Render(canvas, scene, viewport, selection, CacheTiles, ghosts, draft);
+    /// <param name="grips">The selected train's grips (S26), drawn over everything else on the plot.</param>
+    public void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection = null, IReadOnlyList<GraphPath>? ghosts = null, GraphDisruption? draft = null, GraphGrips? grips = null) =>
+        Render(canvas, scene, viewport, selection, CacheTiles, ghosts, draft, grips);
 
-    internal void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection, bool tiles, IReadOnlyList<GraphPath>? ghosts = null, GraphDisruption? draft = null)
+    internal void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection, bool tiles, IReadOnlyList<GraphPath>? ghosts = null, GraphDisruption? draft = null, GraphGrips? grips = null)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(scene);
@@ -165,6 +166,11 @@ public sealed class SkiaGraphRenderer : IDisposable
         if (draft is not null)
         {
             DrawDisruption(canvas, draft, viewport, plot);
+        }
+
+        if (grips is not null)
+        {
+            DrawGrips(canvas, grips, viewport, plot);
         }
 
         canvas.Restore();
@@ -470,6 +476,79 @@ public sealed class SkiaGraphRenderer : IDisposable
             canvas.DrawCircle((float)marker.X, (float)marker.Y, GraphAnnotations.NoteMarkerRadius, Fill(Theme.NoteFill));
             canvas.DrawCircle((float)marker.X, (float)marker.Y, GraphAnnotations.NoteMarkerRadius, Stroke(Theme.NoteBorder, 1.5f));
         }
+    }
+
+    /// <summary>
+    /// The selected train's grips (S26): filled in the line's colour when they can move, hollow grey when locked, larger
+    /// under the mouse and ringed when picked for the arrow keys. While one is dragged only it is drawn, where it has
+    /// got to, with its new time beside it, in the clamp colour when held at a limit.
+    /// </summary>
+    private void DrawGrips(SKCanvas canvas, GraphGrips grips, GraphViewport viewport, SKRect plot)
+    {
+        if (grips.Drag is { } drag)
+        {
+            var colour = drag.Limited ? Theme.GripClamp : grips.Colour with { A = 0xFF };
+            var at = viewport.ToScreen(drag.At.Time, drag.At.Axis);
+            DrawGrip(canvas, drag.Grip, at, viewport, colour, locked: false, scale: 1.35f);
+            DrawGripLabel(canvas, drag.Label, at, plot, drag.Limited ? Theme.GripClamp : Theme.Border);
+            return;
+        }
+
+        foreach (var grip in grips.InView(viewport))
+        {
+            var at = viewport.ToScreen(grip.At.Time, grip.At.Axis);
+            var hot = grip.SameAs(grips.Hot);
+            DrawGrip(canvas, grip, at, viewport, grip.IsLocked ? Theme.GripLocked : grips.Colour with { A = 0xFF }, grip.IsLocked, hot ? 1.35f : 1);
+            if (grip.SameAs(grips.Selected))
+            {
+                canvas.DrawCircle((float)at.X, (float)at.Y, Theme.GripSize + 2, Stroke(Theme.GripFocus, 2));
+            }
+        }
+    }
+
+    private void DrawGrip(SKCanvas canvas, GraphGrip grip, ScreenPoint at, GraphViewport viewport, Colour colour, bool locked, float scale)
+    {
+        var (x, y) = ((float)at.X, (float)at.Y);
+        var half = Theme.GripSize / 2 * scale;
+        var shape = grip.Kind switch
+        {
+            // A bar across the location line at the end of the stop.
+            GraphGripKind.Dwell => viewport.IsVertical
+                ? new SKRect(x - (half * 1.75f), y - (half * 0.5f), x + (half * 1.75f), y + (half * 0.5f))
+                : new SKRect(x - (half * 0.5f), y - (half * 1.75f), x + (half * 0.5f), y + (half * 1.75f)),
+            _ => new SKRect(x - half, y - half, x + half, y + half),
+        };
+        var fill = Fill(locked ? Theme.Background : colour);
+        var edge = Stroke(locked ? colour : Theme.Background, 1.5f);
+        if (grip.Kind == GraphGripKind.Body)
+        {
+            var r = half + 1;
+            canvas.DrawCircle(x, y, r, fill);
+            canvas.DrawCircle(x, y, r, edge);
+        }
+        else
+        {
+            canvas.DrawRect(shape, fill);
+            canvas.DrawRect(shape, edge);
+        }
+    }
+
+    /// <summary>A grip's time while dragging, in a box above and to the right of it, kept inside the plot.</summary>
+    private void DrawGripLabel(SKCanvas canvas, string text, ScreenPoint at, SKRect plot, Colour border)
+    {
+        var width = _annotationFont.MeasureText(text) + 8;
+        var height = GraphAnnotations.LabelFontSize + 8;
+        var left = Math.Min((float)at.X + 10, plot.Right - width - 2);
+        var top = (float)at.Y - 10 - height;
+        if (top < plot.Top + 2)
+        {
+            top = (float)at.Y + 10;
+        }
+
+        var box = new SKRect(Math.Max(plot.Left + 2, left), top, Math.Max(plot.Left + 2, left) + width, top + height);
+        canvas.DrawRoundRect(box, 2, 2, Fill(Theme.Background with { A = 0xF0 }));
+        canvas.DrawRoundRect(box, 2, 2, Stroke(border, 1));
+        canvas.DrawText(text, box.Left + 4, box.Bottom - 5, SKTextAlign.Left, _annotationFont, Fill(Theme.Text));
     }
 
     private void DrawNow(SKCanvas canvas, GraphScene scene, GraphViewport viewport, SKRect plot)

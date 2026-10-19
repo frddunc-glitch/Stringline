@@ -54,7 +54,10 @@ internal static class MenuText
 internal sealed partial class MainViewModel : IGraphEditor
 {
     private PlanDrag? _drag;
+    private GraphGrip? _dragGrip;
     private long? _ghostUntil;
+    private int _pendingNudge;
+    private bool _nudging;
 
     /// <summary>The selected train's schedule.</summary>
     public TrainDetailViewModel Detail { get; private set; } = null!;
@@ -67,7 +70,20 @@ internal sealed partial class MainViewModel : IGraphEditor
 
     /// <summary>For the status bar: what a drag edit does or why it cannot, and the last edit made.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EditStatusText))]
     public partial string EditStatus { get; private set; } = string.Empty;
+
+    /// <summary>The grips on the selected train (S26), with the one under the mouse, the one picked and the one dragged.</summary>
+    [ObservableProperty]
+    public partial GraphGrips? Grips { get; private set; }
+
+    /// <summary>What the grip or line under the mouse would do (S26); shown in the status bar over <see cref="EditStatus"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EditStatusText))]
+    public partial string? GripHint { get; private set; }
+
+    /// <summary>The status bar's edit text: the hint for what is under the mouse, else the last edit's outcome.</summary>
+    public string EditStatusText => GripHint ?? EditStatus;
 
     public bool IsDragging => _drag is not null;
 
@@ -189,8 +205,7 @@ internal sealed partial class MainViewModel : IGraphEditor
             return false;
         }
 
-        var now = NowSeconds is { } n ? new SimTime((int)Math.Floor(n)) : (SimTime?)null;
-        var drag = PlanDrag.Begin(hit, Snapshot, Navigator.Viewport, at, now, fromVertex, out var refusal);
+        var drag = PlanDrag.Begin(hit, Snapshot, Navigator.Viewport, at, NowTime, fromVertex, out var refusal);
         if (drag is null)
         {
             if (refusal is not null)
@@ -201,13 +216,170 @@ internal sealed partial class MainViewModel : IGraphEditor
             return false;
         }
 
+        // The time label goes where the line was pressed, as if a grip were there.
+        var (time, axis) = Navigator.Viewport.ToWorld(at);
+        var kind = drag.Kind switch
+        {
+            PlanDragKind.Dwell => GraphGripKind.Dwell,
+            PlanDragKind.ShiftFrom => GraphGripKind.Point,
+            _ => GraphGripKind.Body,
+        };
+        var plan = Snapshot.Plan.Get(drag.Train);
+        StartDrag(drag, new GraphGrip(kind, drag.Train, plan.Headcode, drag.Index, drag.Location, Name(drag.Location), new GraphVertex(time, axis)));
+        return true;
+    }
+
+    // ---- Grips (S26, #10) --------------------------------------------------------------------
+
+    public GraphGrip? GripAt(ScreenPoint at) => Grips?.HitTest(Navigator.Viewport, at);
+
+    public GraphHit? SelectedLineAt(ScreenPoint at) => Grips?.LineAt(Navigator.Viewport, at);
+
+    public void HoverGrip(GraphGrip? grip, bool overLine)
+    {
+        if (Grips is not { } grips || _drag is not null)
+        {
+            GripHint = null;
+            return;
+        }
+
+        Grips = grips.WithHot(grip);
+        var headcode = Snapshot.Plan.Find(grips.Train)?.Headcode.ToString() ?? grips.Train.ToString();
+        GripHint = grip is { LockReason: { } reason } ? $"Locked: {reason}"
+            : grip is not null ? $"{grip.Action}. Shift: 1 s steps; Esc cancels."
+            : overLine ? $"Drag to retime the rest of {headcode}'s run. Shift: 1 s steps; Esc cancels."
+            : null;
+    }
+
+    public HoverInfo DescribeGrip(GraphGrip grip) => GraphGrips.Describe(grip, Navigator.Viewport.IsVertical);
+
+    public bool BeginGrip(GraphGrip grip, ScreenPoint at)
+    {
+        ArgumentNullException.ThrowIfNull(grip);
+        if (_drag is not null)
+        {
+            return false;
+        }
+
+        if (ReviewRefusal is { } reviewing)
+        {
+            EditStatus = reviewing;
+            return false;
+        }
+
+        if (PlanDrag.Begin(grip, Snapshot, Navigator.Viewport, at, NowTime, out var refusal) is not { } drag)
+        {
+            EditStatus = refusal ?? "It cannot be moved.";
+            return false;
+        }
+
+        StartDrag(drag, grip);
+        return true;
+    }
+
+    public void SelectGrip(GraphGrip grip)
+    {
+        ArgumentNullException.ThrowIfNull(grip);
+        if (Grips is not { } grips)
+        {
+            return;
+        }
+
+        if (grip.LockReason is { } reason)
+        {
+            Grips = grips.WithSelected(null);
+            EditStatus = $"Locked: {reason}";
+            return;
+        }
+
+        Grips = grips.WithSelected(grip);
+        var keys = Navigator.Viewport.IsVertical ? "↑/↓" : "←/→";
+        EditStatus = $"{grip.Action}, or nudge it with {keys} (15 s; Shift: 1 min).";
+    }
+
+    /// <summary>
+    /// Nudges the picked grip (S26). Each nudge is one edit, made on the engine's latest plan so nudges in quick
+    /// succession add up; those pressed while one is being made go together as the next.
+    /// </summary>
+    public bool Nudge(int seconds)
+    {
+        if (Grips?.Selected is not { IsLocked: false } || _drag is not null)
+        {
+            return false;
+        }
+
+        if (ReviewRefusal is { } reviewing)
+        {
+            EditStatus = reviewing;
+            return true;
+        }
+
+        _pendingNudge += seconds;
+        if (!_nudging)
+        {
+            _ = NudgeAsync();
+        }
+
+        return true;
+    }
+
+    /// <summary>Makes the nudges waiting, one edit at a time; done when none is left.</summary>
+    internal async Task NudgeAsync()
+    {
+        _nudging = true;
+        try
+        {
+            while (_pendingNudge != 0 && Grips?.Selected is { } grip)
+            {
+                var seconds = _pendingNudge;
+                _pendingNudge = 0;
+                var drag = PlanDrag.Start(_engine.Current, grip.Train, grip.DragKind, grip.Index, NowTime, out var refusal);
+                var preview = drag?.Nudge(seconds);
+                if (preview?.Command is not { } command)
+                {
+                    EditStatus = refusal ?? preview?.Status ?? "It cannot be moved.";
+                    _pendingNudge = 0;
+                    break;
+                }
+
+                if ((await ExecuteAsync(command)).Applied)
+                {
+                    EditStatus = $"Done: {preview.Status}";
+                }
+            }
+        }
+        finally
+        {
+            _nudging = false;
+        }
+    }
+
+    private SimTime? NowTime => NowSeconds is { } n ? new SimTime((int)Math.Floor(n)) : null;
+
+    private void StartDrag(PlanDrag drag, GraphGrip grip)
+    {
         _drag = drag;
+        _dragGrip = grip;
+        _pendingNudge = 0;
         ClearSuggestionPreview();
         _ghostUntil = null;
+        GripHint = null;
         EditStatus = drag.Preview.Status;
         Ghosts = null;
+        Grips = Grips?.WithHot(null).WithDrag(new GraphGripDrag(grip, grip.At, drag.Preview.Label, false));
         UpdateEditCommands();
-        return true;
+    }
+
+    /// <summary>The grips for the selected train in the scene now, keeping the grip picked, and the one dragged.</summary>
+    private void UpdateGrips()
+    {
+        var grips = Scene is { } scene ? GraphGrips.For(scene, Snapshot, Selection) : null;
+        if (grips is not null && Grips is { } old && old.Train == grips.Train)
+        {
+            grips = grips.WithSelected(old.Selected is { } picked ? grips.Find(picked) : null).WithDrag(old.Drag);
+        }
+
+        Grips = grips;
     }
 
     public void MoveEdit(ScreenPoint at, bool fine)
@@ -221,6 +393,10 @@ internal sealed partial class MainViewModel : IGraphEditor
         EditStatus = preview.Status;
         Ghosts = preview.Command is null || SelectedCorridor is not { } tab ? null
             : GraphSceneBuilder.PlanPaths(tab.Corridor, preview.Train, Profile?.StyleFor(preview.Train.CategoryId).Colour ?? Network.Profiles.CategoryStyle.Fallback.Colour, "ghost");
+        if (_dragGrip is { } grip)
+        {
+            Grips = Grips?.WithDrag(new GraphGripDrag(grip, grip.At with { Time = grip.At.Time + preview.DeltaSeconds }, preview.Label, preview.Limited));
+        }
     }
 
     /// <summary>The drag ends: make the edit previewed (keeping the ghost until the graph shows it), or drop it.</summary>
@@ -232,7 +408,16 @@ internal sealed partial class MainViewModel : IGraphEditor
         }
 
         _drag = null;
+        var grip = _dragGrip;
+        _dragGrip = null;
+        Grips = Grips?.WithDrag(null);
         UpdateEditCommands();
+        if (commit && drag.Preview.Command is not null && grip is not null && Grips?.Find(grip) is { IsLocked: false } kept && grip.Kind != GraphGripKind.Body)
+        {
+            // The grip dragged stays picked, so the arrow keys can fine-tune it.
+            Grips = Grips.WithSelected(kept);
+        }
+
         if (!commit || drag.Preview.Command is not { } command)
         {
             Ghosts = null;
@@ -567,6 +752,7 @@ internal sealed partial class MainViewModel : IGraphEditor
     {
         Detail.Update(Snapshot, Selection, Profile);
         History.Update(Snapshot.History);
+        UpdateGrips();
         UpdateEditCommands();
     }
 
@@ -589,6 +775,8 @@ internal sealed partial class MainViewModel : IGraphEditor
     public string CancelSelectedText => Detail.Schedule?.Plan is { } p && (p.Cancelled || p.TerminatesAt is not null) ? "Reinstate" : "Cancel train";
 
     /// <summary>A scene has been built from a snapshot with this plan version: drop a ghost kept for an edit it now shows.</summary>
+    partial void OnSceneChanged(GraphScene? value) => UpdateGrips();
+
     private void SceneBuiltFor(long planVersion)
     {
         if (_ghostUntil is { } until && planVersion >= until && _drag is null)

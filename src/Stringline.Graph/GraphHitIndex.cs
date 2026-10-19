@@ -4,7 +4,7 @@ namespace Stringline.Graph;
 
 /// <summary>
 /// A spatial grid over a scene's projected segments for one viewport (<c>05-…md</c> §7), so hovering tests only the
-/// segments near the cursor. It answers exactly as <see cref="GraphHitTester.HitTest"/> does. Build one per scene and
+/// segments near the cursor. It answers exactly as <see cref="GraphHitTester.HitTest(GraphScene, GraphViewport, ScreenPoint, double)"/> does. Build one per scene and
 /// viewport (<see cref="IsFor"/> says when it is stale); it is immutable once built, so any thread may use it.
 /// </summary>
 public sealed class GraphHitIndex
@@ -53,7 +53,7 @@ public sealed class GraphHitIndex
         return index;
     }
 
-    /// <summary>The path under <paramref name="point"/>, as <see cref="GraphHitTester.HitTest"/> would find it.</summary>
+    /// <summary>The path under <paramref name="point"/>, as <see cref="GraphHitTester.HitTest(GraphScene, GraphViewport, ScreenPoint, double)"/> would find it.</summary>
     public GraphHit? HitTest(ScreenPoint point)
     {
         if (!Viewport.IsInPlot(point) || _cells[CellOf(point.X, point.Y)] is not { } candidates)

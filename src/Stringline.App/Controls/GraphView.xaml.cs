@@ -26,6 +26,9 @@ public partial class GraphView : UserControl
     public static readonly DependencyProperty GhostsProperty = DependencyProperty.Register(
         nameof(Ghosts), typeof(IReadOnlyList<GraphPath>), typeof(GraphView), new PropertyMetadata(null, OnVisualChanged));
 
+    public static readonly DependencyProperty GripsProperty = DependencyProperty.Register(
+        nameof(Grips), typeof(GraphGrips), typeof(GraphView), new PropertyMetadata(null, OnVisualChanged));
+
     public static readonly DependencyProperty DraftProperty = DependencyProperty.Register(
         nameof(Draft), typeof(GraphDisruption), typeof(GraphView), new PropertyMetadata(null, OnVisualChanged));
 
@@ -41,6 +44,7 @@ public partial class GraphView : UserControl
     private bool _editing;
     private bool _blocking;
     private bool _altUsed;
+    private GraphGrip? _gripPressed;
     private double? _now;
     private double _nowAt = double.NaN;
     private (string Key, int Vertex)? _tipFor;
@@ -74,6 +78,13 @@ public partial class GraphView : UserControl
     {
         get => (IReadOnlyList<GraphPath>?)GetValue(GhostsProperty);
         set => SetValue(GhostsProperty, value);
+    }
+
+    /// <summary>The selected train's grips (S26), drawn over the graph and hit before anything else.</summary>
+    public GraphGrips? Grips
+    {
+        get => (GraphGrips?)GetValue(GripsProperty);
+        set => SetValue(GripsProperty, value);
     }
 
     /// <summary>A block being drawn with B+drag, outlined over the graph.</summary>
@@ -158,7 +169,7 @@ public partial class GraphView : UserControl
         canvas.Save();
         canvas.Scale(scale);
         var now = _now is { } seconds ? new SimTime((int)Math.Floor(seconds)) : scene.Now;
-        _renderer.Render(canvas, scene with { Now = now }, nav.Viewport, Selection, Ghosts, Draft);
+        _renderer.Render(canvas, scene with { Now = now }, nav.Viewport, Selection, Ghosts, Draft, Grips);
         canvas.Restore();
         _nowAt = now is { } n ? nav.Viewport.TimeToPixel(n.Seconds) : double.NaN;
     }
@@ -173,15 +184,28 @@ public partial class GraphView : UserControl
         var at = new ScreenPoint(p.X, p.Y);
         var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
         _blocking = Keyboard.IsKeyDown(Key.B) && Editor is { } blocks && blocks.BeginBlock(at);
-        _editing = !_blocking && Editor is { } editor && HitTest(p) is { } hit && editor.BeginEdit(hit, at, alt);
-        _altUsed |= _editing && alt;
+
+        // A grip on the selected train is hit first (S26); then the train's own line, even under its forecast.
+        _gripPressed = !_blocking ? Editor?.GripAt(at) : null;
+        if (_gripPressed is { } grip)
+        {
+            _editing = Editor!.BeginGrip(grip, at);
+        }
+        else
+        {
+            _editing = !_blocking && Editor is { } editor && (editor.SelectedLineAt(at) ?? HitTest(p)) is { } hit && editor.BeginEdit(hit, at, alt);
+        }
+
+        // Releasing Alt after an Alt+press on the graph must not open the window's menu, whether or not it edited.
+        _altUsed |= alt;
         if (_blocking)
         {
             HideTip();
             Cursor = Cursors.Cross;
         }
-        else if (_editing)
+        else if (_editing || _gripPressed is not null)
         {
+            // A locked grip neither drags nor pans: its reason is in the status bar.
             HideTip();
         }
         else
@@ -216,7 +240,7 @@ public partial class GraphView : UserControl
             {
                 Editor?.MoveEdit(new ScreenPoint(p.X, p.Y), Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
             }
-            else if (_dragged)
+            else if (_dragged && _gripPressed is null)
             {
                 Navigator?.DragTo(new ScreenPoint(p.X, p.Y));
             }
@@ -224,7 +248,23 @@ public partial class GraphView : UserControl
             return;
         }
 
-        UpdateTip(p);
+        UpdateHover(p);
+    }
+
+    /// <summary>
+    /// The mouse moves with no button down: over a grip or the selected train's line, the cursor shows it can be
+    /// dragged (or not, for a locked grip) and the status bar names the action (S26); then the tooltip.
+    /// </summary>
+    private void UpdateHover(Point p)
+    {
+        var at = new ScreenPoint(p.X, p.Y);
+        var grip = Editor?.GripAt(at);
+        var overLine = grip is null && Editor?.SelectedLineAt(at) is not null;
+        Editor?.HoverGrip(grip, overLine);
+        Cursor = grip is { IsLocked: true } ? Cursors.No
+            : grip is not null || overLine ? (Navigator?.Viewport.IsVertical == true ? Cursors.SizeNS : Cursors.SizeWE)
+            : null;
+        UpdateTip(p, grip);
     }
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
@@ -252,7 +292,14 @@ public partial class GraphView : UserControl
         ReleaseMouseCapture();
         Cursor = null;
         var up = e.GetPosition(Surface);
-        if (wasClick && ConflictClicker?.Invoke(TargetAt(up)) != true)
+        var grip = _gripPressed;
+        _gripPressed = null;
+        if (wasClick && grip is not null)
+        {
+            // A click on a grip picks it for the arrow keys; the train stays selected.
+            Editor?.SelectGrip(grip);
+        }
+        else if (wasClick && ConflictClicker?.Invoke(TargetAt(up)) != true)
         {
             PathClicked?.Invoke(this, HitTest(up));
         }
@@ -260,13 +307,35 @@ public partial class GraphView : UserControl
         e.Handled = true;
     }
 
-    /// <summary>Esc during a drag edit drops it (and does not clear the selection).</summary>
+    /// <summary>
+    /// Esc during a drag edit drops it (and does not clear the selection). The arrow keys along the time axis nudge the
+    /// picked grip by 15 s, or a minute with Shift (S26).
+    /// </summary>
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
         base.OnPreviewKeyDown(e);
         if (e.Key == Key.Escape && (_editing || _blocking))
         {
             CancelEdit();
+            e.Handled = true;
+            return;
+        }
+
+        if (_editing || _blocking || Editor is not { } editor || (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) != 0)
+        {
+            return;
+        }
+
+        var vertical = Navigator?.Viewport.IsVertical == true;
+        var sign = (e.Key, vertical) switch
+        {
+            (Key.Right, false) or (Key.Down, true) => 1,
+            (Key.Left, false) or (Key.Up, true) => -1,
+            _ => 0,
+        };
+        var step = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 60 : PlanDrag.SnapSeconds;
+        if (sign != 0 && editor.Nudge(sign * step))
+        {
             e.Handled = true;
         }
     }
@@ -333,6 +402,7 @@ public partial class GraphView : UserControl
 
         _editing = false;
         _pressedAt = null;
+        _gripPressed = null;
         if (IsMouseCaptured)
         {
             ReleaseMouseCapture();
@@ -364,6 +434,11 @@ public partial class GraphView : UserControl
     {
         base.OnMouseLeave(e);
         HideTip();
+        if (!IsMouseCaptured)
+        {
+            Editor?.HoverGrip(null, overLine: false);
+            Cursor = null;
+        }
     }
 
     /// <summary>The path under a point, from a hit-test grid kept until the scene or the view changes.</summary>
@@ -398,8 +473,25 @@ public partial class GraphView : UserControl
         return GraphHitTester.TargetAt(scene, nav.Viewport, new ScreenPoint(p.X, p.Y), IndexFor(scene, nav));
     }
 
-    private void UpdateTip(Point p)
+    private void UpdateTip(Point p, GraphGrip? grip)
     {
+        if (grip is not null && Editor is { } editor)
+        {
+            // A grip: keyed by what it is and whether it is locked.
+            var tip = editor.DescribeGrip(grip);
+            var key = $"grip:{grip.Kind}:{grip.Index}:{grip.LockReason}";
+            if (_annotationTip != key)
+            {
+                _tipFor = null;
+                _annotationTip = key;
+                TipHeading.Text = tip.Heading;
+                TipLines.ItemsSource = tip.Lines;
+            }
+
+            ShowTipAt(p);
+            return;
+        }
+
         if (TargetAt(p) is not { } target || Describer?.Invoke(target) is not { } info)
         {
             HideTip();
@@ -427,6 +519,11 @@ public partial class GraphView : UserControl
             TipLines.ItemsSource = info.Lines;
         }
 
+        ShowTipAt(p);
+    }
+
+    private void ShowTipAt(Point p)
+    {
         Tip.HorizontalOffset = p.X + 16;
         Tip.VerticalOffset = p.Y + 16;
         Tip.IsOpen = true;

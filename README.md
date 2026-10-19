@@ -33,7 +33,7 @@ Uninstalling leaves your settings, profiles, sessions and logs in place (see [Wh
    - Hover over anything for its details: a train shows its booked, actual and forecast times and whether it is early, on time or late; a red conflict ring or box shows the trains, where, when, the delay needed and the best suggestion; a block or speed restriction shows its section, tracks, times and effect (right-click to edit it).
    - The sim time is at the top right. Tools ▸ Options ▸ Display makes it Large or Huge.
 5. **Re-plan.**
-   - Drag a train's path, or right-click it to hold it, change its platform, cancel it or clone it.
+   - Click a train to select it and show its grips: drag a square to retime from that timing point, a bar to change a dwell, or the round handle (or the line itself) to retime the rest of the run. Click a grip and use the arrow keys to nudge it by 15 s (Shift: 1 min). Grey hollow grips are points the train has passed. Right-click a train to hold it, change its platform, cancel it or clone it.
    - Right-click the graph's background, or B+drag, to add a block, a speed restriction or a note.
    - Everything can be undone (Plan ▸ Undo, Ctrl+Z).
    - The **Conflicts** tab lists the clashes the forecast finds, with suggested fixes. **Regulation** lists the movements at a location in their planned order. **Delays** lists each train's lateness.

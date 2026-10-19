@@ -10,7 +10,7 @@ public enum PlanDragKind
     /// <summary>The body of the line: retime the rest of the run, from the next point the train has not reached (RP-2).</summary>
     Shift,
 
-    /// <summary>Alt+drag from a vertex: retime from that timing point on (RP-2).</summary>
+    /// <summary>A timing point's grip, or Alt+drag from a vertex: retime from that timing point on (RP-2).</summary>
     ShiftFrom,
 
     /// <summary>The right-hand end of a stop: change the departure, so the dwell (RP-3).</summary>
@@ -24,14 +24,25 @@ public enum PlanDragKind
 /// <param name="Status">For the status bar: what the edit does, and why it stopped at a limit.</param>
 /// <param name="Limited">True if the drag was held at a limit (now, the latest report, a minimum run or the arrival).</param>
 /// <param name="Warnings">Clamps the plan would make to keep the rest of the run realistic.</param>
-public sealed record PlanDragPreview(IPlanCommand? Command, TrainPlan Train, int DeltaSeconds, string Status, bool Limited, IReadOnlyList<PlanWarning> Warnings);
+public sealed record PlanDragPreview(IPlanCommand? Command, TrainPlan Train, int DeltaSeconds, string Status, bool Limited, IReadOnlyList<PlanWarning> Warnings)
+{
+    /// <summary>The new time of the point the drag moves: the first point retimed, or the departure (S26).</summary>
+    public SimTime? Time { get; init; }
+
+    /// <summary>
+    /// The short text drawn by the grip while dragging (S26): the new time and the change, and "stopped: …" with the
+    /// limit's short name when held at one, such as "07:05:15 (−2 min 45 s) · stopped: now".
+    /// </summary>
+    public string Label { get; init; } = string.Empty;
+}
 
 /// <summary>
-/// A drag edit of one train on the graph (<c>05-…md</c> §3): its body retimes the rest of the run, Alt+drag from a
-/// vertex retimes from that point, and the right end of a stop changes the dwell. Time snaps to 15 s (1 s fine). A
-/// drag never plans the train before the now line or its latest report (Fred, S12), and a retime earlier stops where the
-/// run into the first point moved would be faster than the minimum. Each move gives a <see cref="PlanDragPreview"/>
-/// made by applying the command to the snapshot's plan off the engine, so the ghost shows exactly what the edit gives.
+/// A drag edit of one train on the graph (<c>05-…md</c> §3): its body retimes the rest of the run, a timing point's grip
+/// (or Alt+drag from a vertex) retimes from that point, and the right end of a stop changes the dwell. Time snaps to
+/// 15 s (1 s fine). A drag never plans the train before the now line or its latest report (Fred, S12), and a retime
+/// earlier stops where the run into the first point moved would be faster than the minimum. Each move gives a
+/// <see cref="PlanDragPreview"/> made by applying the command to the snapshot's plan off the engine, so the ghost shows
+/// exactly what the edit gives. The same rules nudge a grip from the keyboard (<see cref="Nudge"/>, S26).
 /// </summary>
 public sealed class PlanDrag
 {
@@ -46,10 +57,11 @@ public sealed class PlanDrag
     private readonly double _pressTime;
     private readonly int _minDelta;
     private readonly string? _minReason;
+    private readonly string? _minShort;
     private readonly SimTime _original;
     private readonly SimTime? _minDepart;
 
-    private PlanDrag(PlanSnapshot snapshot, TrainPlan plan, PlanDragKind kind, int index, double pressTime, SimTime original, int minDelta, string? minReason, SimTime? minDepart)
+    private PlanDrag(PlanSnapshot snapshot, TrainPlan plan, PlanDragKind kind, int index, double pressTime, SimTime original, int minDelta, (string? Reason, string? Short) limit, SimTime? minDepart)
     {
         _snapshot = snapshot;
         _plan = plan;
@@ -58,9 +70,9 @@ public sealed class PlanDrag
         _pressTime = pressTime;
         _original = original;
         _minDelta = minDelta;
-        _minReason = minReason;
+        (_minReason, _minShort) = limit;
         _minDepart = minDepart;
-        Preview = new PlanDragPreview(null, plan, 0, Idle(), false, []);
+        Preview = new PlanDragPreview(null, plan, 0, Idle(), false, []) { Time = original, Label = original.ToString() };
     }
 
     public PlanDragKind Kind { get; }
@@ -71,6 +83,9 @@ public sealed class PlanDrag
     public int Index { get; }
 
     public Tiploc Location => _plan.Points[Index].Location;
+
+    /// <summary>The time the drag moves from: the first timed point retimed, or the departure.</summary>
+    public SimTime Original => _original;
 
     /// <summary>The latest preview (before any move: no change).</summary>
     public PlanDragPreview Preview { get; private set; }
@@ -89,8 +104,49 @@ public sealed class PlanDrag
         ArgumentNullException.ThrowIfNull(viewport);
         refusal = null;
         var path = hit.Path;
-        if (path.Layer is not (GraphLayer.Wtt or GraphLayer.Plan) || path.Train is not { } id || path.Points is null || snapshot.Plan.Find(id) is not { } plan)
+        if (path.Layer is not (GraphLayer.Wtt or GraphLayer.Plan) || path.Train is not { } id || path.Points is null || snapshot.Plan.Find(id) is null)
         {
+            return null;
+        }
+
+        var vertex = hit.NearestVertex;
+        var (kind, index) = (PlanDragKind.Shift, -1);
+        if (path.IsDwellEnd(vertex) && Distance(viewport.ToScreen(path.Vertices[vertex].Time, path.Vertices[vertex].Axis), at) <= DwellGripPixels)
+        {
+            (kind, index) = (PlanDragKind.Dwell, path.PointAt(vertex)!.Value);
+        }
+        else if (fromVertex && path.PointAt(vertex) is { } vertexIndex)
+        {
+            (kind, index) = (PlanDragKind.ShiftFrom, vertexIndex);
+        }
+
+        return Start(snapshot, id, kind, index, PressTime(viewport, at), now, out refusal);
+    }
+
+    /// <summary>Starts a drag of a grip on the selected train (S26), or returns null with the reason it is locked.</summary>
+    public static PlanDrag? Begin(GraphGrip grip, PlanSnapshot snapshot, GraphViewport viewport, ScreenPoint at, SimTime? now, out string? refusal)
+    {
+        ArgumentNullException.ThrowIfNull(grip);
+        ArgumentNullException.ThrowIfNull(viewport);
+        return Start(snapshot, grip.Train, grip.DragKind, grip.Index, PressTime(viewport, at), now, out refusal);
+    }
+
+    /// <summary>
+    /// Starts an edit of <paramref name="train"/> of a kind at a plan point, away from the mouse: a keyboard nudge, or
+    /// to ask whether a grip can move. Returns null with the reason when it cannot.
+    /// </summary>
+    /// <param name="index">The point retimed from (<see cref="PlanDragKind.ShiftFrom"/>) or whose departure moves
+    /// (<see cref="PlanDragKind.Dwell"/>); ignored for <see cref="PlanDragKind.Shift"/>, which starts at the next point not reached.</param>
+    public static PlanDrag? Start(PlanSnapshot snapshot, TrainId train, PlanDragKind kind, int index, SimTime? now, out string? refusal) =>
+        Start(snapshot, train, kind, index, 0, now, out refusal);
+
+    private static PlanDrag? Start(PlanSnapshot snapshot, TrainId id, PlanDragKind kind, int index, double pressTime, SimTime? now, out string? refusal)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        refusal = null;
+        if (snapshot.Plan.Find(id) is not { } plan)
+        {
+            refusal = $"{id} is not in the plan.";
             return null;
         }
 
@@ -134,7 +190,7 @@ public sealed class PlanDrag
                 }
             }
 
-            if (next < 0)
+            if (next < 0 && kind != PlanDragKind.Dwell)
             {
                 refusal = $"{name} has no more points to retime.";
                 return null;
@@ -142,22 +198,21 @@ public sealed class PlanDrag
         }
 
         var limit = Later(now, latest);
-        var limitReason = limit is null ? null : limit == latest && latest != now
-            ? $"{name} was last reported at {latest}"
-            : $"nothing can be planned before now ({limit})";
-        var pressTime = viewport.PixelToTime(viewport.TimePixelOf(at));
-        var vertex = hit.NearestVertex;
+        (string, string)? limitReason = limit is null ? null : limit == latest && latest != now
+            ? ($"{name} was last reported at {latest}", "last report")
+            : ($"nothing can be planned before now ({limit})", "now");
 
         // The end of a stop: the dwell.
-        if (path.IsDwellEnd(vertex) && Distance(viewport.ToScreen(path.Vertices[vertex].Time, path.Vertices[vertex].Axis), at) <= DwellGripPixels)
+        if (kind == PlanDragKind.Dwell)
         {
-            var index = path.PointAt(vertex)!.Value;
-            var point = index < plan.Points.Count ? plan.Points[index] : null;
+            var point = index >= 0 && index < plan.Points.Count ? plan.Points[index] : null;
             if (point is not { IsCall: true, Arrive: { } arrive, Depart: { } depart } || index >= plan.LastIndex)
             {
                 refusal = point is null || index > plan.LastIndex
                     ? $"{name} no longer runs there."
-                    : $"{name} does not stop at {point.Location} in the plan.";
+                    : index == plan.LastIndex
+                        ? $"{name} ends its run at {point.Location}."
+                        : $"{name} does not stop at {point.Location} in the plan.";
                 return null;
             }
 
@@ -169,27 +224,33 @@ public sealed class PlanDrag
 
             // The departure may not be before the arrival, nor before now.
             var minDepart = arrive;
-            string? reason = $"{name} cannot leave {point.Location} before it arrives ({arrive})";
+            (string, string) reason = ($"{name} cannot leave {point.Location} before it arrives ({arrive})", "arrival");
             if (now is { } n && n > minDepart)
             {
-                (minDepart, reason) = (n, $"nothing can be planned before now ({n})");
+                (minDepart, reason) = (n, ($"nothing can be planned before now ({n})", "now"));
             }
 
             return new PlanDrag(snapshot, plan, PlanDragKind.Dwell, index, pressTime, depart, int.MinValue, reason, minDepart);
         }
 
         var from = next;
-        var kind = PlanDragKind.Shift;
-        if (fromVertex && path.PointAt(vertex) is { } vertexIndex)
+        if (kind == PlanDragKind.ShiftFrom)
         {
-            kind = PlanDragKind.ShiftFrom;
-            if (vertexIndex < next)
+            if (index < 0 || index >= plan.Points.Count)
             {
-                refusal = $"{name} has already passed {plan.Points[vertexIndex].Location}.";
+                refusal = $"{name} has no such point.";
                 return null;
             }
 
-            from = vertexIndex;
+            if (index < next)
+            {
+                refusal = forecast?.At(index) is { Basis: ForecastBasis.Arrived }
+                    ? $"{name} has arrived at {plan.Points[index].Location}; drag its departure instead."
+                    : $"{name} has already passed {plan.Points[index].Location}.";
+                return null;
+            }
+
+            from = index;
         }
 
         if (from > plan.LastIndex)
@@ -216,10 +277,10 @@ public sealed class PlanDrag
 
         var firstTime = plan.Points[first].FirstTime!.Value;
         var minDelta = int.MinValue;
-        string? minReason = null;
+        (string?, string?) minReason = (null, null);
         if (limit is { } l)
         {
-            (minDelta, minReason) = (Math.Min(0, l - firstTime), limitReason);
+            (minDelta, minReason) = (Math.Min(0, l - firstTime), limitReason!.Value);
         }
 
         var before = -1;
@@ -239,8 +300,8 @@ public sealed class PlanDrag
             if (runDelta > minDelta)
             {
                 minDelta = runDelta;
-                minReason = string.Create(CultureInfo.InvariantCulture,
-                    $"{name} needs at least {PlanText.Duration(minRun)} from {plan.Points[before].Location} to {plan.Points[first].Location}");
+                minReason = (string.Create(CultureInfo.InvariantCulture,
+                    $"{name} needs at least {PlanText.Duration(minRun)} from {plan.Points[before].Location} to {plan.Points[first].Location}"), "minimum run");
             }
         }
 
@@ -252,8 +313,17 @@ public sealed class PlanDrag
     public PlanDragPreview Update(GraphViewport viewport, ScreenPoint at, bool fine)
     {
         ArgumentNullException.ThrowIfNull(viewport);
-        var step = fine ? 1 : SnapSeconds;
-        var raw = viewport.PixelToTime(viewport.TimePixelOf(at)) - _pressTime;
+        return Move(PressTime(viewport, at) - _pressTime, fine ? 1 : SnapSeconds);
+    }
+
+    /// <summary>
+    /// Moves the point by <paramref name="seconds"/> from where it started (S26: a nudge from the arrow keys), held at the
+    /// same limits as a drag, which are rounded to the 15 s grid.
+    /// </summary>
+    public PlanDragPreview Nudge(int seconds) => Move(seconds, SnapSeconds);
+
+    private PlanDragPreview Move(double raw, int step)
+    {
         var delta = (int)Math.Round(raw / step, MidpointRounding.AwayFromZero) * step;
         var limited = false;
         IPlanCommand? command;
@@ -313,7 +383,14 @@ public sealed class PlanDrag
             status += $" — stopped: {reason}.";
         }
 
-        Preview = new PlanDragPreview(command, train, delta, status, limited, warnings);
+        var time = _original + delta;
+        var label = delta == 0 ? time.ToString() : $"{time} ({PlanText.WithSign(delta)})";
+        if (limited && _minShort is { } limit)
+        {
+            label += $" · stopped: {limit}";
+        }
+
+        Preview = new PlanDragPreview(command, train, delta, status, limited, warnings) { Time = time, Label = label };
         return Preview;
     }
 
@@ -324,6 +401,8 @@ public sealed class PlanDrag
     private string Idle() => Kind == PlanDragKind.Dwell
         ? $"Drag to change {_plan.Headcode}'s departure from {Location}."
         : $"Drag to retime {_plan.Headcode} from {Location}.";
+
+    private static double PressTime(GraphViewport viewport, ScreenPoint at) => viewport.PixelToTime(viewport.TimePixelOf(at));
 
     /// <summary>The smallest multiple of <paramref name="step"/> at least <paramref name="seconds"/>.</summary>
     private static int CeilingTo(int seconds, int step)

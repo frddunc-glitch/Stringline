@@ -83,6 +83,18 @@ public sealed record GraphTheme
     /// <summary>A conflict's ring and highlight (<c>05-…md</c> §2).</summary>
     public Colour Conflict { get; init; } = new(0xE5, 0x1A, 0x1A);
 
+    /// <summary>The side of a timing point's grip square on the selected train (S26), in pixels.</summary>
+    public float GripSize { get; init; } = 8;
+
+    /// <summary>The border of a locked grip, drawn hollow.</summary>
+    public Colour GripLocked { get; init; } = new(0x8A, 0x8A, 0x8A);
+
+    /// <summary>A grip held at a limit while dragging, and its label's border.</summary>
+    public Colour GripClamp { get; init; } = new(0xC6, 0x28, 0x28);
+
+    /// <summary>The ring round the grip the arrow keys nudge.</summary>
+    public Colour GripFocus { get; init; } = new(0x15, 0x65, 0xC0);
+
     /// <summary>Spacing of a block's hatching, in pixels.</summary>
     public float HatchSpacing { get; init; } = 7;
 

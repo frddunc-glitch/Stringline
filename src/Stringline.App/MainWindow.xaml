@@ -269,7 +269,7 @@
       </StatusBarItem>
       <Separator />
       <StatusBarItem>
-        <TextBlock Text="{Binding EditStatus}" TextTrimming="CharacterEllipsis" ToolTip="{Binding EditStatus}" />
+        <TextBlock Text="{Binding EditStatusText}" TextTrimming="CharacterEllipsis" ToolTip="{Binding EditStatusText}" />
       </StatusBarItem>
       <StatusBarItem HorizontalAlignment="Right">
         <TextBlock Text="{Binding RecordingText}" Foreground="#C62828" />
@@ -383,7 +383,7 @@
                     MouseDoubleClick="OnSplitterDoubleClick" DragCompleted="OnSplitterDragCompleted" />
 
       <Grid Grid.Column="2">
-        <controls:GraphView x:Name="Graph" Scene="{Binding Scene}" Selection="{Binding Selection}" Navigator="{Binding Navigator}" Ghosts="{Binding Ghosts}" Draft="{Binding DraftDisruption}">
+        <controls:GraphView x:Name="Graph" Scene="{Binding Scene}" Selection="{Binding Selection}" Navigator="{Binding Navigator}" Ghosts="{Binding Ghosts}" Grips="{Binding Grips}" Draft="{Binding DraftDisruption}">
           <controls:GraphView.InputBindings>
             <KeyBinding Key="Space" Command="{Binding ToggleFollowCommand}" />
             <KeyBinding Key="Escape" Command="{Binding ClearSelectionCommand}" />

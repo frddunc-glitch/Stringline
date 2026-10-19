@@ -211,6 +211,7 @@ Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fi
   - Arrow keys nudge the selected grip by 15 s (Shift: 1 min). Esc cancels a drag.
   - Alt+drag stays as a shortcut.
 - **Tests:** grip hit testing and the drag preview per grip kind (Graph.Tests, portable); App tests driving select → grip drag → command → undo on Waterloo.
+- *Built in S26:* the cause was the forecast line winning the hit test over an on-time train's own line (see `05-…md` §3). Fred: the handle and the whole line drag the body, a click picks a grip for one edit per nudge, and passed points are hollow grey squares.
 
 ### S27 — Sim-aware headways (#7)
 - **Problem.** Every section gets `Section.StandardHeadwaySeconds` = 180 s unless its profile says otherwise. That is too much for busy metro sims and gives false headway conflicts. SimSig's WTT has no headways: SimSig works by signalling, and its timetable writers book trains to it.
