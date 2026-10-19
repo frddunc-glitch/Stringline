@@ -312,9 +312,7 @@ public partial class GraphView : UserControl
         var menu = new ContextMenu { PlacementTarget = this };
         foreach (var item in items)
         {
-            menu.Items.Add(item.IsSeparator ? new Separator()
-                : item.Command is null ? new MenuItem { Header = item.Header, IsEnabled = false, FontWeight = FontWeights.SemiBold }
-                : new MenuItem { Header = item.Header, Command = item.Command });
+            menu.Items.Add(Views.MenuBuilder.ToWpf(item));
         }
 
         menu.IsOpen = true;

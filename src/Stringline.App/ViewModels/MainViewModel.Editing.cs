@@ -8,12 +8,43 @@ using Stringline.Planning;
 
 namespace Stringline.App.ViewModels;
 
-/// <summary>An item of the graph's right-click menu: a heading (no command), an action, or a separator (no header).</summary>
-internal sealed record PlanMenuItem(string? Header, IRelayCommand? Command = null)
+/// <summary>
+/// An item of a menu built in code (the graph's right-click menu, the Corridor menu): a heading (no command), an
+/// action, or a separator (no header). <paramref name="Gesture"/> is the shortcut shown beside it.
+/// </summary>
+internal sealed record PlanMenuItem(string? Header, IRelayCommand? Command = null, string? Gesture = null, bool IsChecked = false)
 {
     public static PlanMenuItem Separator { get; } = new(Header: null);
 
     public bool IsSeparator => Header is null;
+}
+
+/// <summary>Access keys in menu headers (S25): <c>_</c> marks the key, and <c>__</c> is a plain underscore.</summary>
+internal static class MenuText
+{
+    /// <summary>Text shown as it is in a menu header: its underscores are not taken as access keys.</summary>
+    public static string Escape(string text) => text.Replace("_", "__", StringComparison.Ordinal);
+
+    /// <summary>The header's access key, upper case; null when it has none.</summary>
+    public static char? AccessKey(string header)
+    {
+        for (var i = 0; i < header.Length - 1; i++)
+        {
+            if (header[i] != '_')
+            {
+                continue;
+            }
+
+            if (header[i + 1] != '_')
+            {
+                return char.ToUpperInvariant(header[i + 1]);
+            }
+
+            i++; // an escaped underscore
+        }
+
+        return null;
+    }
 }
 
 /// <summary>
@@ -40,9 +71,9 @@ internal sealed partial class MainViewModel : IGraphEditor
 
     public bool IsDragging => _drag is not null;
 
-    public string UndoHeader => Snapshot.History.UndoDescription is { } d ? $"_Undo {d}" : "_Undo";
+    public string UndoHeader => Snapshot.History.UndoDescription is { } d ? $"_Undo {MenuText.Escape(d)}" : "_Undo";
 
-    public string RedoHeader => Snapshot.History.RedoDescription is { } d ? $"_Redo {d}" : "_Redo";
+    public string RedoHeader => Snapshot.History.RedoDescription is { } d ? $"_Redo {MenuText.Escape(d)}" : "_Redo";
 
     public string UndoTip => Snapshot.History.UndoDescription is { } d ? $"Undo: {d} (Ctrl+Z)" : "Nothing to undo";
 
@@ -312,7 +343,7 @@ internal sealed partial class MainViewModel : IGraphEditor
         {
             var location = point.Location;
             items.Add(PlanMenuItem.Separator);
-            items.Add(new PlanMenuItem($"Regulation _list at {Name(location)}", new RelayCommand(() => ShowRegulation(location))));
+            items.Add(new PlanMenuItem($"Re_gulation list at {MenuText.Escape(Name(location))}", new RelayCommand(() => ShowRegulation(location))));
         }
 
         return items;

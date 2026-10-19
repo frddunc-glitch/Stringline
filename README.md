@@ -27,25 +27,25 @@ Uninstalling leaves your settings, profiles, sessions and logs in place (see [Wh
    - For a **payware sim**, enter your SimSig forum username and password: SimSig checks them online. Tick **Remember the password** to keep it, encrypted for your Windows account. Stringline never writes it to its logs.
    - Tick **Also subscribe to train describer and signalling messages** only if you need them. It is much busier.
 3. **Load the timetable.** Pick the sim's `.wtt` in the Connect dialog, or wait for the sim's name to arrive: the bar above the graph then offers the timetables for that sim from SimSig's Timetables folder (`C:\Users\Public\Documents\SimSig\Timetables`). Stringline remembers the one you used for each sim.
-4. **Read the graph.** Time runs across, and each corridor is a tab. Thin lines are the working timetable, heavy lines the actual running, and dashed lines the forecast. The vertical line is now.
+4. **Read the graph.** Time runs across, and each corridor is a tab (or Corridor menu, Ctrl+1 to Ctrl+9; » lists the tabs that do not fit). Thin lines are the working timetable, heavy lines the actual running, and dashed lines the forecast. The vertical line is now.
    - Mouse wheel zooms in time, Ctrl+wheel zooms along the corridor, and dragging pans. Space follows now.
    - Click a train to select it. The panel on the right shows its timings.
    - Hover over anything for its details: a train shows its booked, actual and forecast times and whether it is early, on time or late; a red conflict ring or box shows the trains, where, when, the delay needed and the best suggestion; a block or speed restriction shows its section, tracks, times and effect (right-click to edit it).
-   - The sim time is at the top right. Settings ▸ Display makes it Large or Huge.
+   - The sim time is at the top right. Tools ▸ Options ▸ Display makes it Large or Huge.
 5. **Re-plan.**
    - Drag a train's path, or right-click it to hold it, change its platform, cancel it or clone it.
    - Right-click the graph's background, or B+drag, to add a block, a speed restriction or a note.
-   - Everything can be undone (Ctrl+Z).
+   - Everything can be undone (Plan ▸ Undo, Ctrl+Z).
    - The **Conflicts** tab lists the clashes the forecast finds, with suggested fixes. **Regulation** lists the movements at a location in their planned order. **Delays** lists each train's lateness.
-6. **Keep and share.** Sessions save themselves as you go, and Stringline offers to resume one left running. Session ▸ Export saves the graph as PNG or PDF (A3 landscape for printing), and the delay table as CSV.
+6. **Keep and share.** Sessions save themselves as you go, and Stringline offers to resume one left running; File ▸ Resume saved session… and Review saved session… open any of them. File ▸ Export saves the graph as PNG or PDF (A3 landscape for printing), and the delay table as CSV.
 
 **No sim running?** Session ▸ Open replay… (Ctrl+O) plays a recording (`.sslog`) as if it were live. Try `tests/fixtures/waterloo-4x.sslog` with `waterloo 2010.WTT` from this repository.
 
-**Profiles.** The first time you load a sim's timetable, Stringline works out its corridors (the line diagrams the graph is drawn along). Profile ▸ Edit profile… lets you rename locations (handy for a long name the graph has to shorten; hover over a label for its full name), reorder or add corridors, set distances, headways and line layouts, and choose category colours.
+**Profiles.** The first time you load a sim's timetable, Stringline works out its corridors (the line diagrams the graph is drawn along). Tools ▸ Edit profile… lets you rename locations (handy for a long name the graph has to shorten; hover over a label for its full name), reorder or add corridors, set distances, headways and line layouts, and choose category colours.
 
-## Settings
+## Options
 
-**View ▸ Settings…** (Ctrl+,) has five tabs:
+**Tools ▸ Options…** (Ctrl+,) has five tabs:
 
 - **Forecast and conflicts:**
   - knock-on delay from other trains;
@@ -58,7 +58,7 @@ Uninstalling leaves your settings, profiles, sessions and logs in place (see [Wh
 - **Logging and housekeeping:** detailed (Debug) logging, how many days of logs to keep, and deleting saved sessions after a number of days (off unless you turn it on; the newest is always kept).
 - **Display:** the size of the sim clock at the top right (Normal, Large or Huge).
 
-Connection details are in the Connect dialog. The graph's colours, layers and orientation are in the View menu. Stringline remembers all of them.
+Connection details are in the Connect dialog. The graph's colours, layers and orientation are in the View menu, and the corridor shown in the Corridor menu. Stringline remembers all of them.
 
 ## Where your files are kept
 
@@ -71,7 +71,7 @@ Connection details are in the Connect dialog. The graph's colours, layers and or
 | Recordings (Session ▸ Record to file) | `Documents\Stringline\recordings` |
 | Exports | `Documents\Stringline\exports` |
 
-The last three can be moved in Settings ▸ Folders.
+The last three can be moved in Tools ▸ Options ▸ Folders.
 
 ## Troubleshooting
 
@@ -81,7 +81,7 @@ The last three can be moved in Settings ▸ Folders.
   - Stringline keeps retrying, so it connects as soon as SimSig is ready.
 - **"SimSig refused the connection".** A payware sim did not accept your forum username or password. Stringline does not retry, so that the forum login is not hammered. Correct the details and connect again.
 - **Something else went wrong.**
-  - Help ▸ Open log folder shows the logs. Turn on detailed logging in Settings ▸ Logging and housekeeping to get more.
+  - Help ▸ Open log folder shows the logs. Turn on detailed logging in Tools ▸ Options ▸ Logging and housekeeping to get more.
   - Help ▸ About Stringline ▸ Copy version copies the version and system details for a bug report.
   - Report problems on the [issue tracker](https://github.com/frddunc-glitch/Stringline/issues).
 

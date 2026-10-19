@@ -41,7 +41,7 @@ internal sealed partial class TimetableLoader(ProfileStore profiles, ILoggerFact
         if (string.IsNullOrWhiteSpace(area))
         {
             return new LoadedTimetable(path, import, StringlineProfile.Create(tt) with { AreaId = UnnamedSim },
-                "The timetable has no sim ID, so its profile is not saved until you name the sim (Profile → Edit profile…).", NeedsSimId: true);
+                "The timetable has no sim ID, so its profile is not saved until you name the sim (Tools ▸ Edit profile…).", NeedsSimId: true);
         }
 
         StringlineProfile profile;

@@ -190,6 +190,7 @@ Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fi
   - **Toolbar and context menus.** Check they match the menus.
 - Write the review's findings into `05-…md` (a short "spec vs build" table) and update the spec where the build is better. Add a "Questions for Fred" entry for any change of naming.
 - **Tests:** an App test that every menu command is bound, and that no access key repeats within a menu.
+- *Built in S25:* the spec's bar, File · Session · View · Corridor · Plan · Tools · Help (Fred). The profile's items went to Tools, Undo and Redo stay in Plan, and the corridor tabs are one row with a » overflow. The review is in `05-…md` §1.
 
 ### S26 — TRIMS-style grips for drag re-planning 🪟 (portable drag model) (#10)
 - **Find out first.** Reproduce why dragging "does not work as expected" (`PlanDrag`, `GraphView.xaml.cs`):

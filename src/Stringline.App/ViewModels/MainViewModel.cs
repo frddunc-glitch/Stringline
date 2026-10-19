@@ -166,14 +166,12 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty]
     public partial bool ForecastKnockOn { get; set; } = true;
 
-    public IReadOnlyList<GraphColourMode> ColourModes { get; } = Enum.GetValues<GraphColourMode>();
-
     /// <summary>Colour actual lines (and the train list) by category or by delay band (GR-7). Remembered.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ColourByDelay))]
     public partial GraphColourMode ColourMode { get; set; }
 
-    /// <summary><see cref="ColourMode"/> as a check box.</summary>
+    /// <summary><see cref="ColourMode"/> as a check box (View ▸ Colour by delay, and the toolbar's By delay).</summary>
     public bool ColourByDelay
     {
         get => ColourMode == GraphColourMode.Delay;
@@ -568,6 +566,32 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     [RelayCommand]
     private void ShowFullCorridor() => Navigator.ShowFullCorridor();
+
+    /// <summary>Show a corridor by its number in tab order (Ctrl+1 to Ctrl+9); a number past the last does nothing.</summary>
+    [RelayCommand]
+    private void SelectCorridor(string? number)
+    {
+        if (int.TryParse(number, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n >= 1 && n <= Corridors.Count)
+        {
+            SelectedCorridor = Corridors[n - 1];
+        }
+    }
+
+    /// <summary>
+    /// The Corridor menu's list (S25): every corridor in tab order, the one shown ticked, the first nine numbered as
+    /// their access keys with Ctrl+1 to Ctrl+9 beside them. <paramref name="only"/> limits it to those tabs (the
+    /// toolbar's » list of tabs that do not fit).
+    /// </summary>
+    public IReadOnlyList<PlanMenuItem> CorridorMenuItems(IReadOnlyCollection<CorridorTab>? only = null) =>
+    [
+        .. Corridors.Select((tab, i) => (Tab: tab, Number: i + 1))
+            .Where(c => only is null || only.Contains(c.Tab))
+            .Select(c => new PlanMenuItem(
+                c.Number <= 9 ? $"_{c.Number} {MenuText.Escape(c.Tab.Name)}" : MenuText.Escape(c.Tab.Name),
+                new RelayCommand(() => SelectedCorridor = c.Tab),
+                c.Number <= 9 ? $"Ctrl+{c.Number}" : null,
+                c.Tab == SelectedCorridor)),
+    ];
 
     [RelayCommand]
     private void ClearSelection() => SetSelection(null, null);

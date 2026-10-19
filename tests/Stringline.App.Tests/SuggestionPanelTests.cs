@@ -167,7 +167,7 @@ public sealed class SuggestionPanelTests
             return (hit, vm.Snapshot.Plan.Get(path.Train!.Value).Points[path.PointAt(0)!.Value].Location);
         });
 
-        var item = await app.Ui.Run(() => vm.MenuFor(hit).Single(i => i.Header?.StartsWith("Regulation _list at ", StringComparison.Ordinal) == true));
+        var item = await app.Ui.Run(() => vm.MenuFor(hit).Single(i => i.Header?.StartsWith("Re_gulation list at ", StringComparison.Ordinal) == true));
         await app.Ui.Run(() => item.Command!.Execute(null));
 
         (await app.Ui.Run(() => (vm.SideTab, vm.Regulation.Location?.Tiploc))).Should().Be((MainViewModel.RegulationTab, (Tiploc?)location));

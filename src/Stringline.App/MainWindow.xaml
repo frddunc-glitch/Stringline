@@ -4,6 +4,7 @@
         xmlns:controls="clr-namespace:Stringline.App.Controls"
         xmlns:views="clr-namespace:Stringline.App.Views"
         xmlns:services="clr-namespace:Stringline.App.Services"
+        xmlns:local="clr-namespace:Stringline.App"
         Title="{Binding Title}" Icon="pack://application:,,,/Stringline;component/Assets/stringline.ico" Height="860" Width="1600" MinWidth="1050" MinHeight="520"
         UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
   <Window.Resources>
@@ -13,8 +14,17 @@
     <views:InfoSeverityBrushConverter x:Key="InfoBrush" />
     <views:DelayWordsConverter x:Key="DelayWords" />
     <Style TargetType="Button" x:Key="ToolButton">
-      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="Padding" Value="6,2" />
       <Setter Property="Margin" Value="2,0" />
+    </Style>
+    <!-- The toolbar's toggles and layer boxes, kept tight so two or three corridor tabs fit at 1280 px (S25) -->
+    <Style TargetType="ToggleButton" x:Key="ToolToggle">
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="Margin" Value="4,0,2,0" />
+    </Style>
+    <Style TargetType="CheckBox" x:Key="LayerBox">
+      <Setter Property="Margin" Value="3,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <!-- The side panels' lists (#2): one star-sized text column each, numbers sized to their content and right-aligned. -->
     <Style TargetType="DataGrid" x:Key="PanelGrid">
@@ -47,6 +57,10 @@
       <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
     </Style>
   </Window.Resources>
+  <Window.CommandBindings>
+    <CommandBinding Command="ApplicationCommands.Close" Executed="OnExit" />
+    <CommandBinding Command="{x:Static local:MainWindow.AboutCommand}" Executed="OnAbout" />
+  </Window.CommandBindings>
   <Window.InputBindings>
     <KeyBinding Key="F5" Command="{Binding ConnectCommand}" />
     <KeyBinding Key="O" Modifiers="Ctrl" Command="{Binding OpenReplayCommand}" />
@@ -57,51 +71,58 @@
     <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCommand}" />
     <KeyBinding Key="Z" Modifiers="Ctrl+Shift" Command="{Binding RedoCommand}" />
     <KeyBinding Key="OemComma" Modifiers="Ctrl" Command="{Binding ShowSettingsCommand}" />
+    <KeyBinding Key="D1" Modifiers="Ctrl" Command="{Binding SelectCorridorCommand}" CommandParameter="1" />
+    <KeyBinding Key="D2" Modifiers="Ctrl" Command="{Binding SelectCorridorCommand}" CommandParameter="2" />
+    <KeyBinding Key="D3" Modifiers="Ctrl" Command="{Binding SelectCorridorCommand}" CommandParameter="3" />
+    <KeyBinding Key="D4" Modifiers="Ctrl" Command="{Binding SelectCorridorCommand}" CommandParameter="4" />
+    <KeyBinding Key="D5" Modifiers="Ctrl" Command="{Binding SelectCorridorCommand}" CommandParameter="5" />
+    <KeyBinding Key="D6" Modifiers="Ctrl" Command="{Binding SelectCorridorCommand}" CommandParameter="6" />
+    <KeyBinding Key="D7" Modifiers="Ctrl" Command="{Binding SelectCorridorCommand}" CommandParameter="7" />
+    <KeyBinding Key="D8" Modifiers="Ctrl" Command="{Binding SelectCorridorCommand}" CommandParameter="8" />
+    <KeyBinding Key="D9" Modifiers="Ctrl" Command="{Binding SelectCorridorCommand}" CommandParameter="9" />
   </Window.InputBindings>
 
   <DockPanel>
     <DockPanel DockPanel.Dock="Top" Background="{Binding Background, ElementName=MainMenu}">
-      <!-- The sim clock (#13) at the menu row's right, where there is room at any width; its size from Settings ▸ Display -->
+      <!-- The sim clock (#13) at the menu row's right, where there is room at any width; its size from Tools ▸ Options ▸ Display -->
       <Border x:Name="SimClock" DockPanel.Dock="Right" Padding="10,0,8,0"
-              VerticalAlignment="Center" ToolTip="Sim time and speed. Settings ▸ Display sets the size.">
+              VerticalAlignment="Center" ToolTip="Sim time and speed. Tools ▸ Options ▸ Display sets the size.">
         <StackPanel Orientation="Horizontal">
           <TextBlock Text="{Binding SimClockText}" FontFamily="Consolas" FontWeight="Bold" FontSize="{Binding ClockFontSize}" VerticalAlignment="Center" />
           <TextBlock Text="{Binding SpeedText}" Foreground="#616161" Margin="8,0,0,0" VerticalAlignment="Center"
                      FontSize="{Binding SpeedFontSize}" />
         </StackPanel>
       </Border>
+      <!-- The menus (S25, #8; 05-…md §1 and its "spec vs build" table): File for things on disk, Session for the link to
+           the sim, View for display switches only, Corridor for the corridor shown, Plan (the edit menu) for the working
+           plan, Tools for options and the profile. Access keys are unique within each menu (MenuTests). -->
       <Menu x:Name="MainMenu">
-        <MenuItem Header="_Session">
-          <MenuItem Header="_Connect to SimSig…" InputGestureText="F5" Command="{Binding ConnectCommand}" />
-          <MenuItem Header="Open _replay…" InputGestureText="Ctrl+O" Command="{Binding OpenReplayCommand}" />
-          <MenuItem Header="_Disconnect" Command="{Binding DisconnectCommand}" />
+        <MenuItem Header="_File">
+          <MenuItem Header="_Load timetable…" InputGestureText="Ctrl+T" Command="{Binding LoadTimetableCommand}" />
+          <MenuItem Header="Timetable import _warnings" Command="{Binding ShowWarningsCommand}" />
           <Separator />
-          <MenuItem Header="Re_sume saved session…" Command="{Binding ResumeSessionCommand}" />
+          <MenuItem Header="_Resume saved session…" Command="{Binding ResumeSessionCommand}" />
           <MenuItem Header="Re_view saved session…" Command="{Binding ReviewSessionCommand}" />
           <Separator />
+          <MenuItem Header="_Export">
+            <MenuItem Header="Graph as _PNG…" InputGestureText="Ctrl+E" Command="{Binding ExportPngCommand}" CommandParameter="1" />
+            <MenuItem Header="Graph as PNG at _2× size…" Command="{Binding ExportPngCommand}" CommandParameter="2" />
+            <MenuItem Header="Graph as PDF (_A3 landscape)…" InputGestureText="Ctrl+P" Command="{Binding ExportPdfCommand}" CommandParameter="a3" />
+            <MenuItem Header="Graph as PDF (A_4 landscape)…" Command="{Binding ExportPdfCommand}" CommandParameter="a4" />
+            <MenuItem Header="Graph as PDF (_view size)…" Command="{Binding ExportPdfCommand}" CommandParameter="view" />
+            <Separator />
+            <MenuItem Header="_Delay table as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="points" />
+            <MenuItem Header="_Train delays as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="trains" />
+          </MenuItem>
+          <Separator />
+          <MenuItem Header="E_xit" InputGestureText="Alt+F4" Command="ApplicationCommands.Close" />
+        </MenuItem>
+        <MenuItem Header="_Session">
+          <MenuItem Header="_Connect to SimSig…" InputGestureText="F5" Command="{Binding ConnectCommand}" />
+          <MenuItem Header="Open re_play…" InputGestureText="Ctrl+O" Command="{Binding OpenReplayCommand}" />
+          <MenuItem Header="_Disconnect" Command="{Binding DisconnectCommand}" />
+          <Separator />
           <MenuItem Header="_Record to file" IsCheckable="False" IsChecked="{Binding IsRecording, Mode=OneWay}" Command="{Binding ToggleRecordingCommand}" />
-          <Separator />
-          <MenuItem Header="_Export graph as PNG…" InputGestureText="Ctrl+E" Command="{Binding ExportPngCommand}" CommandParameter="1" />
-          <MenuItem Header="Export graph as PNG at _2× size…" Command="{Binding ExportPngCommand}" CommandParameter="2" />
-          <MenuItem Header="Export graph as _PDF (A3 landscape)…" InputGestureText="Ctrl+P" Command="{Binding ExportPdfCommand}" CommandParameter="a3" />
-          <MenuItem Header="Export graph as PDF (A_4 landscape)…" Command="{Binding ExportPdfCommand}" CommandParameter="a4" />
-          <MenuItem Header="Export graph as PDF (_view size)…" Command="{Binding ExportPdfCommand}" CommandParameter="view" />
-          <Separator />
-          <MenuItem Header="Export _delay table as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="points" />
-          <MenuItem Header="Export _train delays as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="trains" />
-          <Separator />
-          <MenuItem Header="E_xit" Click="OnExit" />
-        </MenuItem>
-        <MenuItem Header="_Timetable">
-          <MenuItem Header="_Load timetable…" InputGestureText="Ctrl+T" Command="{Binding LoadTimetableCommand}" />
-          <MenuItem Header="Show import _warnings" Command="{Binding ShowWarningsCommand}" />
-        </MenuItem>
-        <MenuItem Header="P_rofile">
-          <MenuItem Header="_Edit profile…" Command="{Binding EditProfileCommand}" />
-          <MenuItem Header="_Open profile file" Command="{Binding OpenProfileFileCommand}" />
-          <MenuItem Header="_Reload profile" Command="{Binding ReloadProfileCommand}" />
-          <Separator />
-          <MenuItem Header="Re_generate corridors…" Command="{Binding RegenerateCorridorsCommand}" />
         </MenuItem>
         <MenuItem Header="_View">
           <MenuItem Header="_Follow now" InputGestureText="Space" Command="{Binding FollowCommand}" />
@@ -109,19 +130,15 @@
           <MenuItem Header="_1 hour" Command="{Binding ZoomCommand}" CommandParameter="1" />
           <MenuItem Header="_3 hours" Command="{Binding ZoomCommand}" CommandParameter="3" />
           <MenuItem Header="_6 hours" Command="{Binding ZoomCommand}" CommandParameter="6" />
-          <MenuItem Header="_Whole corridor" Command="{Binding ShowFullCorridorCommand}" />
           <Separator />
           <MenuItem Header="Show _WTT" IsCheckable="True" IsChecked="{Binding ShowWtt}" />
           <MenuItem Header="Show _actual" IsCheckable="True" IsChecked="{Binding ShowActual}" />
-          <MenuItem Header="Show _forecast" IsCheckable="True" IsChecked="{Binding ShowForecast}" />
+          <MenuItem Header="Show f_orecast" IsCheckable="True" IsChecked="{Binding ShowForecast}" />
           <MenuItem Header="Show _disruptions and notes" IsCheckable="True" IsChecked="{Binding ShowDisruptions}" />
           <MenuItem Header="Show co_nflicts" IsCheckable="True" IsChecked="{Binding ShowConflicts}" />
-          <MenuItem Header="Forecast _knock-on from other trains" IsCheckable="True" IsChecked="{Binding ForecastKnockOn}"
-                    ToolTip="Hold trains in the forecast for headways and single lines, so a late train delays the ones behind it" />
-          <MenuItem Header="Colour by _delay" IsCheckable="True" IsChecked="{Binding ColourByDelay}" />
-          <MenuItem Header="_Vertical (time down)" IsCheckable="True" IsChecked="{Binding IsVertical}" />
           <Separator />
-          <MenuItem Header="_Clear selection" Command="{Binding ClearSelectionCommand}" />
+          <MenuItem Header="Colour by de_lay" IsCheckable="True" IsChecked="{Binding ColourByDelay}" />
+          <MenuItem Header="_Vertical (time down)" IsCheckable="True" IsChecked="{Binding IsVertical}" />
           <Separator />
           <MenuItem Header="_Panels">
             <MenuItem Header="_Train list" IsCheckable="True" IsChecked="{Binding Layout.ShowTrainList}" />
@@ -131,8 +148,12 @@
           </MenuItem>
           <MenuItem Header="R_eset layout" Command="{Binding Layout.ResetLayoutCommand}"
                     ToolTip="Show every panel again at its first size" />
-          <Separator />
-          <MenuItem Header="_Settings…" InputGestureText="Ctrl+," Command="{Binding ShowSettingsCommand}" />
+        </MenuItem>
+        <!-- Every corridor (filled in by MainWindow from CorridorMenuItems), then the whole corridor's zoom -->
+        <MenuItem x:Name="CorridorMenu" Header="_Corridor">
+          <Separator x:Name="CorridorListEnd" />
+          <MenuItem Header="_Whole corridor" Command="{Binding ShowFullCorridorCommand}"
+                    ToolTip="Show the whole length of the corridor" />
         </MenuItem>
         <MenuItem Header="_Plan">
           <MenuItem Header="{Binding UndoHeader}" InputGestureText="Ctrl+Z" Command="{Binding UndoCommand}" />
@@ -142,12 +163,24 @@
           <MenuItem Header="_Cancel or reinstate selected train" Command="{Binding CancelSelectedCommand}" />
           <MenuItem Header="Cl_one selected train as ad-hoc…" Command="{Binding CloneSelectedCommand}" />
           <MenuItem Header="_Link selected live train to WTT train…" Command="{Binding LinkSelectedCommand}" />
+          <MenuItem Header="Clear _selection" InputGestureText="Esc" Command="{Binding ClearSelectionCommand}" />
+          <Separator />
+          <MenuItem Header="Forecast _knock-on from other trains" IsCheckable="True" IsChecked="{Binding ForecastKnockOn}"
+                    ToolTip="Hold trains in the forecast for headways and single lines, so a late train delays the ones behind it" />
+        </MenuItem>
+        <MenuItem Header="_Tools">
+          <MenuItem Header="_Options…" InputGestureText="Ctrl+," Command="{Binding ShowSettingsCommand}" />
+          <Separator />
+          <MenuItem Header="_Edit profile…" Command="{Binding EditProfileCommand}" />
+          <MenuItem Header="Open profile _file" Command="{Binding OpenProfileFileCommand}" />
+          <MenuItem Header="_Reload profile" Command="{Binding ReloadProfileCommand}" />
+          <MenuItem Header="Re_generate corridors…" Command="{Binding RegenerateCorridorsCommand}" />
         </MenuItem>
         <MenuItem Header="_Help">
           <MenuItem Header="_Getting started (online)" Command="{Binding OpenHelpCommand}" />
           <MenuItem Header="Open _log folder" Command="{Binding OpenLogFolderCommand}" />
           <Separator />
-          <MenuItem Header="_About Stringline" Click="OnAbout" />
+          <MenuItem Header="_About Stringline" Command="{x:Static local:MainWindow.AboutCommand}" />
         </MenuItem>
       </Menu>
     </DockPanel>
@@ -158,48 +191,52 @@
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
           <Button Style="{StaticResource ToolButton}" Content="Connect…" Command="{Binding ConnectCommand}" ToolTip="Connect to the SimSig Interface Gateway (F5)" />
           <Button Style="{StaticResource ToolButton}" Content="Replay…" Command="{Binding OpenReplayCommand}" ToolTip="Replay a recording (Ctrl+O)" />
-          <Button Style="{StaticResource ToolButton}" Content="Disconnect" Command="{Binding DisconnectCommand}" />
-          <ToggleButton Margin="6,0,2,0" Padding="8,2" IsChecked="{Binding IsRecording, Mode=OneWay}" Command="{Binding ToggleRecordingCommand}"
+          <Button Style="{StaticResource ToolButton}" Content="Disconnect" Command="{Binding DisconnectCommand}" ToolTip="End the live connection or replay" />
+          <ToggleButton Style="{StaticResource ToolToggle}" IsChecked="{Binding IsRecording, Mode=OneWay}" Command="{Binding ToggleRecordingCommand}"
                         ToolTip="Record the live connection to a .sslog file">
             <StackPanel Orientation="Horizontal">
               <Ellipse Width="9" Height="9" Fill="#C62828" Margin="0,0,5,0" VerticalAlignment="Center" />
               <TextBlock Text="Rec" />
             </StackPanel>
           </ToggleButton>
-          <Separator Margin="6,0" />
+          <Separator Margin="4,0" />
           <Button Style="{StaticResource ToolButton}" Content="Timetable…" Command="{Binding LoadTimetableCommand}" ToolTip="Load the sim's timetable (Ctrl+T)" />
         </StackPanel>
         <StackPanel x:Name="ToolbarRight" Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-          <CheckBox Content="WTT" IsChecked="{Binding ShowWtt}" Margin="6,0" VerticalAlignment="Center" />
-          <CheckBox Content="Actual" IsChecked="{Binding ShowActual}" Margin="6,0" VerticalAlignment="Center" />
-          <CheckBox Content="Forecast" IsChecked="{Binding ShowForecast}" Margin="6,0" VerticalAlignment="Center"
+          <CheckBox Style="{StaticResource LayerBox}" Content="WTT" IsChecked="{Binding ShowWtt}" ToolTip="The working timetable as booked (View ▸ Show WTT)" />
+          <CheckBox Style="{StaticResource LayerBox}" Content="Actual" IsChecked="{Binding ShowActual}" ToolTip="Where the trains have run (View ▸ Show actual)" />
+          <CheckBox Style="{StaticResource LayerBox}" Content="Forecast" IsChecked="{Binding ShowForecast}"
                     ToolTip="Dashed lines: where each running train is expected to go" />
-          <CheckBox Content="Disruptions" IsChecked="{Binding ShowDisruptions}" Margin="6,0" VerticalAlignment="Center"
+          <CheckBox Style="{StaticResource LayerBox}" Content="Disruptions" IsChecked="{Binding ShowDisruptions}"
                     ToolTip="Blocks, speed restrictions and notes. Right-click the graph to add one, or hold B and drag to draw a block." />
-          <CheckBox Content="Conflicts" IsChecked="{Binding ShowConflicts}" Margin="6,0" VerticalAlignment="Center"
+          <CheckBox Style="{StaticResource LayerBox}" Content="Conflicts" IsChecked="{Binding ShowConflicts}"
                     ToolTip="Red rings where a train must give way: headways, single lines, platforms, blocks and run times. Click one, or pick it in the Conflicts list, to focus it." />
-          <TextBlock Text="Colour:" Margin="8,0,4,0" VerticalAlignment="Center" />
-          <ComboBox Width="84" ItemsSource="{Binding ColourModes}" SelectedItem="{Binding ColourMode}" VerticalAlignment="Center"
-                    ToolTip="Colour actual lines by train category, or by delay band (green on time or early, amber 1–5 min late, orange 6–15, red over 15)" />
-          <ToggleButton Margin="6,0,2,0" Padding="8,2" Content="⇅ Vertical" IsChecked="{Binding IsVertical}" ToolTip="Time down the graph, the corridor across" />
-          <Separator Margin="6,0" />
-          <Button Style="{StaticResource ToolButton}" Content="1h" Command="{Binding ZoomCommand}" CommandParameter="1" />
-          <Button Style="{StaticResource ToolButton}" Content="3h" Command="{Binding ZoomCommand}" CommandParameter="3" />
-          <Button Style="{StaticResource ToolButton}" Content="6h" Command="{Binding ZoomCommand}" CommandParameter="6" />
-          <ToggleButton Margin="6,0,2,0" Padding="8,2" Content="Follow" IsChecked="{Binding IsFollowing, Mode=OneWay}" Command="{Binding ToggleFollowCommand}"
+          <ToggleButton Style="{StaticResource ToolToggle}" Content="By delay" IsChecked="{Binding ColourByDelay}"
+                        ToolTip="Colour actual lines by delay band (green on time or early, amber 1–5 min late, orange 6–15, red over 15), not by train category (View ▸ Colour by delay)" />
+          <ToggleButton Style="{StaticResource ToolToggle}" Content="⇅ Vertical" IsChecked="{Binding IsVertical}" ToolTip="Time down the graph, the corridor across (View ▸ Vertical)" />
+          <Separator Margin="4,0" />
+          <Button Style="{StaticResource ToolButton}" Content="1h" Command="{Binding ZoomCommand}" CommandParameter="1" ToolTip="Show 1 hour across" />
+          <Button Style="{StaticResource ToolButton}" Content="3h" Command="{Binding ZoomCommand}" CommandParameter="3" ToolTip="Show 3 hours across" />
+          <Button Style="{StaticResource ToolButton}" Content="6h" Command="{Binding ZoomCommand}" CommandParameter="6" ToolTip="Show 6 hours across" />
+          <ToggleButton Style="{StaticResource ToolToggle}" Content="Follow" IsChecked="{Binding IsFollowing, Mode=OneWay}" Command="{Binding ToggleFollowCommand}"
                         ToolTip="Keep the now line in view (Space)" />
         </StackPanel>
-        <ListBox ItemsSource="{Binding Corridors}" SelectedItem="{Binding SelectedCorridor}" DisplayMemberPath="Name"
-                 BorderThickness="0" Background="Transparent" Margin="12,0" VerticalAlignment="Center"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" ToolTip="Corridors">
+        <!-- Corridor tabs on one row (S25, Fred): those that do not fit are under », and all are in the Corridor menu -->
+        <Button x:Name="MoreCorridors" DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="»" Visibility="Collapsed"
+                Click="OnMoreCorridors" ToolTip="Corridors that do not fit here (all are in the Corridor menu, Ctrl+1 to Ctrl+9)" />
+        <ListBox x:Name="CorridorTabs" ItemsSource="{Binding Corridors}" SelectedItem="{Binding SelectedCorridor}" DisplayMemberPath="Name"
+                 BorderThickness="0" Background="Transparent" Margin="6,0,2,0" VerticalAlignment="Center"
+                 ScrollViewer.HorizontalScrollBarVisibility="Hidden" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                 ScrollViewer.CanContentScroll="False" ScrollViewer.ScrollChanged="OnCorridorTabsScrolled"
+                 SelectionChanged="OnCorridorTabChanged" ToolTip="Corridors (Ctrl+1 to Ctrl+9)">
           <ListBox.ItemsPanel>
             <ItemsPanelTemplate>
-              <WrapPanel Orientation="Horizontal" />
+              <StackPanel Orientation="Horizontal" />
             </ItemsPanelTemplate>
           </ListBox.ItemsPanel>
           <ListBox.ItemContainerStyle>
             <Style TargetType="ListBoxItem">
-              <Setter Property="Padding" Value="10,3" />
+              <Setter Property="Padding" Value="8,3" />
               <Setter Property="Margin" Value="1,0" />
             </Style>
           </ListBox.ItemContainerStyle>

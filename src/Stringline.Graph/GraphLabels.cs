@@ -139,7 +139,7 @@ public static class GraphLabels
             lines.Add(new HoverLine("Platforms", location.Platforms.ToString(CultureInfo.InvariantCulture)));
         }
 
-        lines.Add(new HoverLine("Tip", "Profile ▸ Edit profile can give it a shorter name"));
+        lines.Add(new HoverLine("Tip", "Tools ▸ Edit profile can give it a shorter name"));
         return new HoverInfo(location.Name, lines);
     }
 }

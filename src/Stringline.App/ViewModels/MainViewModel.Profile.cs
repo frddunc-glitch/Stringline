@@ -61,7 +61,7 @@ internal sealed partial class MainViewModel
         }
         else
         {
-            ShowInfo(InfoSeverity.Info, $"Opened {path}. After saving changes there, use Profile → Reload profile.");
+            ShowInfo(InfoSeverity.Info, $"Opened {path}. After saving changes there, use Tools ▸ Reload profile.");
         }
     }
 
@@ -153,7 +153,7 @@ internal sealed partial class MainViewModel
             $"Regenerated {regenerated.Corridors.Count} corridors{(keep ? $", keeping {tuned.Count} of yours" : string.Empty)}." + (saved?.Error is { } error ? $" {error}" : string.Empty));
     }
 
-    private const string NotSavedYet = "This timetable has no sim ID, so its profile is not saved yet: name the sim in Profile → Edit profile… first.";
+    private const string NotSavedYet = "This timetable has no sim ID, so its profile is not saved yet: name the sim in Tools ▸ Edit profile… first.";
 
     /// <summary>The editor's Apply: name the sim if it needs it, save, then use the profile.</summary>
     private ProfileApplyResult ApplyEditedProfile(StringlineProfile draft)

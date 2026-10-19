@@ -91,7 +91,7 @@ internal sealed partial class MainViewModel
             var time = new SimTime((int)Math.Round(view.PixelToTime(view.TimePixelOf(at)) / SimTime.SecondsPerMinute) * SimTime.SecondsPerMinute);
             items.Add(new PlanMenuItem("Add _note here…", new AsyncRelayCommand(() => AddNoteAsync(location.Tiploc, time))));
             var tiploc = location.Tiploc;
-            items.Add(new PlanMenuItem($"Regulation _list at {Name(tiploc)}", new RelayCommand(() => ShowRegulation(tiploc))));
+            items.Add(new PlanMenuItem($"Re_gulation list at {MenuText.Escape(Name(tiploc))}", new RelayCommand(() => ShowRegulation(tiploc))));
         }
 
         return items;

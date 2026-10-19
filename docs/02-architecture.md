@@ -148,7 +148,7 @@ public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); s
 
 ## 5. Persistence
 - **Settings** `%APPDATA%\Stringline\settings.json` (`AppSettings`): connection (password only DPAPI-encrypted), view options, timetables by sim, and from S18 the settings window's values: `planning` (forecast, conflict and suggestion numbers), the sessions, recordings and exports folders (`AppPaths.WithFolders`), logging and session housekeeping.
-- **Profile** `%APPDATA%\Stringline\profiles\{area_id}.json` — corridors, location names, distances, categories, priorities. Edited in the app's profile editor (S14a, `ProfileEdits`) or by hand, then Profile → Reload.
+- **Profile** `%APPDATA%\Stringline\profiles\{area_id}.json` — corridors, location names, distances, categories, priorities. Edited in the app's profile editor (S14a, `ProfileEdits`) or by hand, then Tools ▸ Reload profile.
 - **Session** `Documents\Stringline\sessions\{area_id}-{yyyyMMdd-HHmm}.stringline` (SQLite, WAL, format 1; S16):
   - `meta` (key/value): `format`, `kind` (live/replay), `area_id`, `sim_name`, `timetable_path`, `timetable_name`, `host`, `port`, `recording_path`, `position` (replay), `last_sim`, `created`, `updated`, `ended` (0 while running, so it is offered for resuming), `app`.
   - `frames` (seq, at in Unix ms, sim, topic, body): a live session's gateway frames, only those whose events the engine keeps (clock, train location and delay, TD, timetable summary). Replay sessions refer to their `.sslog` instead.

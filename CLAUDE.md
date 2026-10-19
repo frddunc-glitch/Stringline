@@ -39,7 +39,7 @@ C# / .NET 10 LTS. WPF + CommunityToolkit.Mvvm for the shell; SkiaSharp for the g
 - Graph benchmarks (GR-9 budget: 500 trains / 6 h < 33 ms a frame): `dotnet run -c Release --project benchmarks/Stringline.Benchmarks -- --quick` (seconds) or `-- --filter "*" --job short` (BenchmarkDotNet).
 - Publish (Windows): `./build/publish.ps1 [-Version 0.2.0] [-Installer]` → `artifacts/Stringline-<v>-win-x64.zip` (single-file exe) and, with Inno Setup 6, `Stringline-<v>-setup.exe`. Pushing a `v*` tag, or publishing a release on GitHub, runs the Release workflow, which attaches the zip and installer to that release (a draft is made if none exists). To fill in an existing release: Actions ▸ Release ▸ Run workflow with its tag.
 - Redraw the app icon after changing `AppIcon`: `dotnet run --project src/Stringline.Tools -- icon src/Stringline.App/Assets/stringline.ico [--png dir]`.
-- Run the app (Windows): `dotnet run --project src/Stringline.App -- [--wtt t.wtt] [--replay x.sslog --speed 8|max --start 07:30] [--resume|--review s.stringline]`. App logs go to `%LOCALAPPDATA%\Stringline\logs` (Debug with Settings ▸ Logging); sessions autosave to `Documents\Stringline\sessions`.
+- Run the app (Windows): `dotnet run --project src/Stringline.App -- [--wtt t.wtt] [--replay x.sslog --speed 8|max --start 07:30] [--resume|--review s.stringline]`. App logs go to `%LOCALAPPDATA%\Stringline\logs` (Debug with Tools ▸ Options ▸ Logging); sessions autosave to `Documents\Stringline\sessions`.
 
 ## End of every session
 Build and tests green → update `docs/progress.md` (done, decisions, next, known issues, questions for Fred) → update any design doc you changed → commit.

@@ -1286,6 +1286,70 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
   - try Settings ▸ Display ▸ Huge from across the room.
 - The corridor tabs still squeeze into two rows at 1280 px (as before; S25 reviews the toolbar).
 
+## 2026-10-20 — S25: Menus against the UI spec (#8)
+
+### Done
+- **Review.** The shell was checked against `05-…md` §1, §8 and §12 and Windows conventions. The findings, and the menus as now built, are in a new `05-…md` §1 "Menus, toolbar and shortcuts", with a "spec vs build" table. Before S25:
+  - the menu bar was Session · Timetable · Profile · View · Plan · Help, where the spec has File · Session · View · Corridor · Plan · Tools · Help;
+  - Settings was in View (#8);
+  - there was no Corridor menu;
+  - seven export items sat in Session;
+  - access keys repeated in Session (R, V, D), View (W, F, D) and the train's right-click menu (L: Link and Regulation list);
+  - the corridor tabs wrapped onto two rows at 1280 px. Measured, the row had 79 px, and neither of Waterloo's tabs (101 and 112 px) fitted whole.
+- **Menu bar (Fred: the spec's).**
+  - **File:** timetable, saved sessions, Export ▸ (PNG, PDF and CSV) and Exit.
+  - **Session:** Connect, Open replay, Disconnect and Record.
+  - **View:** display switches only.
+  - **Corridor:** every corridor, ticked when shown, with Ctrl+1–9; and Whole corridor.
+  - **Plan:** the edit menu (Fred). Undo and Redo, the train edits, Clear selection (Esc) and Forecast knock-on.
+  - **Tools:** Options… (Ctrl+,) and the profile's items (Fred).
+  - **Help:** unchanged.
+  - Exit is `ApplicationCommands.Close` and About is a routed command, so every item has a command. The Settings window is now titled **Options**. Every "Settings ▸", "Profile →" and "Session ▸" path in the messages, tooltips, the label hover, README, `CLAUDE.md`, `02-…md`, `05-…md` and `06-…md` now names the new place.
+- **Access keys.** `MenuText.AccessKey` and `Escape`:
+  - corridor names, locations and the edit named in Undo and Redo are escaped, so an underscore in them is shown rather than taken as a key;
+  - the right-click menus' "Regulation list" became Re**g**ulation (key G);
+  - `PlanMenuItem` gained a shortcut and a tick, and `Views.MenuBuilder` turns it into a WPF item for the graph's menu, the Corridor menu and ».
+- **Toolbar (Fred: one row + overflow).**
+  - The tabs are a single row. A » button lists the tabs that do not fit (`MainWindow.HiddenCorridorTabs`), and picking one scrolls its tab into view.
+  - To give the tabs room, the Colour box became a **By delay** toggle (the same switch as View ▸ Colour by delay), and the padding is tighter. Both Waterloo tabs now fit at 1280 px.
+  - Every toolbar control has a tooltip that names its menu item or shortcut.
+- **Tests:** `MenuTests` (11):
+  - the bar's order;
+  - every item bound to a command (or a bound tick);
+  - no access key repeated in any menu, including the graph's train and background menus over a Waterloo replay;
+  - every shortcut shown is a key binding for the same command: Space and Esc on the graph, Ctrl+n picking that corridor, and no binding repeated;
+  - the Corridor menu and Ctrl+2;
+  - the tabs on one row at 1280 px, the » list when squeezed, scrolling a picked tab into view, and all of them under » at the least width;
+  - `MenuText` units.
+  Two existing tests follow the new Re_gulation header.
+- Totals: 1 475 (Core 259, Architecture 10, Gateway 207, Timetable 163, Network 140, Planning 231, Persistence 12, Graph 236, Tools 63, App 154). Green on Windows (Debug), and on Linux (`sdk:10.0` container, portable filter, Release: 1 321).
+
+### Decisions
+- **The spec's menu bar, Undo and Redo in Plan, and one row of tabs with overflow (Fred).**
+- **Open replay is under Session, not File.** It starts a session, as Connect does. File holds what reads or writes files without starting one.
+- **Forecast knock-on moved from View to Plan.** It changes the forecast and the conflicts, not only what is drawn, and View is for display switches only.
+- **Clear selection moved to Plan**, beside the commands that act on the selected train.
+- **Whole corridor moved to the Corridor menu.**
+- **The Colour box became a toggle.** It had only two choices, and the room was needed for the tabs.
+- **No recent-file ▾ menus on Connect and Replay** (spec §1). The dialogs already remember the last host and file. This is noted in the spec table.
+
+### Next
+- S26: TRIMS-style grips for drag re-planning (#10).
+
+### Known issues
+- **Not tried by hand.** 👤 Fred:
+  - walk the menus with Alt and the access keys;
+  - try Ctrl+1/Ctrl+2;
+  - narrow the window until » appears, and pick a tab from it.
+- **A possible flaky test.** `MenuTests.Every_shortcut_shown_is_bound_…` failed once, in the first full run after the build, and its message was not captured. It then passed in 10 full runs, one of them after a clean rebuild. If it fails again, the message will say which item.
+
+### Questions for Fred
+- 18. **Naming changes from S25.** Do these read well? Each is easy to change back.
+  - "Settings" is now **Options** (Tools ▸ Options…, and the window's title).
+  - "Show import warnings" is now **File ▸ Timetable import warnings**.
+  - The Colour box is now a **By delay** toggle.
+  - Forecast knock-on and Clear selection are now in **Plan**.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
