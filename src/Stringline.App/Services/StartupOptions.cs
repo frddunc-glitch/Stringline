@@ -5,9 +5,9 @@ namespace Stringline.App.Services;
 
 /// <summary>
 /// Command-line options, for development and shortcuts:
-/// <c>Stringline.exe [--wtt t.wtt] [--replay x.sslog [--speed 8|max] [--start 07:30]]</c>.
+/// <c>Stringline.exe [--wtt t.wtt] [--replay x.sslog [--speed 8|max] [--start 07:30]] [--resume s.stringline | --review s.stringline]</c>.
 /// </summary>
-internal sealed record StartupOptions(string? Timetable, string? Replay, double Speed, SimTime? Start)
+internal sealed record StartupOptions(string? Timetable, string? Replay, double Speed, SimTime? Start, string? Resume = null, string? Review = null)
 {
     public static StartupOptions None { get; } = new(null, null, 8, null);
 
@@ -33,6 +33,12 @@ internal sealed record StartupOptions(string? Timetable, string? Replay, double 
                 case "--replay":
                     options = options with { Replay = value };
                     break;
+                case "--resume":
+                    options = options with { Resume = value };
+                    break;
+                case "--review":
+                    options = options with { Review = value };
+                    break;
                 case "--speed" when value.Equals("max", StringComparison.OrdinalIgnoreCase):
                     options = options with { Speed = double.PositiveInfinity };
                     break;
@@ -43,7 +49,7 @@ internal sealed record StartupOptions(string? Timetable, string? Replay, double 
                     options = options with { Start = start };
                     break;
                 default:
-                    return (None, $"Unknown option or bad value: {name} {value}. Usage: Stringline [--wtt t.wtt] [--replay x.sslog [--speed 8|max] [--start 07:30]]");
+                    return (None, $"Unknown option or bad value: {name} {value}. Usage: Stringline [--wtt t.wtt] [--replay x.sslog [--speed 8|max] [--start 07:30]] [--resume s.stringline | --review s.stringline]");
             }
         }
 

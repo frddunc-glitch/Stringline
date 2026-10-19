@@ -92,6 +92,13 @@ public sealed partial class PlanningEngine
     /// <summary>Raised on the engine loop after each snapshot is published. Handlers must be quick and must not throw.</summary>
     public event EventHandler<PlanSnapshot>? SnapshotPublished;
 
+    /// <summary>
+    /// Raised on the engine loop, in order, for every applied command, undo and redo, and when the history is dropped
+    /// (<see cref="Clear"/> or a different timetable), so the session store can keep them (S16). Not raised for
+    /// <see cref="RestorePlan"/>. Handlers must be quick.
+    /// </summary>
+    public event EventHandler<PlanStep>? PlanStepped;
+
     /// <summary>The latest snapshot; safe to read from any thread.</summary>
     public PlanSnapshot Current => Volatile.Read(ref _current);
 
@@ -132,6 +139,19 @@ public sealed partial class PlanningEngine
 
     /// <summary>Redo the last undone plan command. The task's result is false if there was nothing to redo.</summary>
     public Task<bool> Redo() => QueueStep(InputKind.Redo);
+
+    /// <summary>
+    /// Replace the edit history with the one these steps leave (<see cref="PlanLog.Fold"/>) over the current timetable,
+    /// and the plan with it: to resume a saved session, or to show a reviewed one as it was. Commands that no longer
+    /// apply are dropped. <see cref="PlanStepped"/> is not raised. The task completes on the engine loop once done.
+    /// </summary>
+    public Task RestorePlan(IReadOnlyList<PlanStep> steps)
+    {
+        ArgumentNullException.ThrowIfNull(steps);
+        var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _queue.Writer.TryWrite(new Input(InputKind.Restore, Steps: steps, Step: done));
+        return done.Task;
+    }
 
     /// <summary>Read every event from a source into the queue until it ends or <paramref name="cancellationToken"/> is cancelled.</summary>
     public async Task PumpAsync(ISimEventSource source, CancellationToken cancellationToken)
@@ -209,6 +229,12 @@ public sealed partial class PlanningEngine
                     _history.Clear();
                     ResetPlan();
                     _state = CreateState(_timetable);
+                    RaiseStep(new PlanStep(PlanStepKind.Reset));
+                    forced = true;
+                    break;
+                case InputKind.Restore:
+                    Restore(input.Steps!);
+                    input.Step!.TrySetResult(true);
                     forced = true;
                     break;
                 case InputKind.Execute:
@@ -273,6 +299,7 @@ public sealed partial class PlanningEngine
                 _undone.Clear();
                 SetPlan(plan, before);
                 LogCommandApplied(description, outcome.Warnings.Count);
+                RaiseStep(PlanStep.Execute(command, description));
             }
             else
             {
@@ -308,6 +335,7 @@ public sealed partial class PlanningEngine
         _done.RemoveAt(_done.Count - 1);
         _undone.Add(entry);
         SetPlan(Replay(), _plan);
+        RaiseStep(new PlanStep(PlanStepKind.Undo, Description: entry.Description));
         return true;
     }
 
@@ -332,6 +360,7 @@ public sealed partial class PlanningEngine
 
         _done.Add(entry with { Warnings = result.Warnings });
         SetPlan(plan, before);
+        RaiseStep(new PlanStep(PlanStepKind.Redo, Description: entry.Description));
         return true;
     }
 
@@ -383,6 +412,7 @@ public sealed partial class PlanningEngine
         if (!same)
         {
             _done.Clear();
+            RaiseStep(new PlanStep(PlanStepKind.Reset));
         }
 
         _undone.Clear();
@@ -390,6 +420,86 @@ public sealed partial class PlanningEngine
         _planHistory = null;
         _planVersion++;
         Rebuild();
+    }
+
+    private void Restore(IReadOnlyList<PlanStep> steps)
+    {
+        var before = _plan;
+        var (done, undone) = PlanLog.Fold(steps);
+        _done.Clear();
+        _undone.Clear();
+        var plan = _basePlan;
+        foreach (var step in done)
+        {
+            var command = step.Command!;
+            string description;
+            try
+            {
+                description = step.Description ?? command.Describe(plan);
+                (plan, var result) = plan.Apply(command);
+                if (!result.Applied)
+                {
+                    LogCommandDropped(description, result.Error);
+                    continue;
+                }
+
+                _done.Add(new PlanHistoryEntry(command, description, result.Warnings));
+            }
+#pragma warning disable CA1031 // A command saved by an older version that now throws is dropped, not fatal.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                LogCommandFailed(ex, command.GetType().Name);
+            }
+        }
+
+        // Next redo last, as the engine keeps them.
+        for (var i = undone.Count - 1; i >= 0; i--)
+        {
+            var command = undone[i].Command!;
+            _undone.Add(new PlanHistoryEntry(command, undone[i].Description ?? Describe(command, plan), []));
+        }
+
+        SetPlan(plan, before);
+        LogRestored(_done.Count, _undone.Count, steps.Count);
+    }
+
+    private static string Describe(IPlanCommand command, WorkingPlan plan)
+    {
+        try
+        {
+            return command.Describe(plan);
+        }
+#pragma warning disable CA1031 // Only for display.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            return command.GetType().Name;
+        }
+    }
+
+    private void RaiseStep(PlanStep step)
+    {
+        if (PlanStepped is not { } handlers)
+        {
+            return;
+        }
+
+        var clock = _state.Clock.Reading;
+        step = step with { SimTime = clock.HasTime ? clock.LastReported : null, At = _time.GetUtcNow() };
+        foreach (var handler in handlers.GetInvocationList().Cast<EventHandler<PlanStep>>())
+        {
+            try
+            {
+                handler(this, step);
+            }
+#pragma warning disable CA1031 // A faulty handler must not stop the engine or the other handlers.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                LogHandlerFailed(ex);
+            }
+        }
     }
 
     private void Rebuild()
@@ -546,6 +656,7 @@ public sealed partial class PlanningEngine
         Undo,
         Redo,
         Forecast,
+        Restore,
     }
 
     private readonly record struct Input(
@@ -556,7 +667,8 @@ public sealed partial class PlanningEngine
         TaskCompletionSource<PlanCommandResult>? Result = null,
         TaskCompletionSource<bool>? Step = null,
         ForecastNetwork? Network = null,
-        ForecastOptions? ForecastOptions = null);
+        ForecastOptions? ForecastOptions = null,
+        IReadOnlyList<PlanStep>? Steps = null);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not apply a {Event}; skipped")]
     private partial void LogApplyFailed(Exception ex, string @event);
@@ -578,6 +690,9 @@ public sealed partial class PlanningEngine
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Plan command no longer applies and was dropped from the history: {Description}: {Error}")]
     private partial void LogCommandDropped(string description, string? error);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Plan restored: {Done} edits, {Undone} to redo, from {Steps} steps")]
+    private partial void LogRestored(int done, int undone, int steps);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "The forecast failed; no forecast is shown")]
     private partial void LogForecastFailed(Exception ex);

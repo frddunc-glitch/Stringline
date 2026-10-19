@@ -897,6 +897,86 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - **Live refresh.** While the sim runs, suggestions are worked out again at most every 2 s, so a row can be up to 2 s out of date. Applying one checks the plan has not changed, not the live state.
 - **Not-yet-seen trains look very late in the regulation list.** Trains booked before now but not yet seen are forecast from now (as in S11), so the list shows them late at the top.
 
+## 2026-10-19 — S16: Session persistence and review
+
+### Done
+- **Portable parts (tested on Linux):**
+  - Planning:
+    - **`PlanStep`** (Execute, Undo, Redo, Reset; command, description, sim time, wall time). **`PlanningEngine.PlanStepped`** reports every applied command, undo and redo in order, and a Reset when the history is dropped (`Clear` or a different timetable).
+    - **`PlanningEngine.RestorePlan(steps)`** replaces the history and plan with what the steps leave, over the current timetable, dropping commands that no longer apply. It does not report steps.
+    - **`PlanLog`**: `Fold` (the done and redo lists the steps leave, from the last reset) and `By` (the steps made by a sim time, for review).
+  - Persistence (first code; now references Gateway too):
+    - **`SessionWriter`**: thread-safe autosave (every 2 s, on `Flush` and on close) of the live frames the engine keeps, the plan steps and `SessionInfo`. The file is made lazily, on the first such frame or a replay's first edit, and named from the sim ID known then. `End` marks the session ended. A failed save is logged once and retried with nothing lost.
+    - **`SavedSession`** (`Load`, `Events`, `ToRecording`, `Edits`, `Problems`), **`SessionCatalogue`** (`List`, `LatestUnfinished`, `ReadInfo`) and `SessionFormatException`. The schema is in `02-…md` §5.
+- **App:**
+  - Every live session and replay autosaves to `Documents\Stringline\sessions`. Disconnect, or starting another session, ends it; closing the app leaves it running.
+  - **At start-up** the info bar offers to Resume or Review the last session if it was left running. The Session menu has **Resume saved session…** and **Review saved session…**, and the command line has `--resume` and `--review`.
+  - **Resume:**
+    - A live session is rebuilt from its frames and steps; the clock stands at its last report. Connect then asks whether to carry on (same state and file) or start a new session.
+    - A replay session reopens its recording, paused where it had got to, with its plan.
+    - A timetable or recording that has moved is asked for.
+  - **Review:** the session replays from its start, paused. The plan is restored to the steps made by the replay clock as it moves (and seeking back takes edits away again). Edits, drags, B+drag, undo and redo are refused, the title ends "(review)", and nothing is written. See `05-…md` §10.
+  - Restarting a finished replay (seeking after the end) now **keeps the plan**. Before, it cleared it.
+  - With no session (disconnected, or resumed and not yet connected), the now line stands at the last reported time instead of drifting to the end of the minute.
+- **Tests:**
+  - Planning +8 (213): steps reported in order with sim times, nothing reported for refused or empty steps, restore with a redo list, restore dropping commands that no longer apply, partial restores for review, and `Fold`/`By`.
+  - New `Stringline.Persistence.Tests` (11):
+    - lazy file creation;
+    - frames, steps and meta read back as saved;
+    - end and append;
+    - reset handling;
+    - replay sessions;
+    - autosave on a `FakeTimeProvider` timer;
+    - a failed save retried;
+    - unreadable steps skipped;
+    - non-session and newer files refused;
+    - the catalogue.
+    - A Waterloo 4× fixture saved half way with edits and an undo, then resumed into a fresh engine: the same trains, matches, session start, actuals, history and redo list.
+  - App +6 (104), on Waterloo:
+    - a replay session offered after a restart and resumed paused with its edit, then ended by Disconnect;
+    - restarting a finished replay keeps the plan;
+    - review refusing edits and applying the edit when the replay reaches it, writing nothing;
+    - a live session (`FakeStompServer`) rebuilt after a restart and carried on in the same file;
+    - a new session started instead;
+    - the start-up options.
+  - Totals: 1 350 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 140, Planning 213, Persistence 11, Graph 199, Tools 57, App 104).
+    - Green on Windows (Debug); the App session tests passed 4 runs in a row.
+    - Green on Linux (`sdk:10.0` container, portable filter, Release: 1 246). SQLite's native library loads there.
+- **Tried in the app** (driven through UI Automation and screenshotted). A replay session file was made by a script, with one edit (Cancel 2A94 at 06:10) and the position 06:20.
+  - Starting the app with no arguments showed the offer with Resume and Review.
+  - Resume reopened the Waterloo replay paused at 06:20 with "1 edit".
+  - `--review` showed "(review)" in the title. Pressing Play ran the replay to its end and the edit appeared in History, with Undo and Redo greyed out.
+  - Nothing was logged above Information. The script's session files were deleted from `Documents\Stringline\sessions` afterwards.
+
+### Decisions
+- **Fred's choices:**
+  - **Live and replay sessions are both saved.** A replay refers to its `.sslog` rather than copying it.
+  - **Resume is offered at start-up** when the last session was left running, and also from the Session menu.
+  - **Review shows the plan as it was at each moment.**
+  - **Review is read-only.**
+- **Raw frames, not events, are stored**, filtered to those the engine keeps. Resuming parses them again with `MessageParser`, so parser fixes reach old sessions, and review replays them through the same `ReplaySource` as a recording.
+- **The plan is stored as its step log** (execute/undo/redo/reset), not as the final command list. So the redo list survives a restart, and review can rebuild the plan at any sim time. Commands are pure over the plan, so their order relative to events does not matter.
+- **Disruptions, notes and links are not separate tables:** they are plan commands (S13).
+- **"Ended" means Disconnect or another session started.** Closing the app leaves the session running, so it is offered next time.
+- **Review applies the steps made by the replay clock** (with steps made before any clock first). A step's sim time is the clock's last report when it was made. After a replay was sought backwards, the steps' sim times are not in order, and review applies them by time, not in the order they were made.
+- **A session file is not made until there is something to resume**, so a refused login or a replay watched without edits leaves no file.
+- **Autosave failures never throw.** Saving runs on a timer thread, so any failure is logged and retried.
+
+### Next
+- S17: reporting and exports. A saved session's frames and steps are a ready source for a post-run delay table (`SavedSession.Events`).
+- A session browser (a list of saved sessions with their sim, time and edits) could replace the file picker; `SessionCatalogue.List` is ready for it.
+- S18: `PlanCommandJson` uses reflection-based System.Text.Json. A trimmed or AOT publish would need a source-generated context. Untrimmed single-file publish is unaffected.
+
+### Known issues
+- **Not tried live.** 👤 Fred, against a running sim:
+  - edit, close the app, reopen it, and Resume; then Connect → Carry on and check the trains carry on;
+  - Review a finished session and judge whether the plan changing as the replay runs is useful;
+  - check the size of a long live session file (one per sim minute of clock, plus every train report).
+- **A sim restarted from a save gives new sim UIDs.** Resuming and carrying on then sees the trains as new, and the old ones stay with their last reports.
+- **Sessions are never deleted.** They pile up in `Documents\Stringline\sessions`; delete old ones by hand for now.
+- Review starts at speed Max if that was the last replay speed. Pick a slower speed before pressing Play to watch the plan change.
+- A session whose timetable was changed mid-session resumes on the last timetable only. Its edits before the change are dropped (Reset).
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

@@ -114,6 +114,12 @@ internal sealed partial class MainViewModel
             return false;
         }
 
+        if (ReviewRefusal is { } refusal)
+        {
+            EditStatus = refusal;
+            return false;
+        }
+
         var view = Navigator.Viewport;
         _blockFrom = (view.PixelToTime(view.TimePixelOf(at)), view.PixelToAxis(view.AxisPixelOf(at)));
         MoveBlock(at);

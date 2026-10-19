@@ -12,6 +12,7 @@ using Stringline.Gateway.Replay;
 using Stringline.Graph;
 using Stringline.Network;
 using Stringline.Network.Profiles;
+using Stringline.Persistence;
 using Stringline.Planning;
 using Stringline.Timetable;
 
@@ -89,6 +90,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _logger = loggerFactory.CreateLogger<MainViewModel>();
         InitEditing();
         InitConflicts();
+        InitSessions();
         _settings = settingsStore.Load();
         InitSuggestions();
         Snapshot = engine.Current;
@@ -283,7 +285,8 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public double? Tick()
     {
         var clock = Snapshot.Clock;
-        double? now = clock.HasTime ? _frozenNow ?? clock.SecondsAt(_time.GetUtcNow()) : _timetable?.Timetable.Header.StartTime.Seconds;
+        // With no session (disconnected, or resumed and not yet connected) the sim clock stands at its last report.
+        double? now = clock.HasTime ? _frozenNow ?? (_session is null ? clock.LastReported.Seconds : clock.SecondsAt(_time.GetUtcNow())) : _timetable?.Timetable.Header.StartTime.Seconds;
         NowSeconds = now;
         if (now is { } seconds)
         {
@@ -294,6 +297,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         SpeedText = _frozenNow is not null ? "paused" : StatusText.Speed(clock);
         IsFollowing = Navigator.IsFollowing;
         Transport?.Tick();
+        TickStore();
         if (IsRecording)
         {
             UpdateRecording();
@@ -331,6 +335,19 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     [RelayCommand]
     private async Task ConnectAsync()
     {
+        // A resumed live session carries on with this connection, or a new one starts (S16).
+        var carryOn = false;
+        if (IsResumedIdle && Store is { Kind: SavedSessionKind.Live })
+        {
+            var choice = _dialogs.Choose("Connect to SimSig", "Carry on with the resumed session, or start a new one?", ["Carry on", "Start a new session", "Cancel"]);
+            if (choice is null or 2)
+            {
+                return;
+            }
+
+            carryOn = choice == 0;
+        }
+
         var dialog = new ConnectViewModel(_dialogs)
         {
             Host = _settings.Host,
@@ -353,13 +370,27 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             dialog.RememberPassword);
         _settingsStore.Save(_settings);
 
-        await StopSessionAsync();
+        if (carryOn)
+        {
+            await StopSessionAsync();
+        }
+        else
+        {
+            await LeaveSessionAsync();
+        }
+
         if (dialog.TimetablePath.Length > 0 && !string.Equals(dialog.TimetablePath, _timetable?.Path, StringComparison.OrdinalIgnoreCase))
         {
             await LoadTimetableAsync(dialog.TimetablePath);
         }
 
-        StartSession(SimSession.StartLive(options, _engine, _recorder, _loggerFactory));
+        if (!carryOn)
+        {
+            StartStore(new SessionInfo { Kind = SavedSessionKind.Live, Host = options.Host, Port = options.Port });
+        }
+
+        IsResumedIdle = false;
+        StartSession(SimSession.StartLive(options, _engine, _recorder, _loggerFactory, Store, fresh: !carryOn));
         LogConnecting(options);
     }
 
@@ -385,7 +416,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         _settings = _settings with { LastReplayPath = recordingPath, ReplaySpeed = double.IsPositiveInfinity(speed) ? 0 : speed };
         _settingsStore.Save(_settings);
-        await StopSessionAsync();
+        await LeaveSessionAsync();
 
         ShowInfo(InfoSeverity.Info, $"Loading {Path.GetFileName(recordingPath)}…");
         SslogRecording recording;
@@ -408,13 +439,16 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _recording = recording;
         _recordingName = Path.GetFileName(recordingPath);
         _replayOptions = new ReplayOptions { Speed = speed, StartAt = startAt };
+        StartStore(new SessionInfo { Kind = SavedSessionKind.Replay, RecordingPath = Path.GetFullPath(recordingPath) });
         StartReplay();
     }
 
     [RelayCommand(CanExecute = nameof(HasSession))]
     private async Task DisconnectAsync()
     {
+        LeaveReview();
         await StopSessionAsync();
+        CloseStore(ended: true);
         UpdateConnection();
     }
 
@@ -588,6 +622,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _timetable = loaded;
         HasTimetable = true;
         _engine.SetTimetable(loaded.Timetable);
+        Store?.SetTimetable(loaded.Path, loaded.Timetable.Header.Name, loaded.Timetable.AreaId, loaded.Profile.Name);
         _engine.SetForecast(await Task.Run(() => ForecastNetwork.For(loaded.Profile, loaded.Timetable)));
         var area = loaded.Timetable.AreaId;
         if (area.Length > 0)
@@ -623,17 +658,19 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         _engine.SnapshotPublished -= OnSnapshotPublished;
         await StopSessionAsync();
+        CloseStore(ended: false); // left running: offered for resuming at the next start
         _recorder.Stop();
     }
 
-    private void StartReplay()
+    /// <param name="fresh">False to keep the plan (restarting the same replay from another time).</param>
+    private void StartReplay(bool fresh = true)
     {
         if (_recording is null || _replayOptions is null)
         {
             return;
         }
 
-        var session = SimSession.StartReplay(_recording, _recordingName ?? "recording", _replayOptions, _engine, _loggerFactory);
+        var session = SimSession.StartReplay(_recording, _recordingName ?? "recording", _replayOptions, _engine, _loggerFactory, fresh);
         StartSession(session);
         Transport = new TransportViewModel(session, _replayOptions.Speed, RestartReplayAt);
     }
@@ -644,8 +681,9 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         {
             var speed = Transport?.Speed.Speed ?? _replayOptions?.Speed ?? 1;
             await StopSessionAsync();
-            _replayOptions = (_replayOptions ?? new ReplayOptions()) with { StartAt = target, Speed = speed };
-            StartReplay();
+            _replayOptions = (_replayOptions ?? new ReplayOptions()) with { StartAt = target, Speed = speed, StartPaused = false };
+            _reviewApplied = -1;
+            StartReplay(fresh: false);
         }
 #pragma warning disable CA1031 // An async void handler must not throw onto the dispatcher.
         catch (Exception ex)
@@ -736,6 +774,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
 
         Snapshot = snapshot;
+        UpdateReview(snapshot);
         UpdateEditing();
         UpdateConflicts();
         UpdateSuggestions();
@@ -908,7 +947,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private void UpdateTitle()
     {
         SimName = Profile?.Name is { Length: > 0 } name ? name : Snapshot.AreaId ?? string.Empty;
-        Title = SimName.Length > 0 ? $"Stringline — {SimName}" : "Stringline";
+        Title = (SimName.Length > 0 ? $"Stringline — {SimName}" : "Stringline") + (IsReviewing ? " (review)" : string.Empty);
     }
 
     private void UpdatePlaceholder() => Placeholder =
@@ -922,6 +961,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         InfoMessage = message;
         InfoHasSuggestions = suggestions;
         InfoHasWarnings = hasWarnings;
+        InfoHasResume = false;
     }
 
     private void HideInfo()
@@ -929,6 +969,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         InfoMessage = null;
         InfoHasSuggestions = false;
         InfoHasWarnings = false;
+        InfoHasResume = false;
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Connecting to {Options}")]

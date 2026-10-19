@@ -7,7 +7,8 @@ namespace Stringline.App.Services;
 /// <param name="Profiles">Per-sim profiles, <c>%APPDATA%\Stringline\profiles</c>.</param>
 /// <param name="Logs">Rolling logs, <c>%LOCALAPPDATA%\Stringline\logs</c>.</param>
 /// <param name="Recordings">Recordings made with the Record button, <c>Documents\Stringline\recordings</c>.</param>
-internal sealed record AppPaths(string Settings, string Profiles, string Logs, string Recordings, string Exports)
+/// <param name="Sessions">Saved sessions (S16), <c>Documents\Stringline\sessions</c>.</param>
+internal sealed record AppPaths(string Settings, string Profiles, string Logs, string Recordings, string Exports, string Sessions)
 {
     public static AppPaths Default
     {
@@ -21,7 +22,8 @@ internal sealed record AppPaths(string Settings, string Profiles, string Logs, s
                 Path.Combine(roaming, "profiles"),
                 Path.Combine(local, "logs"),
                 Path.Combine(documents, "recordings"),
-                Path.Combine(documents, "exports"));
+                Path.Combine(documents, "exports"),
+                Path.Combine(documents, "sessions"));
         }
     }
 
@@ -31,5 +33,6 @@ internal sealed record AppPaths(string Settings, string Profiles, string Logs, s
         Path.Combine(root, "profiles"),
         Path.Combine(root, "logs"),
         Path.Combine(root, "recordings"),
-        Path.Combine(root, "exports"));
+        Path.Combine(root, "exports"),
+        Path.Combine(root, "sessions"));
 }

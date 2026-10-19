@@ -32,6 +32,9 @@
         <MenuItem Header="Open _replay…" InputGestureText="Ctrl+O" Command="{Binding OpenReplayCommand}" />
         <MenuItem Header="_Disconnect" Command="{Binding DisconnectCommand}" />
         <Separator />
+        <MenuItem Header="Re_sume saved session…" Command="{Binding ResumeSessionCommand}" />
+        <MenuItem Header="Re_view saved session…" Command="{Binding ReviewSessionCommand}" />
+        <Separator />
         <MenuItem Header="_Record to file" IsCheckable="False" IsChecked="{Binding IsRecording, Mode=OneWay}" Command="{Binding ToggleRecordingCommand}" />
         <Separator />
         <MenuItem Header="_Export graph as PNG…" InputGestureText="Ctrl+E" Command="{Binding ExportPngCommand}" CommandParameter="1" />
@@ -208,7 +211,12 @@
                   Visibility="{Binding InfoHasSuggestions, Converter={StaticResource BoolToVisibility}}" />
           <Button Content="Show warnings" Padding="10,1" Margin="2,0" Command="{Binding ShowWarningsCommand}"
                   Visibility="{Binding InfoHasWarnings, Converter={StaticResource BoolToVisibility}}" />
-          <Button Content="Browse…" Padding="10,1" Margin="2,0,8,0" Command="{Binding LoadTimetableCommand}" />
+          <Button Content="Resume" Padding="10,1" Margin="2,0" Command="{Binding ResumeOfferedCommand}"
+                  Visibility="{Binding InfoHasResume, Converter={StaticResource BoolToVisibility}}" />
+          <Button Content="Review" Padding="10,1" Margin="2,0,8,0" Command="{Binding ReviewOfferedCommand}"
+                  Visibility="{Binding InfoHasResume, Converter={StaticResource BoolToVisibility}}" />
+          <Button Content="Browse…" Padding="10,1" Margin="2,0,8,0" Command="{Binding LoadTimetableCommand}"
+                  Visibility="{Binding InfoShowsBrowse, Converter={StaticResource BoolToVisibility}}" />
         </StackPanel>
         <TextBlock Text="{Binding InfoMessage}" VerticalAlignment="Center" TextWrapping="Wrap" />
       </DockPanel>

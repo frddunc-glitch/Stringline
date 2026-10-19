@@ -72,13 +72,26 @@ public partial class App : Application
 
     private static async Task StartAsync(MainViewModel viewModel, StartupOptions options)
     {
-        if (options.Replay is { } replay)
+        if (options.Resume is { } resume)
+        {
+            await viewModel.ResumeSessionAsync(resume);
+        }
+        else if (options.Review is { } review)
+        {
+            await viewModel.ReviewSessionAsync(review);
+        }
+        else if (options.Replay is { } replay)
         {
             await viewModel.OpenReplayAsync(replay, options.Timetable, options.Speed, options.Start);
         }
-        else if (options.Timetable is { } timetable)
+        else
         {
-            await viewModel.LoadTimetableAsync(timetable);
+            if (options.Timetable is { } timetable)
+            {
+                await viewModel.LoadTimetableAsync(timetable);
+            }
+
+            await viewModel.OfferResumeAsync();
         }
     }
 

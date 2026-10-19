@@ -48,9 +48,9 @@ internal sealed partial class MainViewModel : IGraphEditor
 
     public string RedoTip => Snapshot.History.RedoDescription is { } d ? $"Redo: {d} (Ctrl+Y)" : "Nothing to redo";
 
-    private bool CanUndo => Snapshot.History.CanUndo && _drag is null;
+    private bool CanUndo => Snapshot.History.CanUndo && _drag is null && !IsReviewing;
 
-    private bool CanRedo => Snapshot.History.CanRedo && _drag is null;
+    private bool CanRedo => Snapshot.History.CanRedo && _drag is null && !IsReviewing;
 
     private bool HasSelectedPlan => Detail.HasTrain;
 
@@ -63,6 +63,12 @@ internal sealed partial class MainViewModel : IGraphEditor
     {
         ArgumentNullException.ThrowIfNull(command);
         var description = command.Describe(Snapshot.Plan);
+        if (ReviewRefusal is { } refusal)
+        {
+            ShowInfo(InfoSeverity.Warning, refusal);
+            return PlanCommandResult.Fail(refusal);
+        }
+
         PlanCommandResult result;
         try
         {
@@ -143,6 +149,12 @@ internal sealed partial class MainViewModel : IGraphEditor
         ArgumentNullException.ThrowIfNull(hit);
         if (Selection is not { Train: { } train } || hit.Path.Train != train || _drag is not null)
         {
+            return false;
+        }
+
+        if (ReviewRefusal is { } reviewing)
+        {
+            EditStatus = reviewing;
             return false;
         }
 

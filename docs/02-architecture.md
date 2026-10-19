@@ -131,6 +131,8 @@ TrainSchedule        // S12, pure: PlanSnapshot + train → ScheduleRows (WTT, p
 PlanHistory          // S10: Done (oldest first) and Undone (next redo first) PlanHistoryEntry(Command, Description, Warnings)
 TrainDelays          // actual − booked at a timing point (arrive vs arrival, else departure); Current(live) = latest booked point of the current working
 
+// Stringline.Planning (S16): PlanStep(Kind Execute|Undo|Redo|Reset, Command?, Description?, SimTime?, At); PlanningEngine.PlanStepped (every history change, in order) and RestorePlan(steps); PlanLog.Fold(steps) → done/undone, PlanLog.By(steps, now) for review
+// Stringline.Persistence (S16): SessionWriter (thread-safe autosave of frames, steps and SessionInfo; file made lazily; End marks it ended), SavedSession.Load (Info, Frames, Steps, Problems, Events(parser), ToRecording()), SessionCatalogue (List, LatestUnfinished, ReadInfo), SessionFormatException
 // Stringline.Timetable: WttCatalogue (S8) — ReadInfo(path) peeks the sim ID and name; FindForArea(folder, area) for timetable suggestions
 // Stringline.Gateway: SessionRecorder (S8) — toggleable, thread-safe .sslog recording of a live connection; LiveGatewaySource.MessageParsed feeds it
 
@@ -145,7 +147,11 @@ public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); s
 
 ## 5. Persistence
 - **Profile** `%APPDATA%\Stringline\profiles\{area_id}.json` — corridors, location names, distances, categories, priorities. Edited in the app's profile editor (S14a, `ProfileEdits`) or by hand, then Profile → Reload.
-- **Session** `Documents\Stringline\sessions\{area_id}-{yyyyMMdd-HHmm}.stringline` (SQLite): tables `events`, `plan_commands`, `disruptions`, `notes`, `train_links`, `meta`. Working plan is rebuilt by replaying commands over the WTT.
+- **Session** `Documents\Stringline\sessions\{area_id}-{yyyyMMdd-HHmm}.stringline` (SQLite, WAL, format 1; S16):
+  - `meta` (key/value): `format`, `kind` (live/replay), `area_id`, `sim_name`, `timetable_path`, `timetable_name`, `host`, `port`, `recording_path`, `position` (replay), `last_sim`, `created`, `updated`, `ended` (0 while running, so it is offered for resuming), `app`.
+  - `frames` (seq, at in Unix ms, sim, topic, body): a live session's gateway frames, only those whose events the engine keeps (clock, train location and delay, TD, timetable summary). Replay sessions refer to their `.sslog` instead.
+  - `steps` (seq, at, sim, kind execute/undo/redo/reset, command as `PlanCommandJson`, description): the plan's history as `PlanStep`s. Disruptions, notes and live links are plan commands, so the sketch's separate `disruptions`, `notes` and `train_links` tables are not needed.
+  - The live state is rebuilt by parsing the frames again; the working plan by folding the steps (`PlanLog.Fold`) and replaying the commands over the WTT. A step that cannot be read (e.g. a command from a newer version) is skipped and reported. A newer `format` is refused.
 - **Recordings** `.sslog` — JSON Lines, format version 1:
   - line 1, header: `{"sslog":1,"app":"Stringline 0.1.0","created":"…Z","host":"localhost","port":51515,"topics":[…]}`. The sim's identity is not known yet when the header is written; it is in the first `clock_msg`.
   - frames: `{"t":"2026-10-18T09:12:03.123Z","topic":"/topic/TRAIN_MVT_ALL_TOC","sim":15720,"body":"…"}`. `t` is wall-clock UTC to the millisecond; `sim` is the latest `clock_msg` clock seen so far (absent before the first one), for seeking; `body` is the exact body text, or `body64` (base64) if it is not valid UTF-8.

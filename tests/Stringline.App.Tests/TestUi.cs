@@ -185,12 +185,17 @@ internal sealed class ScriptedDialogs : IDialogService
 /// <summary>A main view model wired as the app wires it, with files under a temporary folder.</summary>
 internal sealed class TestApp : IAsyncDisposable
 {
-    private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("stringline-app-");
+    private readonly DirectoryInfo _root;
+    private readonly bool _ownsRoot;
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _engineLoop;
 
-    public TestApp(Func<AppSettings, AppSettings>? settings = null)
+    /// <param name="root">Another app's folder, to start the app again over its files (S16: resume); that app cleans it up.</param>
+    public TestApp(Func<AppSettings, AppSettings>? settings = null, string? root = null)
     {
+        _ownsRoot = root is null;
+        _root = root is null ? Directory.CreateTempSubdirectory("stringline-app-") : new DirectoryInfo(root);
+        Root = _root.FullName;
         Paths = AppPaths.Under(_root.FullName);
         Settings = new AppSettingsStore(Paths, new DpapiSecretProtector(), NullLogger<AppSettingsStore>.Instance);
         if (settings is not null)
@@ -215,6 +220,9 @@ internal sealed class TestApp : IAsyncDisposable
 
     public TestUiThread Ui { get; } = new();
 
+    /// <summary>The folder everything is kept under.</summary>
+    public string Root { get; }
+
     public ScriptedDialogs Dialogs { get; } = new();
 
     public AppPaths Paths { get; }
@@ -235,6 +243,11 @@ internal sealed class TestApp : IAsyncDisposable
         Ui.Dispose();
         Recorder.Dispose();
         _stop.Dispose();
+        if (!_ownsRoot)
+        {
+            return;
+        }
+
         try
         {
             _root.Delete(recursive: true);

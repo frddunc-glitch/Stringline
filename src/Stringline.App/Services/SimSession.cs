@@ -4,6 +4,7 @@ using Stringline.Core.Events;
 using Stringline.Gateway;
 using Stringline.Gateway.Recording;
 using Stringline.Gateway.Replay;
+using Stringline.Persistence;
 using Stringline.Planning;
 
 namespace Stringline.App.Services;
@@ -91,8 +92,12 @@ internal sealed partial class SimSession : IAsyncDisposable
     /// <summary>Completes when the source ends, fails or is stopped.</summary>
     public Task Completion => _pump;
 
-    /// <summary>Connect to SimSig and feed the engine. A recorder, if given, sees every frame and connection change.</summary>
-    public static SimSession StartLive(GatewayClientOptions options, PlanningEngine engine, SessionRecorder? recorder, ILoggerFactory loggerFactory)
+    /// <summary>
+    /// Connect to SimSig and feed the engine. A recorder, if given, sees every frame and connection change; the session
+    /// store, if given, the frames it keeps. <paramref name="fresh"/> false carries on from the engine's state (a resumed
+    /// session) instead of starting a new one.
+    /// </summary>
+    public static SimSession StartLive(GatewayClientOptions options, PlanningEngine engine, SessionRecorder? recorder, ILoggerFactory loggerFactory, SessionWriter? store = null, bool fresh = true)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(engine);
@@ -100,24 +105,31 @@ internal sealed partial class SimSession : IAsyncDisposable
         var source = new LiveGatewaySource(client, new MessageParser(loggerFactory.CreateLogger<MessageParser>()));
         var session = new SimSession(SessionKind.Live, $"{options.Host}:{options.Port}", new SessionStatus(SessionState.Connecting), loggerFactory.CreateLogger<SimSession>(), client, null, recorder, options);
         client.ConnectionChanged += session.OnConnectionChanged;
-        if (recorder is not null)
+        if (recorder is not null || store is not null)
         {
-            source.MessageParsed += (_, m) => recorder.OnMessage(m.Message, m.Events);
+            source.MessageParsed += (_, m) =>
+            {
+                recorder?.OnMessage(m.Message, m.Events);
+                store?.OnMessage(m.Message, m.Events);
+            };
         }
 
-        session.Start(engine, source);
+        session.Start(engine, source, fresh);
         return session;
     }
 
-    /// <summary>Replay a recording into the engine.</summary>
-    public static SimSession StartReplay(SslogRecording recording, string fileName, ReplayOptions options, PlanningEngine engine, ILoggerFactory loggerFactory)
+    /// <summary>
+    /// Replay a recording into the engine. <paramref name="fresh"/> false keeps the plan and drops only the live state,
+    /// as a seek back does (restarting a finished replay).
+    /// </summary>
+    public static SimSession StartReplay(SslogRecording recording, string fileName, ReplayOptions options, PlanningEngine engine, ILoggerFactory loggerFactory, bool fresh = true)
     {
         ArgumentNullException.ThrowIfNull(recording);
         ArgumentNullException.ThrowIfNull(engine);
         var replay = new ReplaySource(recording, options, new MessageParser(loggerFactory.CreateLogger<MessageParser>()));
         var initial = new SessionStatus(options.StartPaused ? SessionState.Paused : SessionState.Playing);
         var session = new SimSession(SessionKind.Replay, fileName, initial, loggerFactory.CreateLogger<SimSession>(), null, replay, null, null);
-        session.Start(engine, replay);
+        session.Start(engine, replay, fresh);
         return session;
     }
 
@@ -188,9 +200,17 @@ internal sealed partial class SimSession : IAsyncDisposable
         _stop.Dispose();
     }
 
-    private void Start(PlanningEngine engine, ISimEventSource source)
+    private void Start(PlanningEngine engine, ISimEventSource source, bool fresh)
     {
-        engine.Clear();
+        if (fresh)
+        {
+            engine.Clear();
+        }
+        else if (Kind == SessionKind.Replay)
+        {
+            engine.Post(new ReplayRewoundEvent(DateTimeOffset.UtcNow, default));
+        }
+
         _pump = Task.Run(() => PumpAsync(engine, source));
     }
 
