@@ -106,6 +106,169 @@ Covers COR-2 and COR-5, which S6 left to "a simple editor" (`00-…md` §4.4) th
 ### S18 — Packaging 🪟
 - Single-file self-contained publish; app icon; settings page; logging; About/credits; README with setup (enabling the gateway in SimSig).
 
+## Phase 4a — Fixes from Fred's first use (GitHub issues #1–#13)
+Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fix them before the optional extensions. Each session closes its issues with `Fixes #n` in the commit. Order: S22 → S23 → S24 → S25 → S26 → S27. S28 and S29 can run at any point, and S29 waits on Fred's recording. Each session still ends with a green build, tests, `progress.md` and a commit.
+
+| Issue | Title | Session |
+|---|---|---|
+| #1 | Correct Unknown Publisher | S22 |
+| #2 | Delay column display bug | S23 |
+| #3 | Long graph location names clipped | S23 |
+| #4 | Create user guide | S28 |
+| #5 | Investigate multiplayer functionality | S29 |
+| #6 | Sim/timetable identification | S22 |
+| #7 | Review headway conflict calculations | S27 |
+| #8 | Settings menu | S25 |
+| #9 | Window resizing behaviour | S23 (S21 keeps split views) |
+| #10 | Dragging a train path to re-plan | S26 |
+| #11 | Right time wording | S24 |
+| #12 | Infrastructure and conflict red boxes (tooltips) | S24 |
+| #13 | Make SimTime more prominent (low priority, waiting on feedback) | S24 (optional part) |
+
+### S22 — Publisher and sim identity 🪟 (#1, #6)
+- **#1 Unknown publisher.** Windows says "Unknown publisher" because the exe and installer are not Authenticode-signed (S18 question 13). Metadata alone cannot fix that, but it is still part of the fix:
+  - Set `Company`, `Authors` and `Copyright` in `Directory.Build.props` to "Frederick Duncan and Stringline contributors". Today `Authors` is "Fred" and there is no `Company`. Inno's `AppPublisher` already matches.
+  - Add an optional signing step to `build/publish.ps1` and `release.yml`: `signtool` (or the signing service's action) signs `Stringline.exe` before it is zipped, and then the installer (Inno `SignTool=`). The step is skipped, with a warning, when no certificate is set up. Credentials only ever come from GitHub secrets and are never logged.
+  - 👤 Fred picks a route and applies:
+    - **SignPath Foundation**, free for open-source projects (the recommended route; it needs the GitHub repo and an OSI licence, which GPL-3.0 is);
+    - **Azure Trusted Signing** (about US$10 a month);
+    - or an OV certificate.
+  - Until a certificate exists, the README's SmartScreen note stays and says why.
+- **#6 Sim and timetable shown together.** Show "*sim name* – *timetable*" everywhere the app now shows only one of them:
+  - the window title;
+  - the status bar;
+  - the session list and saved session (`SimName` plus the timetable's name and version);
+  - the PNG and PDF title band;
+  - the CSV header.
+  - The sim name comes from the profile, then the gateway's area ID, then "Unknown sim". The timetable comes from the WTT header (name and version). Review mode adds "(review)".
+  - Add a `SimTitle` formatter in `Stringline.App` (or Core, if the Tools need it too) so every place formats it the same way.
+- **Tests:** the formatter's fallbacks; the title, status bar and PDF band on Waterloo; publish.ps1 skips signing cleanly when there is no certificate.
+
+### S23 — Panel layout, resizing and long names 🪟 (#2, #3, #9)
+- **#2 Columns cut off at the right edge.** Check every list and grid in the side panels: the train list, the train detail plan, Conflicts, Suggestions, Regulation, Delays (trains and points) and History.
+  - Fixed pixel widths, with the last column (Delay/Late/Final) past the panel's edge, are the likely cause.
+  - Give each list one star-sized text column (headcode or description), with the numeric columns right-aligned and sized to their content.
+  - Add a horizontal scroll bar only below the panel's least width, and `TextTrimming` with a tooltip for long text.
+  - A UI test sets each panel to its least width and checks the last column is fully visible (column right edge ≤ viewport width).
+- **#3 Long location names clipped.** The horizontal graph has a fixed 150 px left margin, and the labels are right-aligned into it (`GraphMargins.Default`, `SkiaGraphRenderer.DrawLocationLabels`). The vertical graph has the same problem at the top (170 px).
+  - Work the margin out from the widest measured label (name or TIPLOC, station font), between a least and a most width (e.g. 90–260 px).
+  - Past the most width, shorten the name with an ellipsis. The full name and TIPLOC show in the hover.
+  - Use the same margin in the PNG and PDF exports.
+  - The profile's display names (S14a) let users shorten a name for good. Say so in the hover and the guide.
+  - Verify snapshot tests: a corridor with a 40-character name, in both orientations.
+- **#9 Resizing does what users expect.** Splitters between the train list, graph and side panel, and between the train detail, tabs and suggestions:
+  - **Star sizing.** Use proportions, so growing the window grows the graph first and the panels keep their share. Now the side columns are fixed at 330 and 490 px.
+  - **Least sizes.** A splitter cannot push a panel below its least size, or off the window.
+  - **Hide panels.** A double-click on a splitter, or View ▸ Panels, collapses or restores the panel beside it.
+  - **Remembered layout.** Splitter positions, the window's size and place, and maximised state are saved in settings and restored, back onto a visible monitor if a screen has gone.
+  - Add View ▸ Reset layout.
+  - S21's split and multi-board views stay in S21. This session fixes the single view only.
+- **Tests:** layout save and restore (view-model); the least-width column test above; a window-shot check at 1280×720 and 2560×1440.
+
+### S24 — Wording, tooltips and the clock 🪟 (core part portable) (#11, #12, #13)
+- **#11 Early / On time / Late.** Replace "Right time" with railway punctuality wording everywhere: hover, train detail, Delays tab, Regulation, CSV, the colour legend and tooltips, the README and the docs.
+  - The wording is "On time" within the minute (as now), "*n* min late" and "*n* min early".
+  - `DelayBand.RightTime` becomes `DelayBand.OnTime`. The colour stays the same.
+  - The CSV column values change, so note it in the release notes.
+  - Add a test that no UI string or resource contains "right time".
+- **#12 Tooltips for conflict and disruption boxes.** Extend the hit testing (`GraphHitTester`/`GraphHitIndex`) to conflict markers and disruption blocks or restriction bands, and `GraphHover` to describe them.
+  - **Conflict:** the kind, the trains, where (from–to), when, how bad it is (minutes), and the top suggestion if there is one. A click still focuses it.
+  - **Disruption:** the kind (block/possession or speed restriction), the section and tracks, from–to times, the speed or effect, and its note. A hint says "right-click to edit".
+  - The hover is the same in both orientations. Portable tests go in Graph.Tests.
+- **#13 Prominent sim time (optional; Fred: not critical, waiting on feedback).** Build it only if the session has time:
+  - a large sim clock (and speed) at the toolbar's right, sized by a setting (Normal/Large/Huge);
+  - optionally, a small always-on-top clock window for a second monitor.
+  - Otherwise, leave it for user feedback.
+- **Tests:** the hover text per kind; the wording test; App tests for the clock setting if built.
+
+### S25 — Menus against the UI spec 🪟 (#8)
+- Review the whole shell against `05-…md` §1, §8 and §12 and Windows conventions, then fix what differs:
+  - **Settings.** Move Settings… out of View into a **Tools** menu, as Tools ▸ Options… (Ctrl+, stays). Profile editing could go there too; decide when the review is done.
+  - **Every menu.** Check that each item is where users look for it: Session versus File naming, export placement, and the View menu holding only display switches.
+  - **Accelerators and shortcuts.** Check they are unique.
+  - **Toolbar and context menus.** Check they match the menus.
+- Write the review's findings into `05-…md` (a short "spec vs build" table) and update the spec where the build is better. Add a "Questions for Fred" entry for any change of naming.
+- **Tests:** an App test that every menu command is bound, and that no access key repeats within a menu.
+
+### S26 — TRIMS-style grips for drag re-planning 🪟 (portable drag model) (#10)
+- **Find out first.** Reproduce why dragging "does not work as expected" (`PlanDrag`, `GraphView.xaml.cs`):
+  - the hit tolerance on a thin line;
+  - drag starting a pan instead;
+  - Alt being taken by the WPF menu;
+  - the now-line and latest-report clamps stopping the drag with no feedback.
+  - Write the cause in `progress.md`.
+- **Grips on the selected train** (TRIMS style; `05-…md` §3 to be updated):
+  - Selecting a train draws grips:
+    - a square at each timing point it has not yet passed (drag = retime from here, now `ShiftFrom` without Alt);
+    - a bar at each stop's departure end (drag = dwell);
+    - a handle on the line's body (drag = shift the rest of the run).
+  - Grips are only drawn on the selected train, so they never clutter the graph. They are hit first, with a tolerance of 6 px or more.
+  - The cursor changes over a grip, and the status bar names the action.
+  - Points that cannot move (past, or the train's latest report) show as hollow or locked, and the tooltip says why.
+  - While dragging, the ghost and a time label at the grip show the new time. A clamp is shown on the grip, not only in the status bar.
+  - Arrow keys nudge the selected grip by 15 s (Shift: 1 min). Esc cancels a drag.
+  - Alt+drag stays as a shortcut.
+- **Tests:** grip hit testing and the drag preview per grip kind (Graph.Tests, portable); App tests driving select → grip drag → command → undo on Waterloo.
+
+### S27 — Sim-aware headways (#7)
+- **Problem.** Every section gets `Section.StandardHeadwaySeconds` = 180 s unless its profile says otherwise. That is too much for busy metro sims and gives false headway conflicts. SimSig's WTT has no headways: SimSig works by signalling, and its timetable writers book trains to it.
+- **Work out a headway for each section, in order of preference:**
+  1. **The profile's section headway**, if set by hand (S14a; "hand-set" is marked so regenerating keeps it).
+  2. **From the WTT.** The least booked spacing between same-direction trains on the same track, taken as a low percentile (e.g. the 5th) of booked spacings so one tight pair does not set it. It must lie between a floor and a ceiling (e.g. 60–300 s), with at least N pairs, else fall back. This follows the existing rule that no pair need be further apart than the WTT books them.
+  3. **A profile-wide default**, then a global one in Settings. The global default stays 3 min unless the WTT corpus shows otherwise.
+- **Observed spacing (optional; gated on the work above).** Spacing between actual trains in recordings (or live, from TD berth steps) could tighten or confirm the WTT figure. Report it in `stringline corridors --headways`, and do not apply it on its own.
+- **Show where a value comes from.** The profile editor shows each section's headway and source (hand / WTT / default), and `stringline corridors` prints them. A conflict's tooltip (S24) names the headway used.
+- **Tests:**
+  - derivation on synthetic sections;
+  - the corpus: Waterloo's headway conflicts on the 4× recording before and after, which should fall without losing the real ones in the failure recording;
+  - Llangollen single line unchanged;
+  - `ProfileJson` round trip with the source.
+- Update `06-…md` §3 with the rule.
+
+### S28 — User guide, in-app help and wiki (#4)
+- **Guide in the repo** (`docs/user-guide/`, Australian English, railway terms as SimSig uses them). Its parts:
+  - installing;
+  - turning on the gateway;
+  - connecting (single player and multiplayer, after S29);
+  - timetables and profiles;
+  - reading the graph;
+  - re-planning (grips, after S26);
+  - disruptions and notes;
+  - conflicts and suggestions;
+  - the regulation list;
+  - sessions and review;
+  - exports and reports;
+  - settings;
+  - troubleshooting and logs;
+  - a glossary;
+  - keyboard and mouse reference.
+- **Screenshots** come from the `STRINGLINE_WINDOW_SHOTS` hook and `render-png` with free-sim data only, so the guide's images can be made again.
+- **In-app help** (offline, works without a network):
+  - Help ▸ User guide opens the guide bundled with the app as HTML, made from the Markdown at build time with a GPL-compatible library such as Markdig (BSD-2); check before adding it.
+  - F1 opens the page for the focused panel or window.
+  - "Getting started (online)" stays.
+- **GitHub wiki.** A workflow (or `build/publish-wiki.ps1`) copies `docs/user-guide/` into the repo's wiki, so the repo stays the source and the wiki is never edited by hand.
+  - 👤 Fred turns on the wiki and creates its first page. GitHub needs that first page before the wiki can be pushed to.
+- **Other sources.** Review the SimSig wiki and forum pages on the Interface Gateway, and link them from the guide's "Further reading". Raise follow-up issues for gaps found (the issue expects this may need another issue).
+- **Tests:** link check over the guide (no broken relative links or images); the bundled help resource exists and every F1 target page exists.
+
+### S29 — Multiplayer investigation 🪟 (#5)
+- 👤 **Before this session**, Fred records:
+  - a short multiplayer session (host plus one client, 20–30 min), with `stringline record` on the host and on a client if the client's gateway can be reached;
+  - notes on which machine has the gateway turned on, and any login asked for.
+- **Answer `03-…md` §6.9**:
+  - does each player's SimSig run its own gateway, or only the host's?
+  - does a client see the whole sim's messages or only its own panel's?
+  - are the clock messages the same?
+  - do any message shapes differ?
+- Add parser tests for whatever the recording shows.
+- **App:** the connect dialog already takes a host and port.
+  - Add a "multiplayer" note to it.
+  - Check that the reconnect and back-off cope with the host pausing or dropping out.
+  - Check that a client sees a partial area correctly: trains are not marked missing because they are on another player's panel.
+  - Assist (S19) stays off. Its confirmation must name multiplayer if S19 is built later.
+- **Write-up.** Record the outcome in `00-…md` §5 question 2, and add the guide's multiplayer page (S28). If a real gap needs code, raise it as an issue sized for a session.
+
 ## Phase 5 — Optional extensions
 - **S19** Opt-in assist: route-request / TD-interpose for the selected regulation step, with explicit confirmation and per-session enable.
 - **S20** Optimiser (`IReplanner` using OR-Tools CP-SAT) for a rolling horizon.
@@ -116,7 +279,9 @@ Covers COR-2 and COR-5, which S6 left to "a simple editor" (`00-…md` §4.4) th
 S1 → S2 → S3 ─┬→ S5 → S7 → S8 → S9
        S4 ────┤       ↑
        S6 ────┘───────┘
-S8 → S10 → S11 → S12 → S13 → S14 → S14a → S15 → S16 → S17 → S18 → (S19–S21)
+S8 → S10 → S11 → S12 → S13 → S14 → S14a → S15 → S16 → S17 → S18 → S22 → S23 → S24 → S25 → S26 → S27 → (S19–S21)
+                                                                    S18 → S28 (after S26 for grips, S29 for multiplayer)
+                                                                    👤 recording → S29
 ```
 S4 and S6 can run in parallel with S2–S3 (separate worktrees/sessions).
 

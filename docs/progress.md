@@ -1129,6 +1129,32 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - The README's gateway steps are from the design notes ("turn on Interface Gateway in the options before starting the sim"), not from a fresh look at SimSig's Loader. Check the wording matches SimSig.
 - The release draft notes are GitHub's generated ones. Edit them before publishing.
 
+## 2026-10-20 — Plan update: GitHub issues #1–#13
+
+### Done
+- Reviewed Fred's 13 open GitHub issues (raised 2026-10-19 after using the S18 build) and added **Phase 4a (S22–S29)** to `07-implementation-plan.md`, with an issue → session table:
+  - S22: publisher and sim identity (#1, #6)
+  - S23: panel layout, resizing and long names (#2, #3, #9)
+  - S24: wording, tooltips and clock (#11, #12, #13)
+  - S25: menus against the UI spec (#8)
+  - S26: TRIMS-style drag grips (#10)
+  - S27: sim-aware headways (#7)
+  - S28: user guide and wiki (#4)
+  - S29: multiplayer (#5)
+- Docs only, so there was no code change, build or test run.
+
+### Decisions
+- **The fixes come before the optional S19–S21.**
+- **#9 single-view resizing is fixed in S23.** S21 keeps the split and multi-board views.
+- **#13 is optional within S24**, because Fred marked it not critical.
+
+### Next
+- S22.
+
+### Questions for Fred
+- 15. **#1:** which code-signing route: SignPath Foundation (free for open source, recommended), Azure Trusted Signing or an OV certificate? Without one, Windows keeps saying "Unknown publisher".
+- 16. **#5:** a multiplayer recording is needed before S29.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
