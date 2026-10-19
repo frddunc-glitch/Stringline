@@ -26,6 +26,7 @@ public sealed class WorkingPlan
         ImmutableDictionary<TrainId, TrainPlan> trains,
         ImmutableList<TrainId> order,
         ImmutableList<Disruption> disruptions,
+        ImmutableList<PlanNote> notes,
         ImmutableList<LiveLink> links)
     {
         Timetable = timetable;
@@ -33,6 +34,7 @@ public sealed class WorkingPlan
         _trains = trains;
         _order = order;
         DisruptionList = disruptions;
+        NoteList = notes;
         LinkList = links;
     }
 
@@ -54,6 +56,9 @@ public sealed class WorkingPlan
 
     public IReadOnlyList<Disruption> Disruptions => DisruptionList;
 
+    /// <summary>Notes pinned to the graph (S13), in the order made.</summary>
+    public IReadOnlyList<PlanNote> Notes => NoteList;
+
     /// <summary>Manual live links, in the order made (a later link of the same working replaces the earlier one).</summary>
     public IReadOnlyList<LiveLink> Links => LinkList;
 
@@ -62,6 +67,8 @@ public sealed class WorkingPlan
     internal ImmutableList<TrainId> Order => _order;
 
     internal ImmutableList<Disruption> DisruptionList { get; }
+
+    internal ImmutableList<PlanNote> NoteList { get; }
 
     internal ImmutableList<LiveLink> LinkList { get; }
 
@@ -81,6 +88,7 @@ public sealed class WorkingPlan
             trains.ToImmutable(),
             timetable.Trains.Select(t => t.Id).ToImmutableList(),
             [],
+            [],
             []);
     }
 
@@ -89,6 +97,26 @@ public sealed class WorkingPlan
     public TrainPlan Get(TrainId id) => _trains.TryGetValue(id, out var plan) ? plan : throw new KeyNotFoundException($"No train {id} in the plan.");
 
     public Disruption? FindDisruption(string id) => DisruptionList.Find(d => d.Id == id);
+
+    public PlanNote? FindNote(string id) => NoteList.Find(n => n.Id == id);
+
+    /// <summary>A disruption ID not yet used in this plan: <c>B1</c>, <c>B2</c>… for a block, <c>SR1</c>… for a speed restriction.</summary>
+    public string NewDisruptionId(DisruptionKind kind) => NewId(kind == DisruptionKind.Block ? "B" : "SR", id => FindDisruption(id) is not null);
+
+    /// <summary>A note ID not yet used in this plan: <c>N1</c>, <c>N2</c>…</summary>
+    public string NewNoteId() => NewId("N", id => FindNote(id) is not null);
+
+    private static string NewId(string prefix, Func<string, bool> used)
+    {
+        for (var n = 1; ; n++)
+        {
+            var id = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{prefix}{n}");
+            if (!used(id))
+            {
+                return id;
+            }
+        }
+    }
 
     /// <summary>The manual link of a live working, if any.</summary>
     public LiveLink? FindLink(string simUid, Headcode headcode) => LinkList.Find(l => l.SimUid == simUid && l.Headcode == headcode);

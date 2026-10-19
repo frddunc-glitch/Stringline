@@ -50,6 +50,10 @@ internal static class PlanInput
         { } t => t.ToString("T", CultureInfo.InvariantCulture),
     };
 
+    /// <summary>Seconds as minutes for a prompt: <c>0</c>, <c>2</c>, <c>0.5</c>, <c>1.25</c>.</summary>
+    public static string FormatMinutes(int seconds) =>
+        ((double)seconds / SimTime.SecondsPerMinute).ToString("0.##", CultureInfo.InvariantCulture);
+
     /// <summary>A number of minutes (<c>2</c>, <c>1.5</c>, <c>0,5</c>), as whole seconds; false unless it is a number.</summary>
     public static bool TryParseMinutes(string? text, out int seconds)
     {

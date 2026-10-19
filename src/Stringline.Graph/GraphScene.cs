@@ -108,5 +108,11 @@ public sealed record GraphScene(
     IReadOnlyList<GraphPath> Paths,
     SimTime? Now)
 {
+    /// <summary>Blocks and speed restrictions on this corridor (S13), drawn under the trains.</summary>
+    public IReadOnlyList<GraphDisruption> Disruptions { get; init; } = [];
+
+    /// <summary>Notes pinned to this corridor (S13), drawn over the trains.</summary>
+    public IReadOnlyList<GraphNote> Notes { get; init; } = [];
+
     public IEnumerable<GraphPath> InLayer(GraphLayer layer) => Paths.Where(p => p.Layer == layer);
 }

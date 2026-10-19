@@ -95,7 +95,7 @@ public sealed class MinRunTable
         {
             foreach (var disruption in disruptions)
             {
-                if (disruption.Kind == DisruptionKind.SpeedRestriction && disruption.IsActiveAt(time) && disruption.Covers(points, from, to))
+                if (disruption.Kind == DisruptionKind.SpeedRestriction && disruption.IsActiveAt(time) && disruption.AppliesTo(points, from, to))
                 {
                     result = Math.Max(result, disruption.Lengthen(min));
                 }

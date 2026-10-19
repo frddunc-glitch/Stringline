@@ -112,7 +112,9 @@ record TrainForecast(TrainId Train, Headcode Headcode, TrainForecastStatus Statu
 class Forecast(SimTime? Now, bool Interaction, IReadOnlyList<TrainForecast> Trains);   // Find, Drawn
 record ForecastSection(int Id, Tiploc From, Tiploc To, int HeadwaySeconds, bool SingleLine, int DownTracks, int UpTracks, …);  // in ForecastNetwork
 record Disruption(string Id, DisruptionKind Kind /*Block | SpeedRestriction*/, Tiploc From, Tiploc To, string? Track,
-                  SimTime Start, SimTime End, double RunTimeFactor, int AddedSeconds, string Note);
+                  SimTime Start, SimTime End, double RunTimeFactor, int AddedSeconds, string Note,
+                  TrackDirection? Direction /*S13: Track is a corridor track run this way; null = a WTT line code*/);   // AppliesTo
+record PlanNote(string Id, Tiploc Location, SimTime Time, string Text);   // S13, DIS-3
 record Conflict(string Id, ConflictKind Kind, TrainId A, TrainId? B,
                 Tiploc Where, SimTime When, int SeveritySeconds);
 ```

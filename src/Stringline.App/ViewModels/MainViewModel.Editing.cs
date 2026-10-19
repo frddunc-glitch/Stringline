@@ -213,7 +213,7 @@ internal sealed partial class MainViewModel : IGraphEditor
 
     /// <summary>
     /// The right-click menu for a train's line (<c>05-…md</c> §3), at the timing point nearest the click. Selects the
-    /// train. Empty for the background (S13 adds disruptions there).
+    /// train. Empty for none; the background's menu is <see cref="MenuFor(GraphHit?, ScreenPoint)"/>'s.
     /// </summary>
     public IReadOnlyList<PlanMenuItem> MenuFor(GraphHit? hit)
     {

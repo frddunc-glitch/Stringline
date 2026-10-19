@@ -810,6 +810,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             ShowWtt = ShowWtt,
             ShowActual = ShowActual,
             ShowForecast = ShowForecast,
+            ShowDisruptions = ShowDisruptions,
             ColourMode = ColourMode,
         };
         _building = true;

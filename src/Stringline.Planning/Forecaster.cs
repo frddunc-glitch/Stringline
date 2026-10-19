@@ -469,9 +469,7 @@ public static class Forecaster
         {
             foreach (var block in _plan.Disruptions)
             {
-                if (block.Kind == DisruptionKind.Block && d < block.End.Seconds && d + run > block.Start.Seconds &&
-                    (block.Track is null || string.Equals(block.Track, points[c].Line, StringComparison.OrdinalIgnoreCase)) &&
-                    block.Covers(points, c, n))
+                if (block.Kind == DisruptionKind.Block && d < block.End.Seconds && d + run > block.Start.Seconds && block.AppliesTo(points, c, n))
                 {
                     return block.End.Seconds;
                 }

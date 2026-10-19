@@ -34,6 +34,9 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
 
     public bool ShowForecast { get; init; } = true;
 
+    /// <summary>Draws the plan's blocks, speed restrictions and notes on this corridor (S13).</summary>
+    public bool ShowDisruptions { get; init; } = true;
+
     /// <summary>Colour actual lines by category (the default) or by delay band.</summary>
     public GraphColourMode ColourMode { get; init; } = GraphColourMode.Category;
 
@@ -117,7 +120,14 @@ public static class GraphSceneBuilder
         }
 
         var title = $"{profile.Name ?? profile.AreaId} — {corridor.Name}";
-        return new GraphScene(corridor.Id, title, locations, paths, request.Now);
+        var scene = new GraphScene(corridor.Id, title, locations, paths, request.Now);
+        if (request.ShowDisruptions && request.Plan is { } withDisruptions)
+        {
+            var (disruptions, notes) = GraphAnnotations.For(corridor, withDisruptions);
+            scene = scene with { Disruptions = disruptions, Notes = notes };
+        }
+
+        return scene;
     }
 
     private static Colour ColourOf(LiveWorking working, GraphSceneRequest request) =>

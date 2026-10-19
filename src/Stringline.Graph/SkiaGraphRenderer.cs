@@ -1,5 +1,6 @@
 using SkiaSharp;
 using Stringline.Network.Profiles;
+using Stringline.Planning;
 
 namespace Stringline.Graph;
 
@@ -37,6 +38,8 @@ public sealed class SkiaGraphRenderer : IDisposable
     private readonly SKFont _hourFont;
     private readonly SKFont _headcodeFont;
     private readonly SKFont _titleFont;
+    private readonly SKFont _annotationFont;
+    private SKPaint? _draftBorder;
     private readonly SKPathEffect _dash = SKPathEffect.CreateDash([6, 4], 0);
 
     public SkiaGraphRenderer(GraphTheme? theme = null)
@@ -50,6 +53,7 @@ public sealed class SkiaGraphRenderer : IDisposable
         _hourFont = GraphFonts.Create(GraphFonts.Bold, Theme.TimeFontSize);
         _headcodeFont = GraphFonts.Create(GraphFonts.Bold, Theme.HeadcodeFontSize);
         _titleFont = GraphFonts.Create(GraphFonts.Bold, Theme.TitleFontSize);
+        _annotationFont = GraphFonts.Create(GraphFonts.Regular, GraphAnnotations.LabelFontSize);
     }
 
     public GraphTheme Theme { get; }
@@ -91,10 +95,11 @@ public sealed class SkiaGraphRenderer : IDisposable
     /// Paths to draw over everything as a translucent preview, such as where a train being dragged would run (S12).
     /// They are drawn directly each frame, not cached, so they can change on every mouse move.
     /// </param>
-    public void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection = null, IReadOnlyList<GraphPath>? ghosts = null) =>
-        Render(canvas, scene, viewport, selection, CacheTiles, ghosts);
+    /// <param name="draft">A block or restriction being drawn with B+drag (S13), outlined over everything.</param>
+    public void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection = null, IReadOnlyList<GraphPath>? ghosts = null, GraphDisruption? draft = null) =>
+        Render(canvas, scene, viewport, selection, CacheTiles, ghosts, draft);
 
-    internal void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection, bool tiles, IReadOnlyList<GraphPath>? ghosts = null)
+    internal void Render(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection, bool tiles, IReadOnlyList<GraphPath>? ghosts = null, GraphDisruption? draft = null)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(scene);
@@ -110,10 +115,21 @@ public sealed class SkiaGraphRenderer : IDisposable
         DrawPast(canvas, scene, viewport, plot);
         DrawTimeGrid(canvas, ticks, viewport, plot);
         DrawLocationLines(canvas, scene, viewport, plot);
+        foreach (var disruption in scene.Disruptions)
+        {
+            DrawDisruption(canvas, disruption, viewport, plot);
+        }
+
         DrawPaths(canvas, scene, viewport, selection, tiles);
         DrawGhosts(canvas, ghosts, viewport);
         DrawNow(canvas, scene, viewport, plot);
         DrawHeadcodes(canvas, viewport, plot);
+        DrawNotes(canvas, scene, viewport, plot);
+        if (draft is not null)
+        {
+            DrawDisruption(canvas, draft, viewport, plot);
+        }
+
         canvas.Restore();
 
         canvas.DrawRect(plot, Stroke(Theme.Border, 1));
@@ -302,6 +318,82 @@ public sealed class SkiaGraphRenderer : IDisposable
             var style = Theme.Ghost;
             canvas.DrawPath(path, Stroke(Theme.Halo, style.Width + (2 * Theme.HaloWidth)));
             canvas.DrawPath(path, Stroke(ghost.Colour with { A = (byte)Math.Round(ghost.Colour.A * style.Opacity) }, style.Width));
+        }
+    }
+
+    /// <summary>
+    /// A block as a hatched rectangle, a speed restriction as an amber band (<c>05-…md</c> §2), each with a thin border
+    /// and its label in the corner; a draft (B+drag) has a dashed border and its times in the label.
+    /// </summary>
+    private void DrawDisruption(SKCanvas canvas, GraphDisruption disruption, GraphViewport viewport, SKRect plot)
+    {
+        var rect = GraphAnnotations.RectOf(disruption, viewport).ToSk();
+        if (!rect.IntersectsWith(plot))
+        {
+            return;
+        }
+
+        var block = disruption.Kind == DisruptionKind.Block;
+        var colour = block ? Theme.Block : Theme.Restriction;
+        canvas.DrawRect(rect, Fill(colour with { A = (byte)(block ? 0x1A : 0x40) }));
+        if (block)
+        {
+            canvas.Save();
+            canvas.ClipRect(rect);
+            var hatch = Stroke(colour with { A = 0x70 }, 1);
+            var visible = SKRect.Intersect(rect, plot);
+            var height = visible.Height;
+            var spacing = Theme.HatchSpacing;
+            // Lines at 45°, on a grid from the rectangle's corner so the hatching moves with it as the view pans.
+            var first = rect.Left + (MathF.Floor((visible.Left - height - rect.Left) / spacing) * spacing);
+            for (var x = first; x <= visible.Right; x += spacing)
+            {
+                canvas.DrawLine(x, visible.Bottom, x + height, visible.Top, hatch);
+            }
+
+            canvas.Restore();
+        }
+
+        SKPaint border;
+        if (disruption.IsDraft)
+        {
+            border = _draftBorder ??= new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f, PathEffect = _dash };
+            border.Color = ToSk(colour);
+        }
+        else
+        {
+            border = Stroke(colour with { A = 0xC0 }, 1);
+        }
+
+        canvas.DrawRect(rect, border);
+        var text = disruption.IsDraft ? $"{disruption.Label}  {disruption.Disruption.Start}–{disruption.Disruption.End}" : disruption.Label;
+        var width = _annotationFont.MeasureText(text);
+        var left = Math.Max(rect.Left, plot.Left) + 3;
+        var top = Math.Max(rect.Top, plot.Top);
+        if (left + width + 3 <= rect.Right && rect.Bottom - top >= GraphAnnotations.LabelFontSize + 3)
+        {
+            canvas.DrawText(text, left, top + GraphAnnotations.LabelFontSize + 1, SKTextAlign.Left, _annotationFont, Fill(Darken(colour)));
+        }
+    }
+
+    /// <summary>Notes: a marker at the time and location, and the first line of the text in a pale box beside it.</summary>
+    private void DrawNotes(SKCanvas canvas, GraphScene scene, GraphViewport viewport, SKRect plot)
+    {
+        foreach (var note in scene.Notes)
+        {
+            var box = GraphAnnotations.LabelOf(note, viewport).ToSk();
+            var marker = GraphAnnotations.MarkerOf(note, viewport);
+            var bounds = SKRect.Union(box, new SKRect((float)marker.X - 5, (float)marker.Y - 5, (float)marker.X + 5, (float)marker.Y + 5));
+            if (!bounds.IntersectsWith(plot))
+            {
+                continue;
+            }
+
+            canvas.DrawRoundRect(box, 2, 2, Fill(Theme.NoteFill));
+            canvas.DrawRoundRect(box, 2, 2, Stroke(Theme.NoteBorder, 1));
+            canvas.DrawText(note.Label, box.Left + 4, box.Bottom - 5, SKTextAlign.Left, _annotationFont, Fill(Theme.Text));
+            canvas.DrawCircle((float)marker.X, (float)marker.Y, GraphAnnotations.NoteMarkerRadius, Fill(Theme.NoteFill));
+            canvas.DrawCircle((float)marker.X, (float)marker.Y, GraphAnnotations.NoteMarkerRadius, Stroke(Theme.NoteBorder, 1.5f));
         }
     }
 
@@ -635,6 +727,8 @@ public sealed class SkiaGraphRenderer : IDisposable
         _hourFont.Dispose();
         _headcodeFont.Dispose();
         _titleFont.Dispose();
+        _annotationFont.Dispose();
+        _draftBorder?.Dispose();
         _dash.Dispose();
     }
 }

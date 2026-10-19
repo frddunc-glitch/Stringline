@@ -18,6 +18,7 @@ public sealed class WorkingPlanBuilder
     private ImmutableDictionary<TrainId, TrainPlan> _trains;
     private ImmutableList<TrainId> _order;
     private ImmutableList<Disruption> _disruptions;
+    private ImmutableList<PlanNote> _notes;
     private ImmutableList<LiveLink> _links;
     private List<PlanWarning> _warnings = [];
 
@@ -27,6 +28,7 @@ public sealed class WorkingPlanBuilder
         _trains = plan.TrainMap;
         _order = plan.Order;
         _disruptions = plan.DisruptionList;
+        _notes = plan.NoteList;
         _links = plan.LinkList;
     }
 
@@ -36,11 +38,15 @@ public sealed class WorkingPlanBuilder
 
     public IReadOnlyList<Disruption> Disruptions => _disruptions;
 
+    public IReadOnlyList<PlanNote> Notes => _notes;
+
     public IReadOnlyList<LiveLink> Links => _links;
 
     public TrainPlan? Find(TrainId id) => _trains.GetValueOrDefault(id);
 
     public Disruption? FindDisruption(string id) => _disruptions.Find(d => d.Id == id);
+
+    public PlanNote? FindNote(string id) => _notes.Find(n => n.Id == id);
 
     /// <summary>
     /// Replaces a train's plan, clamping it to the minimum run times and dwells. Returns an error, and changes
@@ -138,6 +144,58 @@ public sealed class WorkingPlanBuilder
         return null;
     }
 
+    public string? AddNote(PlanNote note)
+    {
+        ArgumentNullException.ThrowIfNull(note);
+        if (note.Problem() is { } problem)
+        {
+            return problem;
+        }
+
+        if (FindNote(note.Id) is not null)
+        {
+            return $"There is already a note {note.Id}.";
+        }
+
+        _notes = _notes.Add(note);
+        return null;
+    }
+
+    public string? ReplaceNote(PlanNote note)
+    {
+        ArgumentNullException.ThrowIfNull(note);
+        if (note.Problem() is { } problem)
+        {
+            return problem;
+        }
+
+        var index = _notes.FindIndex(n => n.Id == note.Id);
+        if (index < 0)
+        {
+            return $"No note {note.Id}.";
+        }
+
+        if (_notes[index] == note)
+        {
+            return "This makes no change to the note.";
+        }
+
+        _notes = _notes.SetItem(index, note);
+        return null;
+    }
+
+    public string? RemoveNote(string id)
+    {
+        var index = _notes.FindIndex(n => n.Id == id);
+        if (index < 0)
+        {
+            return $"No note {id}.";
+        }
+
+        _notes = _notes.RemoveAt(index);
+        return null;
+    }
+
     /// <summary>Adds or replaces the manual link of a live working. The train, if any, must be in the WTT.</summary>
     public string? SetLink(LiveLink link)
     {
@@ -181,7 +239,7 @@ public sealed class WorkingPlanBuilder
         _warnings.Add(warning);
     }
 
-    public WorkingPlan Build() => new(_start.Timetable, _start.MinRuns, _trains, _order, _disruptions, _links);
+    public WorkingPlan Build() => new(_start.Timetable, _start.MinRuns, _trains, _order, _disruptions, _notes, _links);
 
     /// <summary>
     /// Runs a command: on success its warnings are returned with it; on failure (an error, or an exception from a
@@ -189,7 +247,7 @@ public sealed class WorkingPlanBuilder
     /// </summary>
     internal PlanCommandResult Run(IPlanCommand command)
     {
-        var saved = (_trains, _order, _disruptions, _links, _warnings);
+        var saved = (_trains, _order, _disruptions, _notes, _links, _warnings);
         _warnings = [];
         PlanCommandResult result;
         try
@@ -198,13 +256,13 @@ public sealed class WorkingPlanBuilder
         }
         catch
         {
-            (_trains, _order, _disruptions, _links, _warnings) = saved;
+            (_trains, _order, _disruptions, _notes, _links, _warnings) = saved;
             throw;
         }
 
         if (!result.Applied)
         {
-            (_trains, _order, _disruptions, _links, _warnings) = saved;
+            (_trains, _order, _disruptions, _notes, _links, _warnings) = saved;
             return result;
         }
 

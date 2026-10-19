@@ -38,7 +38,9 @@ public sealed class PlanningEngineForecastTests : IAsyncDisposable
         _engine.SnapshotPublished += OnPublished;
         try
         {
-            return until(_engine.Current) ? _engine.Current : await found.Task.WaitAsync(Timeout);
+            // Read the current snapshot once: the engine may publish another between a check and a second read.
+            var current = _engine.Current;
+            return until(current) ? current : await found.Task.WaitAsync(Timeout);
         }
         finally
         {

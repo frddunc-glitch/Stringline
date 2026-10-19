@@ -68,6 +68,21 @@ public sealed record GraphTheme
     /// <summary>Other trains' opacity while one is selected.</summary>
     public double DimOpacity { get; init; } = 0.5;
 
+    /// <summary>A block or possession: hatched in this colour (<c>05-…md</c> §2).</summary>
+    public Colour Block { get; init; } = new(0xC6, 0x28, 0x28);
+
+    /// <summary>A speed restriction: a translucent band in this colour.</summary>
+    public Colour Restriction { get; init; } = new(0xF5, 0x9E, 0x0B);
+
+    /// <summary>The fill of a note's label.</summary>
+    public Colour NoteFill { get; init; } = new(0xFF, 0xF6, 0xC2, 0xF0);
+
+    /// <summary>A note's marker and the border of its label.</summary>
+    public Colour NoteBorder { get; init; } = new(0x8D, 0x6E, 0x00);
+
+    /// <summary>Spacing of a block's hatching, in pixels.</summary>
+    public float HatchSpacing { get; init; } = 7;
+
     public float LocationFontSize { get; init; } = 12;
 
     public float TiplocFontSize { get; init; } = 9;

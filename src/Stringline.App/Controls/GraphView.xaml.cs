@@ -26,6 +26,9 @@ public partial class GraphView : UserControl
     public static readonly DependencyProperty GhostsProperty = DependencyProperty.Register(
         nameof(Ghosts), typeof(IReadOnlyList<GraphPath>), typeof(GraphView), new PropertyMetadata(null, OnVisualChanged));
 
+    public static readonly DependencyProperty DraftProperty = DependencyProperty.Register(
+        nameof(Draft), typeof(GraphDisruption), typeof(GraphView), new PropertyMetadata(null, OnVisualChanged));
+
     public static readonly DependencyProperty NavigatorProperty = DependencyProperty.Register(
         nameof(Navigator), typeof(GraphNavigator), typeof(GraphView), new PropertyMetadata(null, OnNavigatorChanged));
 
@@ -36,10 +39,12 @@ public partial class GraphView : UserControl
     private Point? _pressedAt;
     private bool _dragged;
     private bool _editing;
+    private bool _blocking;
     private bool _altUsed;
     private double? _now;
     private double _nowAt = double.NaN;
     private (string Key, int Vertex)? _tipFor;
+    private string? _annotationTip;
     private GraphHitIndex? _hitIndex;
 
     public GraphView()
@@ -71,6 +76,13 @@ public partial class GraphView : UserControl
         set => SetValue(GhostsProperty, value);
     }
 
+    /// <summary>A block being drawn with B+drag, outlined over the graph.</summary>
+    public GraphDisruption? Draft
+    {
+        get => (GraphDisruption?)GetValue(DraftProperty);
+        set => SetValue(DraftProperty, value);
+    }
+
     public GraphNavigator? Navigator
     {
         get => (GraphNavigator?)GetValue(NavigatorProperty);
@@ -79,6 +91,9 @@ public partial class GraphView : UserControl
 
     /// <summary>Builds the tooltip for a path under the cursor.</summary>
     public Func<GraphHit, HoverInfo?>? Describer { get; set; }
+
+    /// <summary>Builds the tooltip for a note or disruption under the cursor, when no line is.</summary>
+    public Func<ScreenPoint, HoverInfo?>? AnnotationDescriber { get; set; }
 
     /// <summary>Edits trains by dragging and gives the right-click menu; without one, presses only pan.</summary>
     internal IGraphEditor? Editor { get; set; }
@@ -121,7 +136,7 @@ public partial class GraphView : UserControl
     private void OnNavigatorMoved(object? sender, EventArgs e)
     {
         Surface.InvalidateVisual();
-        if (_tipFor is not null)
+        if (_tipFor is not null || _annotationTip is not null)
         {
             HideTip();
         }
@@ -140,7 +155,7 @@ public partial class GraphView : UserControl
         canvas.Save();
         canvas.Scale(scale);
         var now = _now is { } seconds ? new SimTime((int)Math.Floor(seconds)) : scene.Now;
-        _renderer.Render(canvas, scene with { Now = now }, nav.Viewport, Selection, Ghosts);
+        _renderer.Render(canvas, scene with { Now = now }, nav.Viewport, Selection, Ghosts, Draft);
         canvas.Restore();
         _nowAt = now is { } n ? nav.Viewport.TimeToPixel(n.Seconds) : double.NaN;
     }
@@ -154,9 +169,15 @@ public partial class GraphView : UserControl
         _dragged = false;
         var at = new ScreenPoint(p.X, p.Y);
         var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
-        _editing = Editor is { } editor && HitTest(p) is { } hit && editor.BeginEdit(hit, at, alt);
+        _blocking = Keyboard.IsKeyDown(Key.B) && Editor is { } blocks && blocks.BeginBlock(at);
+        _editing = !_blocking && Editor is { } editor && HitTest(p) is { } hit && editor.BeginEdit(hit, at, alt);
         _altUsed |= _editing && alt;
-        if (_editing)
+        if (_blocking)
+        {
+            HideTip();
+            Cursor = Cursors.Cross;
+        }
+        else if (_editing)
         {
             HideTip();
         }
@@ -173,6 +194,12 @@ public partial class GraphView : UserControl
     {
         base.OnMouseMove(e);
         var p = e.GetPosition(Surface);
+        if (_blocking && IsMouseCaptured)
+        {
+            Editor?.MoveBlock(new ScreenPoint(p.X, p.Y));
+            return;
+        }
+
         if (_pressedAt is { } from && IsMouseCaptured)
         {
             if (!_dragged && (Math.Abs(p.X - from.X) > ClickSlop || Math.Abs(p.Y - from.Y) > ClickSlop))
@@ -202,6 +229,16 @@ public partial class GraphView : UserControl
         base.OnMouseLeftButtonUp(e);
         var wasClick = _pressedAt is not null && !_dragged;
         _pressedAt = null;
+        if (_blocking)
+        {
+            _blocking = false;
+            ReleaseMouseCapture();
+            Cursor = null;
+            _ = Editor?.EndBlockAsync(commit: true);
+            e.Handled = true;
+            return;
+        }
+
         if (_editing)
         {
             _editing = false;
@@ -223,7 +260,7 @@ public partial class GraphView : UserControl
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
         base.OnPreviewKeyDown(e);
-        if (e.Key == Key.Escape && _editing)
+        if (e.Key == Key.Escape && (_editing || _blocking))
         {
             CancelEdit();
             e.Handled = true;
@@ -244,7 +281,7 @@ public partial class GraphView : UserControl
     protected override void OnLostMouseCapture(MouseEventArgs e)
     {
         base.OnLostMouseCapture(e);
-        if (_editing)
+        if (_editing || _blocking)
         {
             CancelEdit();
         }
@@ -254,14 +291,15 @@ public partial class GraphView : UserControl
     protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseRightButtonUp(e);
-        if (_editing || Editor is not { } editor)
+        if (_editing || _blocking || Editor is not { } editor)
         {
             return;
         }
 
         Focus();
         HideTip();
-        var items = editor.MenuFor(HitTest(e.GetPosition(Surface)));
+        var p = e.GetPosition(Surface);
+        var items = editor.MenuFor(HitTest(p), new ScreenPoint(p.X, p.Y));
         if (items.Count == 0)
         {
             return;
@@ -281,9 +319,18 @@ public partial class GraphView : UserControl
 
     private void CancelEdit()
     {
+        if (_blocking)
+        {
+            _blocking = false;
+            _ = Editor?.EndBlockAsync(commit: false);
+        }
+        else
+        {
+            _ = Editor?.EndEditAsync(commit: false);
+        }
+
         _editing = false;
         _pressedAt = null;
-        _ = Editor?.EndEditAsync(commit: false);
         if (IsMouseCaptured)
         {
             ReleaseMouseCapture();
@@ -335,18 +382,32 @@ public partial class GraphView : UserControl
 
     private void UpdateTip(Point p)
     {
-        if (HitTest(p) is not { } hit || Describer?.Invoke(hit) is not { } info)
+        if (HitTest(p) is { } hit && Describer?.Invoke(hit) is { } info)
+        {
+            var key = (hit.Path.Key, hit.NearestVertex);
+            if (_tipFor != key)
+            {
+                _tipFor = key;
+                _annotationTip = null;
+                TipHeading.Text = info.Heading;
+                TipLines.ItemsSource = info.Lines;
+            }
+        }
+        else if (AnnotationDescriber?.Invoke(new ScreenPoint(p.X, p.Y)) is { } about)
+        {
+            // A note or disruption: keyed by its heading, which names it.
+            if (_annotationTip != about.Heading)
+            {
+                _tipFor = null;
+                _annotationTip = about.Heading;
+                TipHeading.Text = about.Heading;
+                TipLines.ItemsSource = about.Lines;
+            }
+        }
+        else
         {
             HideTip();
             return;
-        }
-
-        var key = (hit.Path.Key, hit.NearestVertex);
-        if (_tipFor != key)
-        {
-            _tipFor = key;
-            TipHeading.Text = info.Heading;
-            TipLines.ItemsSource = info.Lines;
         }
 
         Tip.HorizontalOffset = p.X + 16;
@@ -357,6 +418,7 @@ public partial class GraphView : UserControl
     private void HideTip()
     {
         _tipFor = null;
+        _annotationTip = null;
         Tip.IsOpen = false;
     }
 }

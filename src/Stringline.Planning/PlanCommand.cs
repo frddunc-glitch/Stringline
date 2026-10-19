@@ -23,6 +23,9 @@ namespace Stringline.Planning;
 [JsonDerivedType(typeof(AddDisruption), "addDisruption")]
 [JsonDerivedType(typeof(RemoveDisruption), "removeDisruption")]
 [JsonDerivedType(typeof(EditDisruption), "editDisruption")]
+[JsonDerivedType(typeof(AddNote), "addNote")]
+[JsonDerivedType(typeof(EditNote), "editNote")]
+[JsonDerivedType(typeof(RemoveNote), "removeNote")]
 [JsonDerivedType(typeof(LinkLiveTrain), "linkLiveTrain")]
 [JsonDerivedType(typeof(UnlinkLiveTrain), "unlinkLiveTrain")]
 [JsonDerivedType(typeof(AcceptSuggestion), "acceptSuggestion")]
@@ -380,6 +383,45 @@ public sealed record EditDisruption(Disruption Disruption) : IPlanCommand
     public string Describe(WorkingPlan plan) => $"Change {PlanText.Describe(Disruption)}";
 }
 
+/// <summary>Pins a note to the graph (DIS-3).</summary>
+public sealed record AddNote(PlanNote Note) : IPlanCommand
+{
+    public PlanCommandResult Apply(WorkingPlanBuilder b)
+    {
+        ArgumentNullException.ThrowIfNull(b);
+        return Note is null ? PlanCommandResult.Fail("No note given.") : PlanCommandResult.From(b.AddNote(Note));
+    }
+
+    public string Describe(WorkingPlan plan) => $"Add {PlanText.Describe(Note)}";
+}
+
+/// <summary>Replaces the note with the same <see cref="PlanNote.Id"/> (its text, time or location).</summary>
+public sealed record EditNote(PlanNote Note) : IPlanCommand
+{
+    public PlanCommandResult Apply(WorkingPlanBuilder b)
+    {
+        ArgumentNullException.ThrowIfNull(b);
+        return Note is null ? PlanCommandResult.Fail("No note given.") : PlanCommandResult.From(b.ReplaceNote(Note));
+    }
+
+    public string Describe(WorkingPlan plan) => $"Change {PlanText.Describe(Note)}";
+}
+
+public sealed record RemoveNote(string Id) : IPlanCommand
+{
+    public PlanCommandResult Apply(WorkingPlanBuilder b)
+    {
+        ArgumentNullException.ThrowIfNull(b);
+        return PlanCommandResult.From(b.RemoveNote(Id));
+    }
+
+    public string Describe(WorkingPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return plan.FindNote(Id) is { } n ? $"Remove {PlanText.Describe(n)}" : $"Remove note {Id}";
+    }
+}
+
 /// <summary>
 /// Links a live working (sim uid and headcode) to a WTT train by hand, or with a null <see cref="Train"/> marks it
 /// "do not match". Not a change to the plan itself, but kept in its history so it can be undone (Fred, S10).
@@ -517,5 +559,7 @@ public static class PlanText
 
     public static string Describe(Disruption? d) => d is null
         ? "disruption"
-        : $"{(d.Kind == DisruptionKind.Block ? "block" : "speed restriction")} {d.From}–{d.To} {d.Start}–{d.End}";
+        : $"{(d.Kind == DisruptionKind.Block ? "block" : "speed restriction")} {d.From}–{d.To}{(d.Track is null ? string.Empty : $" ({d.Track})")} {d.Start}–{d.End}";
+
+    public static string Describe(PlanNote? n) => n is null ? "note" : $"note at {n.Location} {n.Time}: “{n.Summary(30)}”";
 }

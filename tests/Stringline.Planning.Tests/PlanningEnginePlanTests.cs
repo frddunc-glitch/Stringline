@@ -40,9 +40,12 @@ public sealed class PlanningEnginePlanTests : IAsyncDisposable
         _engine.SnapshotPublished += OnPublished;
         try
         {
-            if (until(_engine.Current))
+            // Read the current snapshot once: the engine may publish another between a check and a second read, which
+            // made Clear_starts_a_new_session_with_the_booked_plan fail now and then (S12, fixed in S13).
+            var current = _engine.Current;
+            if (until(current))
             {
-                return _engine.Current;
+                return current;
             }
 
             return await found.Task.WaitAsync(Timeout);

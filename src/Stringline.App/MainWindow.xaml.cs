@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         DataContext = viewModel;
         Graph.Describer = viewModel.Describe;
+        Graph.AnnotationDescriber = viewModel.DescribeAt;
         Graph.Editor = viewModel;
         Graph.PathClicked += (_, hit) => viewModel.SelectPath(hit);
         viewModel.History.PropertyChanged += (_, e) =>

@@ -627,6 +627,61 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - **An intermittent failure:** `Clear_starts_a_new_session_with_the_booked_plan` (S10) failed once in the Linux container and passed on five reruns. It is probably a timing race in the test's snapshot wait; not investigated.
 - In Debug builds the engine still logs "Forecast … took 100+ ms" for Waterloo; Release is about 23 ms (S11).
 
+## 2026-10-19 — S13: Disruptions and notes
+
+### Done
+- **Portable parts (tested on Linux):**
+  - Planning:
+    - **Tracks** (`Disruption.Direction`, `Disruption.AppliesTo`): a block or speed restriction is on all lines, on a corridor track (Up, Down or Single, applying to trains running that way), or on a WTT line code (applying to trains planned on it out of the point the run starts from). The forecaster's blocks, the forecaster's restrictions and the plan's clamping (`MinRunTable.Along`) all use it. Restrictions ignored their track before.
+    - **Notes** (DIS-3): `PlanNote` (location, time, text, at most 500 characters), with `AddNote`, `EditNote` and `RemoveNote` commands (`addNote`, `editNote`, `removeNote` in `PlanCommandJson`). `WorkingPlan.Notes`, `FindNote`, `NewNoteId` (`N1`…), and `NewDisruptionId` (`B1`…, `SR1`…).
+    - **`DisruptionTracks.For`**: the track choices for a span of a corridor: all lines, the profile's section tracks, then WTT line codes used there, most used first (`TrackChoice`).
+    - Disruptions describe their track in the history ("Add block A–C (Down) …").
+  - Graph (`GraphAnnotations`):
+    - `GraphScene.Disruptions` and `Notes`, built from the plan for the corridor (`GraphSceneRequest.ShowDisruptions`).
+    - Drawing: a block is a red hatched rectangle, a restriction an amber band, each labelled in its corner and drawn under the trains; a note is a ring with its first line in a yellow box, over the trains. A B+drag draft is drawn dashed with its times (`Render(…, draft)`).
+    - Hit tests (`NoteAt`, `DisruptionAt`), tooltips (`Describe`), `NearestLocation`, and `SpanBetween`: a drag or click widened out to the location lines around it and to 5-minute steps.
+- **App:**
+  - **Right-click:** a note gives Edit note… and Remove note; the background gives the disruption there (Edit…, Remove), then Add block/possession here…, Add speed restriction here… and Add note here….
+  - **B+drag** draws a block (a dashed draft and the span in the status bar); release opens the block dialog filled in, and Esc drops it.
+  - **Dialogs** (`PromptDialog`): for a block or restriction, the ends, track, times, running (factor and added minutes) and note; for a note, the location, time and text. Every field is checked.
+  - **Tooltips** over notes and disruptions.
+  - **Disruptions** check box on the toolbar, and View → "Show disruptions and notes".
+- **Fixed:** the intermittent `Clear_starts_a_new_session_with_the_booked_plan` (S12 known issue). It now failed about 1 run in 5 on Windows. The test helper checked `_engine.Current` and then read it again, so it could return a newer snapshot than the one it checked. It now reads it once; `PlanningEngineForecastTests` had the same pattern and is fixed too. The engine was not at fault.
+- **Tests:**
+  - Planning +15 (161): blocks on all lines, on corridor tracks by direction, on line codes (and the line out of the run's start), at one location; a restriction on a track; track validation and wording; new IDs; notes added, changed, removed, refused and leaving the forecast alone; track choices on double and single lines; JSON for the new commands and a disruption with a direction.
+  - Graph +14 (184): the scene's disruptions and notes (off-corridor ones left out), hiding, labels, rectangles in both orientations, one-location bands, hit tests, spans (between sections, at a point, on a line, vertical), tooltips, tinting, the draft, and a PNG snapshot.
+  - App +5 (64), on Waterloo: a block from the menu with its dialog, then edited, removed and the removal undone; a restriction refused for not slowing trains, then added on a typed line code; B+drag with its draft, dialog and Esc; notes added, edited, refused when empty and removed; hiding.
+  - Totals: 1 195 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 103, Planning 161, Graph 184, Tools 57, App 64). Green on Windows (Debug); the engine tests passed 15 runs in a row. Green on Linux (`sdk:10.0` container, portable filter, Release: 1 131), including the new PNG snapshot.
+- **Tried in the app:** it starts with a Waterloo replay and closes cleanly, with nothing logged above Information. The menus, B+drag and dialogs were driven only by the view-model tests, not by hand; see Known issues.
+
+### Decisions
+- **Fred's choices:**
+  - **Notes are plan commands**, so they undo, show in the history and will be saved with the commands (S16).
+  - **Tracks are "direction + line codes"**: all lines, the corridor's tracks by direction, or WTT line codes.
+  - **B+drag opens the block dialog filled in.** Disruptions and notes are changed through right-click → Edit…, not by dragging them.
+- **A disruption's From is the corridor's Up end.** The dialog swaps the ends if they are entered the other way, so a track's Down and Up are the corridor's own. A disruption made elsewhere (JSON, S15) with the ends reversed reads Down as To → From.
+- **A direction at one location applies to every train**, since a run into or out of one place has no way along the disruption.
+- **A typed track that is not offered is a WTT line code.** An empty one is all lines.
+- **"Here" means the section around the click, from the click's time rounded down to 5 min, for an hour**; a note goes on the nearest location at the nearest minute.
+- **A speed restriction must slow trains**: a factor over 1 or added minutes. The default is ×1.5.
+- **Only disruptions with both ends on the corridor are drawn**; one partly on a corridor is not shown there. Notes need their location on the corridor.
+- **Disruptions draw under the trains and notes over them**, so blocks never hide a train and notes stay readable. Neither dims when a train is selected.
+
+### Next
+- S14: a disruption conflict is a plan run through a block in force on its track: `Disruption.AppliesTo` with the time check in `Forecaster.AfterBlocks`. Conflicts can sit in the right-hand column next to the history.
+- S16: save notes and disruptions through the command history (they are plan commands); `02-…md`'s separate `disruptions` and `notes` tables are not needed unless wanted for review queries.
+
+### Known issues
+- **Not tried by hand.** 👤 Fred: on a replay, please try:
+  - right-clicking the background and adding a block, a speed restriction and a note;
+  - holding B and dragging a block (does B+drag feel right?), and Esc while drawing;
+  - right-clicking a block or note to edit or remove it, then Ctrl+Z;
+  - hovering a block or note for its tooltip;
+  - whether the hatching and amber are too strong or too faint on your screen, and whether the forecast holds trains as you expect for a block on one track.
+- The prompt has one-line text boxes, so a note is typed on one line (a note loaded with several lines shows its first line on the graph and all of it in the tooltip).
+- Track choices are worked out from the ends shown when the dialog opens; if the ends are changed, the list is not refreshed (a typed line code still works).
+- The Disruptions toggle is not remembered between runs.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
