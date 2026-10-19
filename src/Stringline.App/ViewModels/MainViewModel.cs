@@ -234,6 +234,16 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     partial void OnSelectedCorridorChanged(CorridorTab? value)
     {
+        if (KeepsViewOnTabChange(value))
+        {
+            if (value is not null)
+            {
+                RequestScene();
+            }
+
+            return;
+        }
+
         Navigator.ShowFullCorridor();
         RequestScene();
     }
@@ -564,7 +574,8 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         LoadedTimetable loaded;
         try
         {
-            loaded = await Task.Run(() => _loader.Load(path));
+            var simId = _settings.SimIdFor(path);
+            loaded = await Task.Run(() => _loader.Load(path, simId));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WttFormatException)
         {
@@ -573,6 +584,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
 
         _timetable = loaded;
+        HasTimetable = true;
         _engine.SetTimetable(loaded.Timetable);
         _engine.SetForecast(await Task.Run(() => ForecastNetwork.For(loaded.Profile, loaded.Timetable)));
         var area = loaded.Timetable.AreaId;

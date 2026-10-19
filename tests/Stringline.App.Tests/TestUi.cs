@@ -148,6 +148,38 @@ internal sealed class ScriptedDialogs : IDialogService
     }
 
     public void ShowList(string title, string heading, IReadOnlyList<string> lines) => Lists.Add((title, lines));
+
+    /// <summary>Answers to questions, in order (the index of the choice); none left means the window was closed.</summary>
+    public Queue<int?> Choices { get; } = new();
+
+    /// <summary>Every question asked.</summary>
+    public List<string> Asked { get; } = [];
+
+    public int? Choose(string title, string message, IReadOnlyList<string> choices)
+    {
+        Asked.Add(message);
+        return Choices.Count > 0 ? Choices.Dequeue() : null;
+    }
+
+    /// <summary>What the user does in the profile editor while it is open.</summary>
+    public Action<ProfileEditorViewModel>? ProfileEditor { get; set; }
+
+    public List<ProfileEditorViewModel> ProfileEditors { get; } = [];
+
+    public void ShowProfileEditor(ProfileEditorViewModel viewModel)
+    {
+        ProfileEditors.Add(viewModel);
+        ProfileEditor?.Invoke(viewModel);
+    }
+
+    /// <summary>Files opened in their Windows program.</summary>
+    public List<string> Opened { get; } = [];
+
+    public string? OpenInShell(string path)
+    {
+        Opened.Add(path);
+        return null;
+    }
 }
 
 /// <summary>A main view model wired as the app wires it, with files under a temporary folder.</summary>

@@ -50,6 +50,23 @@ internal sealed record AppSettings
     /// <summary>The folder the last graph export went to.</summary>
     public string? LastExportFolder { get; init; }
 
+    /// <summary>
+    /// The sim name the user gave each timetable that has no sim ID of its own (S14a), by full path in lower case, so
+    /// its profile is found again next time.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> SimIdByTimetable { get; init; } = new Dictionary<string, string>();
+
+    public string? SimIdFor(string? timetablePath) =>
+        timetablePath is { Length: > 0 } && SimIdByTimetable.TryGetValue(PathKey(timetablePath), out var id) ? id : null;
+
+    public AppSettings WithSimId(string timetablePath, string simId)
+    {
+        var map = new Dictionary<string, string>(SimIdByTimetable, StringComparer.Ordinal) { [PathKey(timetablePath)] = simId.Trim() };
+        return this with { SimIdByTimetable = map };
+    }
+
+    private static string PathKey(string path) => Path.GetFullPath(path).ToLowerInvariant();
+
     public string? TimetableFor(string? areaId) =>
         areaId is not null && TimetableByArea.TryGetValue(areaId.Trim().ToLowerInvariant(), out var path) ? path : null;
 

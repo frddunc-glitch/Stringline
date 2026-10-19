@@ -12,6 +12,8 @@ internal static class FileFilters
     public const string Timetable = "SimSig timetables (*.wtt)|*.wtt|All files (*.*)|*.*";
     public const string Recording = "Stringline recordings (*.sslog)|*.sslog|All files (*.*)|*.*";
     public const string Png = "PNG images (*.png)|*.png";
+
+    public const string Csv = "CSV files (*.csv)|*.csv|Text files (*.txt)|*.txt|All files (*.*)|*.*";
 }
 
 /// <summary>The Connect dialog (CON-1, CON-5): where SimSig is, the optional login, and an optional timetable.</summary>

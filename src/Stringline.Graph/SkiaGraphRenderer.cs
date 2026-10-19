@@ -21,7 +21,7 @@ public sealed class SkiaGraphRenderer : IDisposable
     /// <summary>Height of the title band at the top of the surface.</summary>
     private const float TitleBand = 24;
 
-    private readonly Dictionary<(Colour Colour, GraphLayer Layer, bool Dim, bool Cancelled), SKPaint> _pathPaints = [];
+    private readonly Dictionary<(Colour Colour, GraphLayer Layer, bool Dim, bool Cancelled, LineStyle Style), SKPaint> _pathPaints = [];
     private readonly Dictionary<(Colour Colour, float Width), SKPaint> _strokes = [];
     private readonly Dictionary<Colour, SKPaint> _fills = [];
     private readonly ProjectedPathCache _paths = new();
@@ -41,6 +41,7 @@ public sealed class SkiaGraphRenderer : IDisposable
     private readonly SKFont _annotationFont;
     private SKPaint? _draftBorder;
     private readonly SKPathEffect _dash = SKPathEffect.CreateDash([6, 4], 0);
+    private readonly Dictionary<(LineStyle Style, float Width), SKPathEffect> _categoryDashes = [];
 
     public SkiaGraphRenderer(GraphTheme? theme = null)
     {
@@ -281,7 +282,7 @@ public sealed class SkiaGraphRenderer : IDisposable
     {
         foreach (var run in _paths.Get(path))
         {
-            canvas.DrawPath(run.Path, PathPaint(run.Colour, path.Layer, dim, path.IsCancelled));
+            canvas.DrawPath(run.Path, PathPaint(run.Colour, path.Layer, dim, path.IsCancelled, path.Style));
         }
     }
 
@@ -696,9 +697,9 @@ public sealed class SkiaGraphRenderer : IDisposable
         canvas.DrawText(text, 8, 17, SKTextAlign.Left, _titleFont, Fill(Theme.Text));
     }
 
-    private SKPaint PathPaint(Colour colour, GraphLayer layer, bool dim, bool cancelled = false)
+    private SKPaint PathPaint(Colour colour, GraphLayer layer, bool dim, bool cancelled = false, LineStyle lineStyle = LineStyle.Solid)
     {
-        if (!_pathPaints.TryGetValue((colour, layer, dim, cancelled), out var paint))
+        if (!_pathPaints.TryGetValue((colour, layer, dim, cancelled, lineStyle), out var paint))
         {
             var style = cancelled ? Theme.Cancelled : Theme.StyleOf(layer);
             paint = new SKPaint
@@ -709,12 +710,35 @@ public sealed class SkiaGraphRenderer : IDisposable
                 StrokeJoin = SKStrokeJoin.Round,
                 StrokeCap = SKStrokeCap.Round,
                 Color = ToSk(colour with { A = (byte)Math.Round(colour.A * style.Opacity * (dim ? Theme.DimOpacity : 1)) }),
-                PathEffect = style.Dashed ? _dash : null,
+                PathEffect = style.Dashed ? _dash : CategoryDash(lineStyle, style.Width),
             };
-            _pathPaints[(colour, layer, dim, cancelled)] = paint;
+            _pathPaints[(colour, layer, dim, cancelled, lineStyle)] = paint;
         }
 
         return paint;
+    }
+
+    /// <summary>
+    /// A category's dashes (S14a): 12–7, less the round caps, longer than the forecast's 6–4 dash so a dashed
+    /// category's actual line does not read as a forecast; dots are round caps spaced two widths apart. Kept per
+    /// pattern and width.
+    /// </summary>
+    private SKPathEffect? CategoryDash(LineStyle lineStyle, float width)
+    {
+        if (lineStyle == LineStyle.Solid)
+        {
+            return null;
+        }
+
+        if (!_categoryDashes.TryGetValue((lineStyle, width), out var effect))
+        {
+            effect = lineStyle == LineStyle.Dotted
+                ? SKPathEffect.CreateDash([0.01f, Math.Max(3f, width * 2)], 0)
+                : SKPathEffect.CreateDash([12, 7], 0);
+            _categoryDashes[(lineStyle, width)] = effect;
+        }
+
+        return effect;
     }
 
     private SKPaint Stroke(Colour colour, float width)
@@ -770,5 +794,11 @@ public sealed class SkiaGraphRenderer : IDisposable
         _annotationFont.Dispose();
         _draftBorder?.Dispose();
         _dash.Dispose();
+        foreach (var effect in _categoryDashes.Values)
+        {
+            effect.Dispose();
+        }
+
+        _categoryDashes.Clear();
     }
 }

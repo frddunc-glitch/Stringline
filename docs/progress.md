@@ -770,6 +770,71 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - The platform margin and threshold are fixed defaults in `ConflictOptions`. There is no setting for them in the app yet (S18's settings page).
 - Picking the row that is already selected does not focus the graph again; pick another row, or click its ring.
 
+## 2026-10-19 — S14a: Profile editor
+
+### Done
+- **Portable parts (tested on Linux):**
+  - Network (`Stringline.Network.Profiles`):
+    - **`ProfileEdits`**: immutable edits on a `StringlineProfile` for everything COR-2 and COR-5 ask for: the sim's name and ID, location names, corridors (add a candidate or a new one, remove, rename, reorder), locations (insert, remove, move, distance, platforms, axis mode), sections (tracks, headway) and category styles. Each is checked, and a refused one throws `ProfileEditException` with its reason. Also `HandTuned` and `RegenerateCorridors`. The rules are in `04-…md` §5.
+    - **`ProfileValidator`**: `ProfileJson`'s checks moved out unchanged, so a file and an edit keep the same rules.
+    - **`TrackLayouts`**: the track presets, and tracks as text (`Up Fast:Up, Down:Down, Relief:Bi`).
+    - **`LocationNamesCsv`**: `TIPLOC,name` import (header, quotes, comments), reporting unknown TIPLOCs and bad rows.
+  - Graph: **category line styles** are drawn. `GraphPath.Style` carries the category's style on the WTT, plan and actual layers; Dashed is long dashes (12–7), Dotted round dots. The forecast keeps its 6–4 dash.
+- **App:**
+  - A **Profile menu**: Edit profile…, Open profile file, Reload profile and Regenerate corridors….
+  - The **profile editor** (`ProfileEditorWindow`, `ProfileEditorViewModel` and its rows): General, Corridors (with an axis preview) and Categories tabs, OK/Cancel/Apply. See `05-…md` §9.
+  - **Applying** saves the profile, then rebuilds the forecast network, the tabs, the train list's colours and the graph without reloading the WTT. The plan, disruptions and selection stay, and so does the corridor shown, with its view.
+  - **No sim ID**: the editor asks for one; it is saved and remembered for that `.wtt` (`AppSettings.SimIdByTimetable`), and `TimetableLoader.Load` takes it next time.
+  - `IDialogService` gains `Choose` (a question with buttons, `ChoiceDialog`), `ShowProfileEditor` and `OpenInShell`. Dialogs are now owned by the window in front, so a question from the editor sits over it.
+- **Tests:**
+  - Network +37 (140): every edit and its refusal, sections kept and rebuilt, distances, hand-tuned detection, regenerating both ways, edits surviving save → load → `Refresh`; track presets and text; CSV import.
+  - Graph +4 (199): styles reaching the scene's paths, and dashes and dots leaving gaps when drawn.
+  - App +23 (93):
+    - on Waterloo: rename a location, move a tab, set 12 min headways and see the forecast's knock-on behind a block grow, with the plan and selection kept;
+    - refused edits showing why and restoring the cell, and Cancel asking;
+    - locations removed, added back and moved, a distance axis, a new corridor, and a removed one offered again;
+    - removing the corridor shown; CSV import and category styles reaching the graph; Reload (and a damaged file); Open; Regenerate with each answer;
+    - a Llangollen copy with no sim ID: named, saved, and found again by a fresh app; naming one whose profile exists;
+    - the editor's text parsing;
+    - **the editor window itself**, shown on an STA thread with every tab laid out and no binding errors. It caught nothing this time, but a broken binding fails it (checked).
+  - Totals: 1 299 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 140, Planning 184, Graph 199, Tools 57, App 93).
+    - Green on Windows (Debug).
+    - Green on Linux (`sdk:10.0` container, portable filter, Release: 1 206).
+- **Tried in the app:**
+  - Started on Waterloo and opened Profile → Edit profile… through UI Automation. The editor showed its three tabs; Cancel closed it, and the app closed cleanly with nothing logged above Information.
+  - The tabs were also rendered to PNG from the window test and checked by eye.
+  - No edit was applied by hand, so as not to change the real Waterloo profile; applying was driven only by the view-model tests.
+
+### Decisions
+- **Fred's choices:**
+  - **No sim ID**: the user names the sim, and the name is remembered per `.wtt` file.
+  - **Regenerate** asks if any corridor is hand-tuned: Replace all, Keep mine, or Cancel.
+  - **Tracks**: presets plus a custom text list.
+  - **Line styles** are edited and drawn; the forecast keeps its own dash.
+- **Edits apply to a draft** and only Apply or OK save. A refused edit never reaches the draft, so the editor cannot produce a profile `ProfileJson` would refuse.
+- **Editor-only rules**: a corridor needs at least 2 locations, and a priority is 0–100. Files are not refused for these, so an older hand-edited file still loads.
+- **A corridor's ID never changes**: renaming changes its tab name only. A new corridor's ID comes from its name.
+- **Reload doesn't save.** It shows the file as it is, refreshed against the WTT; the next timetable load saves as before.
+- **CSV names for TIPLOCs not in the timetable are imported** (and reported), since another timetable for the sim may use them.
+- **Headways are typed as m:ss**, minutes (2.5) or seconds (90s).
+- **The App tests run with real cultures** (`System.Globalization.Invariant` false at run time only, as the app has), because WPF text needs them. The build keeps `InvariantGlobalization`, so the analyser rules are unchanged.
+
+### Next
+- S15: suggestions (see S14's notes). Category priorities, now editable, weight them.
+- The editor could show the single-line hint (S6) beside each section, to help set Llangollen's.
+
+### Known issues
+- **Not tried by hand.** 👤 Fred, on a sim you know:
+  - rename locations, reorder tabs and change tracks and headways, then press Apply and check the graph;
+  - try a distance axis;
+  - import a names CSV;
+  - change a category to dashed or dotted, and say whether it reads well next to the forecast's dashes;
+  - try Regenerate corridors after changing a corridor.
+- Grid cells commit when you leave them (Tab, Enter or a click elsewhere), as WPF grids do. A cell still being typed in when Apply is pressed may not be included; press Enter first.
+- The selected train is drawn solid whatever its category's line style.
+- Changing a corridor's locations re-measures it from the WTT straight away, which takes a moment on large sims.
+- A section whose two locations swap order (by moving one past the other) keeps its tracks, as `Refresh` already did, so its Up and Down tracks are then the wrong way round. Set its layout again.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
@@ -793,3 +858,6 @@ New from S11:
 
 New from S14:
 9. Is **1 minute** right as the default platform re-occupation margin, and **30 s** as the least conflict shown, once you have tried them on a busy sim? Both are in `ConflictOptions`.
+
+New from S14a:
+10. When you have tried line styles: are dashed and dotted categories distinct enough from the forecast's dashes, or should the forecast change instead (e.g. thinner, or dash-dot)?

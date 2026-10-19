@@ -141,7 +141,7 @@ public interface IPlanCommand { PlanCommandResult Apply(WorkingPlanBuilder b); s
 - Sim clock between `clock_msg`s (`Stringline.Core.Live.SimClock`, S5): interpolates from the events' `ReceivedAt` wall times, frozen when paused. The speed is **measured** from successive running `clock_msg`s (Δsim / Δwall, over at least 20 sim s), because at SimSig's flat-out setting the interval is 1 and a replay at 8× still reports the recorded interval. 500/interval is only the first guess, and at flat out the clock holds until measured. It never runs past the end of the current sim minute (the next `clock_msg` is due then) or past the latest `train_location` time, which runs up to a minute ahead of the clock and moves it on.
 
 ## 5. Persistence
-- **Profile** `%APPDATA%\Stringline\profiles\{area_id}.json` — corridors, location names, distances, categories, priorities.
+- **Profile** `%APPDATA%\Stringline\profiles\{area_id}.json` — corridors, location names, distances, categories, priorities. Edited in the app's profile editor (S14a, `ProfileEdits`) or by hand, then Profile → Reload.
 - **Session** `Documents\Stringline\sessions\{area_id}-{yyyyMMdd-HHmm}.stringline` (SQLite): tables `events`, `plan_commands`, `disruptions`, `notes`, `train_links`, `meta`. Working plan is rebuilt by replaying commands over the WTT.
 - **Recordings** `.sslog` — JSON Lines, format version 1:
   - line 1, header: `{"sslog":1,"app":"Stringline 0.1.0","created":"…Z","host":"localhost","port":51515,"topics":[…]}`. The sim's identity is not known yet when the header is written; it is in the first `clock_msg`.

@@ -37,12 +37,24 @@ internal interface IDialogService
     bool Prompt(ViewModels.PromptViewModel viewModel);
 
     void ShowList(string title, string heading, IReadOnlyList<string> lines);
+
+    /// <summary>Asks a question with these answers (as buttons, the first the default); the index picked, or null if the window was closed.</summary>
+    int? Choose(string title, string message, IReadOnlyList<string> choices);
+
+    /// <summary>Shows the profile editor until it is closed.</summary>
+    void ShowProfileEditor(ViewModels.ProfileEditorViewModel viewModel);
+
+    /// <summary>Opens a file in the program Windows uses for it. Returns why it could not, or null.</summary>
+    string? OpenInShell(string path);
 }
 
 /// <summary>The real dialogs, owned by the main window.</summary>
 internal sealed class WpfDialogService : IDialogService
 {
-    private static Window? Owner => Application.Current?.MainWindow is { IsLoaded: true } main ? main : null;
+    /// <summary>The window in front if it is one of ours (the profile editor, say, so its questions sit over it), else the main window.</summary>
+    private static Window? Owner =>
+        Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w is { IsActive: true, IsLoaded: true })
+        ?? (Application.Current?.MainWindow is { IsLoaded: true } main ? main : null);
 
     public bool ShowConnect(ViewModels.ConnectViewModel viewModel) =>
         new Views.ConnectDialog(viewModel) { Owner = Owner }.ShowDialog() == true;
@@ -107,4 +119,23 @@ internal sealed class WpfDialogService : IDialogService
 
     public void ShowList(string title, string heading, IReadOnlyList<string> lines) =>
         new Views.ListWindow(title, heading, lines) { Owner = Owner }.Show();
+
+    public int? Choose(string title, string message, IReadOnlyList<string> choices) =>
+        Views.ChoiceDialog.Ask(Owner, title, message, choices);
+
+    public void ShowProfileEditor(ViewModels.ProfileEditorViewModel viewModel) =>
+        new Views.ProfileEditorWindow(viewModel) { Owner = Owner }.ShowDialog();
+
+    public string? OpenInShell(string path)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+            return null;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or System.IO.FileNotFoundException)
+        {
+            return ex.Message;
+        }
+    }
 }

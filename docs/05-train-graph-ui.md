@@ -35,7 +35,8 @@ Panels are dockable later; v1 uses a fixed three-column layout with a splitter.
 | WTT | 1 px, category colour at 30% opacity |
 | Working plan (where differs from WTT) | 1.5 px solid, category colour |
 | Actual | 2.5 px solid, category colour (or delay band colour) |
-| Forecast | 1.5 px dashed, same colour |
+| Forecast | 1.5 px dashed (6–4), same colour |
+| Category line style (S14a) | a category styled Dashed draws its WTT, plan and actual lines in long dashes (12–7), Dotted in round dots two widths apart; the forecast keeps its own dash. The selected train is drawn solid |
 | Cancelled | thin grey with crosses at ends |
 | Unmatched live train | grey actuals |
 | Selected train | 4 px with halo; others dim to 50% |
@@ -127,7 +128,7 @@ Built in S7 and S9 as below, except that the scene builder takes a `GraphSceneRe
 ## 8. The WPF shell (S8)
 
 Built as §1 describes, with these specifics:
-- **Layout.** Menu (Session, Timetable, View, Help), toolbar (Connect, Replay, Disconnect, Rec, Timetable; corridor tabs; WTT/Actual layer toggles; 1h/3h/6h; Follow), an info bar for messages and timetable suggestions, the train list and graph side by side with a splitter, a replay transport bar (play/pause, speed 1×–60×/Max, seek bar), and the status bar (connection, sim name, sim clock and speed, train counts, recording). S12 adds a Plan menu, a third column (train detail over edit history, with a splitter), and the edit status in the status bar; S13 a Disruptions layer box (also in the View menu); S14 the conflicts panel as a tab beside the history, a Conflicts layer box (also in the View menu) and the count in the status bar.
+- **Layout.** Menu (Session, Timetable, View, Help), toolbar (Connect, Replay, Disconnect, Rec, Timetable; corridor tabs; WTT/Actual layer toggles; 1h/3h/6h; Follow), an info bar for messages and timetable suggestions, the train list and graph side by side with a splitter, a replay transport bar (play/pause, speed 1×–60×/Max, seek bar), and the status bar (connection, sim name, sim clock and speed, train counts, recording). S12 adds a Plan menu, a third column (train detail over edit history, with a splitter), and the edit status in the status bar; S13 a Disruptions layer box (also in the View menu); S14 the conflicts panel as a tab beside the history, a Conflicts layer box (also in the View menu) and the count in the status bar; S14a a Profile menu (§9).
 - **Sessions.** One `LiveEngine` runs for the app's lifetime; each Connect or Replay clears it and pumps a new source into it. A replay is read in-process through `ReplaySource` (Fred's choice); the external `replay-server` still works through Connect. Seeking a finished replay starts it again from the chosen time.
 - **Timetables (Fred's choice: pick + suggest).** The Connect and Replay dialogs take an optional `.wtt`, remembered per sim. When the sim's `area_id` arrives and no timetable is loaded, the info bar offers the timetable last used for that sim plus every `.wtt` for that area in SimSig's Timetables folder (`WttCatalogue`). A timetable for a different sim gets a warning and suggestions. Loading one mid-session rebuilds the matches from the session's events. The profile is loaded and refreshed, or created, and saved (`%APPDATA%\Stringline\profiles`); a damaged profile is not overwritten.
 - **Credentials (CON-5, Fred's choice: opt-in).** The username is always remembered; the password only with "Remember the password", encrypted with DPAPI for the current Windows user in `%APPDATA%\Stringline\settings.json`. `GatewayClientOptions` is logged only through its masked `ToString`.
@@ -138,3 +139,14 @@ Built as §1 describes, with these specifics:
 - **Command line.** `Stringline.exe [--wtt t.wtt] [--replay x.sslog [--speed 8|max] [--start 07:30]]`.
 - **View options (S9).** The toolbar's Colour box (Category or Delay) and ⇅ Vertical toggle, also in the View menu, are remembered in the settings. Turning the graph keeps the time and corridor ranges and follow mode.
 - **Export (S9, GR-10; Fred: the current view).** Session ▸ Export graph as PNG… (Ctrl+E), or at 2× size. It saves the graph as shown: the same time and corridor range, orientation, colours, selection and now line, at the graph's size in device-independent pixels times 1 or 2. A save dialog offers `Documents\Stringline\exports\{area}-{corridor}-{HHmm}.png` at first, then the folder last used. PDF export (GR-10) is not built.
+
+## 9. Profile editor (S14a)
+
+- **Profile menu.** Edit profile… opens the editor. Open profile file opens `{area_id}.json` in the program Windows uses for JSON. Reload profile re-reads it (after a hand edit) and redraws without reloading the WTT; a damaged file is reported and the profile in use stays. Regenerate corridors… replaces the corridors with generated ones; if any are hand-tuned it asks first: Replace all, Keep mine (beside the generated ones), or Cancel (Fred's choice).
+- **Editor window** (modal), with OK, Cancel and Apply. Tabs:
+  - **General:** the sim ID (editable only when the timetable has none), the sim name, and every location's display name (with the corridors it is on), plus Import names from CSV….
+  - **Corridors:** the corridors in tab order (rename in place, ▲/▼ to reorder, New… from two ends, Remove, and Add for a generated corridor not in the profile). For the selected one: an axis preview (Up end on the left, stations heavier), Space by distance, the locations (name, distance, platforms; Add location… after the selected one, Remove, ▲/▼), and the sections (a layout preset or tracks as text, headway as m:ss, the WTT's minimum run).
+  - **Categories:** name, colour (`#RRGGBB` with a swatch), line style, priority and the number of trains.
+- Every cell edit is a `ProfileEdits` edit on a draft. One that is refused shows why under the tabs, and the cell goes back to its old value. Cancel or closing with unapplied changes asks before discarding them.
+- **Apply** saves through `ProfileStore`, then rebuilds the forecast network, the corridor tabs, the train list's colours and the graph from the loaded WTT. The working plan, disruptions, notes and selection are kept. The corridor shown stays, with its view, if it is still there; a removed corridor's tab closes and the first is shown.
+- **No sim ID** (Fred's choice: remember per file). A timetable without an area ID gets an unsaved `unknown` profile and says so. The editor asks for a sim ID, offering the live sim's `area_id` if connected. On Apply the profile is saved under it, and the settings remember it for that `.wtt` path (`SimIdByTimetable`), so the next load finds it. If a profile with that ID is already saved, it asks whether to use the saved one or replace it.

@@ -7,6 +7,15 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
 
+  <!-- Real cultures at run time, as the app has: WPF text needs them (the window tests lay out text). The build keeps
+       InvariantGlobalization, so the culture analyser rules stay as in every other project. -->
+  <Target Name="RealCulturesAtRunTime" BeforeTargets="GenerateBuildRuntimeConfigurationFiles">
+    <ItemGroup>
+      <RuntimeHostConfigurationOption Remove="System.Globalization.Invariant" />
+      <RuntimeHostConfigurationOption Include="System.Globalization.Invariant" Value="false" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Stringline.App\Stringline.App.csproj" />
   </ItemGroup>

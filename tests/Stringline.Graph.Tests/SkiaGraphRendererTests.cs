@@ -130,6 +130,48 @@ public class SkiaGraphRendererTests
         bitmap.GetPixel((int)Math.Round(p.X), (int)Math.Round(p.Y)).Red.Should().BeGreaterThan(150);
     }
 
+    [Fact]
+    public void Category_line_styles_reach_the_wtt_and_actual_paths()
+    {
+        var dashed = Profile with { Categories = [.. Profile.Categories.Select(c => c.CategoryId == "XP" ? c with { Style = LineStyle.Dashed } : c)] };
+        var scene = GraphSceneBuilder.Build(new GraphSceneRequest(dashed, TestCorridor)
+        {
+            Timetable = TwoTrains(),
+            LiveTrains = [Live("901", "1A01", MatchStatus.Matched, "1A01", ("A", TrainLocationAction.Depart, "07:01:30"), ("B", TrainLocationAction.Pass, "07:06:00"))],
+        });
+
+        scene.Paths.Where(p => p.Headcode.Value == "1A01").Select(p => (p.Layer, p.Style)).Should().BeEquivalentTo(
+            [(GraphLayer.Wtt, LineStyle.Dashed), (GraphLayer.Actual, LineStyle.Dashed)]);
+        scene.Paths.Where(p => p.Headcode.Value != "1A01").Should().OnlyContain(p => p.Style == LineStyle.Solid);
+        Scene().Paths.Should().OnlyContain(p => p.Style == LineStyle.Solid, "the profile's styles are solid");
+    }
+
+    [Theory]
+    [InlineData(LineStyle.Solid, 0)]
+    [InlineData(LineStyle.Dashed, 15)]
+    [InlineData(LineStyle.Dotted, 40)]
+    public void Dashed_and_dotted_lines_leave_gaps(LineStyle style, int minGapPercent)
+    {
+        var vertices = new List<GraphVertex> { new(SimTime.FromClock(7, 0).Seconds, 0.5), new(SimTime.FromClock(7, 20).Seconds, 0.5) };
+        var scene = new GraphScene("main", "t", [], [new GraphPath("act", GraphLayer.Actual, null, new Headcode("1P01"), Express, vertices, Style: style)], null);
+        var view = View();
+
+        using var bitmap = Render(scene, view);
+
+        var y = (int)Math.Round(view.AxisToPixel(0.5));
+        var (from, to) = ((int)view.TimeToPixel(SimTime.FromClock(7, 2).Seconds), (int)view.TimeToPixel(SimTime.FromClock(7, 18).Seconds));
+        var gaps = Enumerable.Range(from, to - from).Count(x => bitmap.GetPixel(x, y).Green > 150);
+        var percent = gaps * 100 / (to - from);
+        if (minGapPercent == 0)
+        {
+            percent.Should().Be(0);
+        }
+        else
+        {
+            percent.Should().BeGreaterThanOrEqualTo(minGapPercent);
+        }
+    }
+
     [Theory]
     [InlineData(0, 50, 200, 50, 10, 50, 100, 50)] // horizontal, clipped both ends
     [InlineData(50, 0, 50, 200, 50, 20, 50, 80)] // vertical, clipped both ends

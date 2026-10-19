@@ -43,6 +43,13 @@
         <MenuItem Header="_Load timetable…" InputGestureText="Ctrl+T" Command="{Binding LoadTimetableCommand}" />
         <MenuItem Header="Show import _warnings" Command="{Binding ShowWarningsCommand}" />
       </MenuItem>
+      <MenuItem Header="P_rofile">
+        <MenuItem Header="_Edit profile…" Command="{Binding EditProfileCommand}" />
+        <MenuItem Header="_Open profile file" Command="{Binding OpenProfileFileCommand}" />
+        <MenuItem Header="_Reload profile" Command="{Binding ReloadProfileCommand}" />
+        <Separator />
+        <MenuItem Header="Re_generate corridors…" Command="{Binding RegenerateCorridorsCommand}" />
+      </MenuItem>
       <MenuItem Header="_View">
         <MenuItem Header="_Follow now" InputGestureText="Space" Command="{Binding FollowCommand}" />
         <Separator />

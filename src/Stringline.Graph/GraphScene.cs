@@ -44,6 +44,10 @@ public readonly record struct GraphVertex(double Time, double Axis);
 /// graph knows which timing point it is at. A stop with a dwell has two vertices with the same index. Null for actuals.
 /// </param>
 /// <param name="IsCancelled">A cancelled train on the plan layer: drawn thin and grey with crosses at its ends (S12).</param>
+/// <param name="Style">
+/// The category's line style (S14a) on the WTT, plan and actual layers. The forecast layer keeps its own dash, so it
+/// is always <see cref="LineStyle.Solid"/> there.
+/// </param>
 /// <remarks>The bounds are worked out once, when the path is made; do not copy a path <c>with</c> new vertices.</remarks>
 public sealed record GraphPath(
     string Key,
@@ -58,7 +62,8 @@ public sealed record GraphPath(
     int? Working = null,
     IReadOnlyList<Colour>? SegmentColours = null,
     IReadOnlyList<int>? Points = null,
-    bool IsCancelled = false)
+    bool IsCancelled = false,
+    LineStyle Style = LineStyle.Solid)
 {
     public double TimeMin => Vertices[0].Time;
 
@@ -85,7 +90,7 @@ public sealed record GraphPath(
     public bool DrawsLike(GraphPath other)
     {
         ArgumentNullException.ThrowIfNull(other);
-        return ReferenceEquals(this, other) || (Key == other.Key && Layer == other.Layer && Colour == other.Colour && IsCancelled == other.IsCancelled &&
+        return ReferenceEquals(this, other) || (Key == other.Key && Layer == other.Layer && Colour == other.Colour && IsCancelled == other.IsCancelled && Style == other.Style &&
             Vertices.SequenceEqual(other.Vertices) &&
             (SegmentColours is null ? other.SegmentColours is null : other.SegmentColours is not null && SegmentColours.SequenceEqual(other.SegmentColours)));
     }

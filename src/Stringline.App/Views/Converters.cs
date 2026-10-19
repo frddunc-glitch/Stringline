@@ -72,3 +72,41 @@ public sealed class InfoSeverityBrushConverter : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>A swatch for a <c>#RRGGBB</c> colour; transparent if the text is not a colour.</summary>
+public sealed class ColourTextBrushConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (!Network.Profiles.Colour.TryParse(value as string, out var colour))
+        {
+            return Brushes.Transparent;
+        }
+
+        var brush = new SolidColorBrush(Color.FromArgb(colour.A, colour.R, colour.G, colour.B));
+        brush.Freeze();
+        return brush;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>Not, for binding <c>IsReadOnly</c> to a flag that means editable.</summary>
+public sealed class InverseBooleanConverter : IValueConverter
+{
+    public static InverseBooleanConverter Instance { get; } = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value is not true;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => value is not true;
+}
+
+/// <summary>True when the value is not null, for enabling a panel while something is selected.</summary>
+public sealed class NotNullToBooleanConverter : IValueConverter
+{
+    public static NotNullToBooleanConverter Instance { get; } = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value is not null;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}

@@ -94,7 +94,8 @@ public static class GraphSceneBuilder
         {
             foreach (var train in timetable.Trains)
             {
-                AddWtt(paths, corridor, train, profile.StyleFor(train.CategoryId).Colour);
+                var style = profile.StyleFor(train.CategoryId);
+                AddWtt(paths, corridor, train, style.Colour, style.Style);
             }
         }
 
@@ -102,7 +103,8 @@ public static class GraphSceneBuilder
         {
             foreach (var train in plan.Modified)
             {
-                paths.AddRange(PlanPaths(corridor, train, train.Cancelled ? CancelledColour : profile.StyleFor(train.CategoryId).Colour));
+                var style = profile.StyleFor(train.CategoryId);
+                paths.AddRange(PlanPaths(corridor, train, train.Cancelled ? CancelledColour : style.Colour, style: train.Cancelled ? LineStyle.Solid : style.Style));
             }
         }
 
@@ -141,12 +143,12 @@ public static class GraphSceneBuilder
         return scene;
     }
 
-    private static Colour ColourOf(LiveWorking working, GraphSceneRequest request) =>
+    private static (Colour Colour, LineStyle Style) StyleOf(LiveWorking working, GraphSceneRequest request) =>
         working is { IsMatched: true, Train: { } id } && request.Timetable?.Find(id) is { } train
-            ? request.Profile.StyleFor(train.CategoryId).Colour
-            : working.IsMatched ? CategoryStyle.Fallback.Colour : UnmatchedColour;
+            ? (request.Profile.StyleFor(train.CategoryId).Colour, request.Profile.StyleFor(train.CategoryId).Style)
+            : (working.IsMatched ? CategoryStyle.Fallback.Colour : UnmatchedColour, LineStyle.Solid);
 
-    private static void AddWtt(List<GraphPath> paths, Corridor corridor, Train train, Colour colour)
+    private static void AddWtt(List<GraphPath> paths, Corridor corridor, Train train, Colour colour, LineStyle style)
     {
         var builder = new PathAccumulator(corridor);
         for (var i = 0; i < train.Points.Count; i++)
@@ -155,15 +157,15 @@ public static class GraphSceneBuilder
             AddBooked(builder, point.Location, point.Arrive, point.Depart, point.IsPass, i);
         }
 
-        AddPaths(paths, corridor, builder, $"wtt:{train.Id}", GraphLayer.Wtt, train.Id, train.Headcode, colour, cancelled: false);
+        AddPaths(paths, corridor, builder, $"wtt:{train.Id}", GraphLayer.Wtt, train.Id, train.Headcode, colour, cancelled: false, style);
     }
 
     /// <summary>
     /// A train's plan as plan-layer paths along a corridor (more than one if it leaves the corridor and comes back), as
     /// the scene draws a re-planned train; a cancelled train is marked so. Also used for a drag's ghost preview, with
-    /// <paramref name="keyPrefix"/> keeping its keys apart from the scene's.
+    /// <paramref name="keyPrefix"/> keeping its keys apart from the scene's. <paramref name="style"/> is the category's line style.
     /// </summary>
-    public static IReadOnlyList<GraphPath> PlanPaths(Corridor corridor, TrainPlan train, Colour colour, string keyPrefix = "plan")
+    public static IReadOnlyList<GraphPath> PlanPaths(Corridor corridor, TrainPlan train, Colour colour, string keyPrefix = "plan", LineStyle style = LineStyle.Solid)
     {
         ArgumentNullException.ThrowIfNull(corridor);
         ArgumentNullException.ThrowIfNull(train);
@@ -174,7 +176,7 @@ public static class GraphSceneBuilder
         }
 
         var paths = new List<GraphPath>(1);
-        AddPaths(paths, corridor, builder, $"{keyPrefix}:{train.Id}", GraphLayer.Plan, train.Id, train.Headcode, colour, train.Cancelled);
+        AddPaths(paths, corridor, builder, $"{keyPrefix}:{train.Id}", GraphLayer.Plan, train.Id, train.Headcode, colour, train.Cancelled, style);
         return paths;
     }
 
@@ -248,12 +250,12 @@ public static class GraphSceneBuilder
         }
     }
 
-    private static void AddPaths(List<GraphPath> paths, Corridor corridor, PathAccumulator builder, string key, GraphLayer layer, TrainId train, Headcode headcode, Colour colour, bool cancelled)
+    private static void AddPaths(List<GraphPath> paths, Corridor corridor, PathAccumulator builder, string key, GraphLayer layer, TrainId train, Headcode headcode, Colour colour, bool cancelled, LineStyle style)
     {
         foreach (var (segment, index, count) in builder.Finish())
         {
             paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", layer, train, headcode, colour,
-                segment.Vertices, Direction: corridor.DirectionOf(segment.Locations), Points: segment.Indices, IsCancelled: cancelled));
+                segment.Vertices, Direction: corridor.DirectionOf(segment.Locations), Points: segment.Indices, IsCancelled: cancelled, Style: style));
         }
     }
 
@@ -272,14 +274,14 @@ public static class GraphSceneBuilder
             }
         }
 
-        var colour = ColourOf(w, request);
+        var (colour, style) = StyleOf(w, request);
         var key = $"act:{live.SimUid}/{working}";
         foreach (var (segment, index, count) in builder.Finish())
         {
             var (pathColour, segmentColours) = byDelay ? DelayColours(segment.Delays) : (colour, null);
             paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", GraphLayer.Actual, w.Train, w.Headcode, pathColour,
                 segment.Vertices, IsUnmatched: !w.IsMatched, Direction: corridor.DirectionOf(segment.Locations), LiveUid: live.SimUid, Working: working,
-                SegmentColours: segmentColours));
+                SegmentColours: segmentColours, Style: style));
         }
     }
 
