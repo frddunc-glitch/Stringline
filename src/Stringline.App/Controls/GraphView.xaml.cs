@@ -95,6 +95,12 @@ public partial class GraphView : UserControl
     /// <summary>Builds the tooltip for a note or disruption under the cursor, when no line is.</summary>
     public Func<ScreenPoint, HoverInfo?>? AnnotationDescriber { get; set; }
 
+    /// <summary>Builds the tooltip for a conflict's ring under the cursor (S14); it comes before a line's.</summary>
+    public Func<ScreenPoint, HoverInfo?>? ConflictDescriber { get; set; }
+
+    /// <summary>A click: true if a conflict's ring took it (S14), so it does not select the line under it.</summary>
+    public Func<ScreenPoint, bool>? ConflictClicker { get; set; }
+
     /// <summary>Edits trains by dragging and gives the right-click menu; without one, presses only pan.</summary>
     internal IGraphEditor? Editor { get; set; }
 
@@ -248,9 +254,10 @@ public partial class GraphView : UserControl
         Navigator?.EndDrag();
         ReleaseMouseCapture();
         Cursor = null;
-        if (wasClick)
+        var up = e.GetPosition(Surface);
+        if (wasClick && ConflictClicker?.Invoke(new ScreenPoint(up.X, up.Y)) != true)
         {
-            PathClicked?.Invoke(this, HitTest(e.GetPosition(Surface)));
+            PathClicked?.Invoke(this, HitTest(up));
         }
 
         e.Handled = true;
@@ -382,7 +389,18 @@ public partial class GraphView : UserControl
 
     private void UpdateTip(Point p)
     {
-        if (HitTest(p) is { } hit && Describer?.Invoke(hit) is { } info)
+        if (ConflictDescriber?.Invoke(new ScreenPoint(p.X, p.Y)) is { } conflict)
+        {
+            // A conflict: keyed by its heading, which names it.
+            if (_annotationTip != conflict.Heading)
+            {
+                _tipFor = null;
+                _annotationTip = conflict.Heading;
+                TipHeading.Text = conflict.Heading;
+                TipLines.ItemsSource = conflict.Lines;
+            }
+        }
+        else if (HitTest(p) is { } hit && Describer?.Invoke(hit) is { } info)
         {
             var key = (hit.Path.Key, hit.NearestVertex);
             if (_tipFor != key)

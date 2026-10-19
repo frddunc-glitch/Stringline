@@ -22,12 +22,15 @@ public sealed record PlanningEngineOptions
 
     /// <summary>The forecaster's settings to start with; <see cref="PlanningEngine.SetForecast"/> changes them.</summary>
     public ForecastOptions Forecast { get; init; } = new();
+
+    /// <summary>The conflict detector's settings.</summary>
+    public ConflictOptions Conflicts { get; init; } = new();
 }
 
 /// <summary>
 /// The single writer (<c>02-…md</c> §2): one loop takes gateway events, plan commands, undo and redo from a queue,
 /// applies them to a <see cref="LiveState"/> and the <see cref="WorkingPlan"/>, and publishes immutable
-/// <see cref="PlanSnapshot"/>s, at most once per <see cref="PlanningEngineOptions.PublishInterval"/>. Readers never
+/// <see cref="PlanSnapshot"/>s (with the forecast and its conflicts), at most once per <see cref="PlanningEngineOptions.PublishInterval"/>. Readers never
 /// lock; they take <see cref="Current"/> or handle <see cref="SnapshotPublished"/>.
 /// </summary>
 /// <remarks>
@@ -72,6 +75,7 @@ public sealed partial class PlanningEngine
     private long _forecastSettingsVersion;
     private (long State, long Plan, long Settings) _forecastKey = (-1, -1, -1);
     private Forecast _forecast = Forecast.Empty;
+    private ConflictSet _conflicts = ConflictSet.Empty;
     private IReadOnlyDictionary<Headcode, int> _entryDelays = new Dictionary<Headcode, int>();
 
     public PlanningEngine(PlanningEngineOptions? options = null, TimeProvider? timeProvider = null, ILoggerFactory? loggerFactory = null)
@@ -437,7 +441,8 @@ public sealed partial class PlanningEngine
             _planHistory,
             _planVersion,
             _entryDelays,
-            _forecast);
+            _forecast,
+            _conflicts);
         _publishedVersion = _state.Version;
         _lastPublish = _time.GetUtcNow();
         Volatile.Write(ref _current, snapshot);
@@ -491,6 +496,7 @@ public sealed partial class PlanningEngine
         {
             LogForecastFailed(ex);
             _forecast = Forecast.Empty;
+            _conflicts = ConflictSet.Empty;
             return;
         }
 
@@ -498,6 +504,25 @@ public sealed partial class PlanningEngine
         if (elapsed > SlowForecast)
         {
             LogForecastSlow(_forecast.Trains.Count, elapsed.TotalMilliseconds);
+        }
+
+        started = _time.GetTimestamp();
+        try
+        {
+            _conflicts = ConflictDetector.Detect(new ConflictRequest(_plan, _forecast) { Network = _network, Options = _options.Conflicts });
+        }
+#pragma warning disable CA1031 // A detector fault must not stop the live picture: no conflicts are shown.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            LogConflictsFailed(ex);
+            _conflicts = ConflictSet.Empty;
+        }
+
+        elapsed = _time.GetElapsedTime(started);
+        if (elapsed > SlowForecast)
+        {
+            LogConflictsSlow(_conflicts.Count, elapsed.TotalMilliseconds);
         }
 
         if (_forecast.Trains.Count(t => t.Status == TrainForecastStatus.Unavailable) is var failed and > 0)
@@ -556,6 +581,12 @@ public sealed partial class PlanningEngine
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Forecast of {Trains} trains took {Milliseconds:0} ms")]
     private partial void LogForecastSlow(int trains, double milliseconds);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Conflict detection failed; no conflicts are shown")]
+    private partial void LogConflictsFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Finding {Conflicts} conflicts took {Milliseconds:0} ms")]
+    private partial void LogConflictsSlow(int conflicts, double milliseconds);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "The forecast failed for {Trains} trains; they are shown without one")]
     private partial void LogForecastUnavailable(int trains);

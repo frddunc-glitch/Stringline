@@ -115,8 +115,11 @@ record Disruption(string Id, DisruptionKind Kind /*Block | SpeedRestriction*/, T
                   SimTime Start, SimTime End, double RunTimeFactor, int AddedSeconds, string Note,
                   TrackDirection? Direction /*S13: Track is a corridor track run this way; null = a WTT line code*/);   // AppliesTo
 record PlanNote(string Id, Tiploc Location, SimTime Time, string Text);   // S13, DIS-3
-record Conflict(string Id, ConflictKind Kind, TrainId A, TrainId? B,
-                Tiploc Where, SimTime When, int SeveritySeconds);
+// S14: implemented as below (see 06-…md §3). A gives way; B is the other train, if any.
+record Conflict(string Id, ConflictKind Kind /*Headway | Overtake | SingleLine | Platform | Disruption | Unrealistic*/, TrainId A, TrainId? B,
+                Tiploc Where, SimTime When, int SeveritySeconds);   // + HeadcodeA/B, To, Start, End, PointIndex, Platform, DisruptionId, KnockOnSeconds
+class ConflictSet(IEnumerable<Conflict>);   // by time; Find, Involving
+record BlockHold(int Index, int ToIndex, string DisruptionId, SimTime Departure, SimTime HeldUntil);   // TrainForecast.BlockHolds
 ```
 
 Up/Down direction of a train on a corridor is inferred from whether its locations ascend or descend in corridor order.

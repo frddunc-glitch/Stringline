@@ -37,6 +37,11 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
     /// <summary>Draws the plan's blocks, speed restrictions and notes on this corridor (S13).</summary>
     public bool ShowDisruptions { get; init; } = true;
 
+    /// <summary>The plan's conflicts (S14); those meeting this corridor are marked.</summary>
+    public ConflictSet? Conflicts { get; init; }
+
+    public bool ShowConflicts { get; init; } = true;
+
     /// <summary>Colour actual lines by category (the default) or by delay band.</summary>
     public GraphColourMode ColourMode { get; init; } = GraphColourMode.Category;
 
@@ -50,6 +55,7 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
             LiveTrains = snapshot.Trains,
             Plan = snapshot.Plan,
             Forecast = snapshot.Forecast,
+            Conflicts = snapshot.Conflicts,
             Now = snapshot.Clock.HasTime ? snapshot.Clock.LastReported : null,
         };
     }
@@ -125,6 +131,11 @@ public static class GraphSceneBuilder
         {
             var (disruptions, notes) = GraphAnnotations.For(corridor, withDisruptions);
             scene = scene with { Disruptions = disruptions, Notes = notes };
+        }
+
+        if (request.ShowConflicts && request.Conflicts is { Count: > 0 } conflicts)
+        {
+            scene = scene with { Conflicts = GraphConflicts.For(corridor, conflicts) };
         }
 
         return scene;

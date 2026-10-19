@@ -70,6 +70,17 @@ Run on the **working plan without the interaction pass** (so conflicts are shown
 
 Severity = seconds of delay one of the trains must take to resolve.
 
+*Implemented in S14 (`ConflictDetector.Detect(ConflictRequest)` → `ConflictSet`; `PlanningEngine` runs it after every forecast and publishes it in `PlanSnapshot.Conflicts`).* The rules:
+- **Times** (Fred): the forecast **without** the interaction pass (`Forecast.Independent`, which the forecaster now keeps alongside the full one): actuals so far, then the plan with lateness, trains running through each other. A late train shows the clashes its lateness makes, and re-planning a train (holding it, say) clears them. Each conflict carries the train's knock-on from the full forecast (`KnockOnSeconds`).
+- **Who gives way.** `Conflict.A` is the train that must take the delay: the one entering the section or platform second, or the one held; `B` the other. `SeveritySeconds` is that delay; `Where`/`When` is where and when A meets it; `To`, `Start` and `End` give the graph its highlight. IDs are stable (kind, trains, place) so the panel keeps its selection.
+- **Only what can still be resolved.** A train already on its way into a section (its departure is actual), or already at a platform, is never A, but it is in the way of others. So nothing wholly in the past is reported.
+- **Headway, overtake, single line** use the interaction pass's rules, moved into `SectionOccupancy<T>` and shared: each run goes through the sections on its route in entry order; it takes whichever track lets it through soonest; if none does, it clashes with the train in the way on the best one. Overtake is a follower reaching the far end first on the same track. **No pair need be further apart than the WTT books them** (Fred), as in the forecaster. A pair clashing in sections one after another (within 10 min) is one conflict, `Where` to the last `To`, as bad as the worst.
+- **Platform**: trains planned at the same platform of a location (ignoring case), from arrival to departure (a pass for an instant), must be **1 minute** apart (Fred), or as close as the WTT books them there (even overlapping, as Waterloo shares platforms). Trains associated there (any WTT activity naming the other, or formed from it) are not checked against each other, and a train formed from another holds the platform from the other's arrival (booked and forecast). A platform change gets the full margin.
+- **Disruption**: each block the forecast holds a train for (`TrainForecast.BlockHolds`, new); severity is the hold.
+- **Unrealistic**: a planned run not yet started shorter than the minimum run, lengthened by speed restrictions in force (the usual case: a restriction added after the plan). The train's own booked run, less allowances, caps the minimum (`MinRunTable.Along(…, ceiling)`), so summed step minimums never flag a WTT run as booked.
+- **Threshold** (Fred): clashes under **30 s** are left out (`ConflictOptions.MinSeveritySeconds`): booking rounding.
+- **Measured**: Waterloo's on-time day gives 4 conflicts (54 s to 2 min 8 s, where its bookings are tighter than the shortest dwells); detection takes about 9 ms in Release (`benchmarks/ --quick`), 34 ms with both forecast passes.
+
 ## 4. Suggestion engine (rule-based v1)
 For each conflict, generate candidates:
 1. **Hold lower-priority** train at the last location before the conflict where it can wait (station platform, loop, or its origin) until clear + headway.

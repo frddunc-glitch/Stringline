@@ -88,6 +88,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<MainViewModel>();
         InitEditing();
+        InitConflicts();
         _settings = settingsStore.Load();
         Snapshot = engine.Current;
         // Read them all first: setting any saves the view settings, which would overwrite the others.
@@ -721,6 +722,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
         Snapshot = snapshot;
         UpdateEditing();
+        UpdateConflicts();
         Trains.Update(snapshot, Profile);
         TrainsText = snapshot.Trains.Count == 0 ? string.Empty : StatusText.Trains(snapshot.Matches);
         if (snapshot.AreaId is { Length: > 0 } area)
@@ -811,6 +813,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             ShowActual = ShowActual,
             ShowForecast = ShowForecast,
             ShowDisruptions = ShowDisruptions,
+            ShowConflicts = ShowConflicts,
             ColourMode = ColourMode,
         };
         _building = true;
@@ -851,9 +854,15 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         SetSelection(row?.Train, row?.Uid);
     }
 
-    private void SetSelection(TrainId? train, string? uid)
+    /// <param name="conflictId">A conflict picked with the train (S14), drawn stronger; null clears the conflicts list's selection.</param>
+    private void SetSelection(TrainId? train, string? uid, string? conflictId = null)
     {
-        Selection = train is null && uid is null ? null : new GraphSelection(train, uid);
+        Selection = train is null && uid is null ? null : new GraphSelection(train, uid) { ConflictId = conflictId };
+        if (conflictId is null)
+        {
+            ConflictList.Select(null);
+        }
+
         UpdateEditing();
         _syncingSelection = true;
         try

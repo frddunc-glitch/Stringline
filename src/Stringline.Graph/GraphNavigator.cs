@@ -178,6 +178,16 @@ public sealed class GraphNavigator
         Set(Viewport.PanTime(time - ((Viewport.TimeStart + Viewport.TimeEnd) / 2)), force: true);
     }
 
+    /// <summary>
+    /// Stop following and centre the view on a sim time and a place on the corridor, e.g. a conflict picked from the
+    /// list. Zoomed along the corridor, the view moves along it to the place; showing all of it, it stays.
+    /// </summary>
+    public void CentreOn(double time, double axis)
+    {
+        IsFollowing = false;
+        Set(Viewport.PanTime(time - ((Viewport.TimeStart + Viewport.TimeEnd) / 2)).CentredOnAxis(axis), force: true);
+    }
+
     /// <summary>A drag on the background starts here.</summary>
     public void BeginDrag(ScreenPoint at) => _dragFrom = at;
 

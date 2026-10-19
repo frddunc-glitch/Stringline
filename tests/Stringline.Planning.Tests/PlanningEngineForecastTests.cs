@@ -86,6 +86,26 @@ public sealed class PlanningEngineForecastTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Snapshots_carry_the_conflicts_of_the_plan()
+    {
+        _engine.SetTimetable(WorkingPlanTests.Timetable());
+        var loaded = await Snapshot(s => s.Plan.Count == 2);
+        loaded.Conflicts.Count.Should().Be(0);
+
+        var block = new Disruption("B1", DisruptionKind.Block, new Tiploc("A"), new Tiploc("B"), null, SimTime.Parse("06:00"), SimTime.Parse("07:30"));
+        (await _engine.Execute(new AddDisruption(block)).WaitAsync(Timeout)).Applied.Should().BeTrue();
+        var blocked = await Snapshot(s => s.PlanVersion > loaded.PlanVersion);
+
+        var c = blocked.Conflicts.All.Should().ContainSingle(c => c.A == Slow).Subject;
+        (c.Kind, c.DisruptionId, c.Where).Should().Be((ConflictKind.Disruption, "B1", new Tiploc("A")));
+        c.SeveritySeconds.Should().Be(30 * 60);
+
+        await _engine.Undo().WaitAsync(Timeout);
+        var undone = await Snapshot(s => s.PlanVersion > blocked.PlanVersion);
+        undone.Conflicts.Count.Should().Be(0);
+    }
+
+    [Fact]
     public async Task Entry_delays_reach_the_snapshot_and_the_forecast()
     {
         _engine.SetTimetable(WorkingPlanTests.Timetable());

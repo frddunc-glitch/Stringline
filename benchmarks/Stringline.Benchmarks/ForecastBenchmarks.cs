@@ -63,4 +63,10 @@ public class ForecastBenchmarks
 
     [Benchmark]
     public Forecast WithKnockOn() => Forecaster.Run(_request);
+
+    /// <summary>Conflict detection (S14) on a forecast made once, as the engine runs it after each forecast.</summary>
+    [Benchmark]
+    public ConflictSet Conflicts() => ConflictDetector.Detect(new ConflictRequest(_request.Plan, _forecast ??= Forecaster.Run(_request)) { Network = _request.Network });
+
+    private Forecast? _forecast;
 }

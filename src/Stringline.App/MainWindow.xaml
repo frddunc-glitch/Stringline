@@ -55,6 +55,7 @@
         <MenuItem Header="Show _actual" IsCheckable="True" IsChecked="{Binding ShowActual}" />
         <MenuItem Header="Show _forecast" IsCheckable="True" IsChecked="{Binding ShowForecast}" />
         <MenuItem Header="Show _disruptions and notes" IsCheckable="True" IsChecked="{Binding ShowDisruptions}" />
+        <MenuItem Header="Show co_nflicts" IsCheckable="True" IsChecked="{Binding ShowConflicts}" />
         <MenuItem Header="Forecast _knock-on from other trains" IsCheckable="True" IsChecked="{Binding ForecastKnockOn}"
                   ToolTip="Hold trains in the forecast for headways and single lines, so a late train delays the ones behind it" />
         <MenuItem Header="Colour by _delay" IsCheckable="True" IsChecked="{Binding ColourByDelay}" />
@@ -100,6 +101,8 @@
                     ToolTip="Dashed lines: where each running train is expected to go" />
           <CheckBox Content="Disruptions" IsChecked="{Binding ShowDisruptions}" Margin="6,0" VerticalAlignment="Center"
                     ToolTip="Blocks, speed restrictions and notes. Right-click the graph to add one, or hold B and drag to draw a block." />
+          <CheckBox Content="Conflicts" IsChecked="{Binding ShowConflicts}" Margin="6,0" VerticalAlignment="Center"
+                    ToolTip="Red rings where a train must give way: headways, single lines, platforms, blocks and run times. Click one, or pick it in the Conflicts list, to focus it." />
           <TextBlock Text="Colour:" Margin="8,0,4,0" VerticalAlignment="Center" />
           <ComboBox Width="84" ItemsSource="{Binding ColourModes}" SelectedItem="{Binding ColourMode}" VerticalAlignment="Center"
                     ToolTip="Colour actual lines by train category, or by delay band (green right time, amber 1–5 min, orange 6–15, red over 15)" />
@@ -148,6 +151,10 @@
       </StatusBarItem>
       <Separator />
       <StatusBarItem Content="{Binding TrainsText}" />
+      <Separator />
+      <StatusBarItem>
+        <TextBlock Text="{Binding ConflictsText}" />
+      </StatusBarItem>
       <Separator />
       <StatusBarItem>
         <TextBlock Text="{Binding EditStatus}" TextTrimming="CharacterEllipsis" ToolTip="{Binding EditStatus}" />
@@ -398,36 +405,70 @@
 
         <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#EEEEEE" />
 
-        <!-- Edit history (RP-7) -->
-        <DockPanel Grid.Row="2">
-          <DockPanel DockPanel.Dock="Top" Margin="6,4">
-            <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="↷ Redo" Command="{Binding RedoCommand}"
-                    ToolTip="{Binding RedoTip}" ToolTipService.ShowOnDisabled="True" />
-            <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="↶ Undo" Command="{Binding UndoCommand}"
-                    ToolTip="{Binding UndoTip}" ToolTipService.ShowOnDisabled="True" />
-            <TextBlock Text="Edit history" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding History.Summary}" Foreground="#757575" Margin="8,0,0,0" VerticalAlignment="Center" />
-          </DockPanel>
-          <ListBox x:Name="HistoryList" ItemsSource="{Binding History.Entries}" BorderThickness="0,1,0,0" HorizontalContentAlignment="Stretch"
-                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <DockPanel>
-                  <TextBlock DockPanel.Dock="Left" Text="{Binding Number, StringFormat={}{0}.}" Foreground="#9E9E9E" Width="26" />
-                  <TextBlock DockPanel.Dock="Left" Text="⚠ " Foreground="#EF6C00" ToolTip="{Binding Warnings}"
-                             Visibility="{Binding Warnings, Converter={StaticResource NotNull}}" />
-                  <TextBlock x:Name="EntryText" Text="{Binding Description}" TextWrapping="Wrap" />
-                </DockPanel>
-                <DataTemplate.Triggers>
-                  <DataTrigger Binding="{Binding IsUndone}" Value="True">
-                    <Setter TargetName="EntryText" Property="Foreground" Value="#9E9E9E" />
-                    <Setter TargetName="EntryText" Property="FontStyle" Value="Italic" />
-                  </DataTrigger>
-                </DataTemplate.Triggers>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-        </DockPanel>
+        <!-- Conflicts (FC-4, S14) and edit history (RP-7), as tabs (Fred) -->
+        <TabControl Grid.Row="2" BorderThickness="0,1,0,0" Padding="0">
+          <TabItem Header="{Binding ConflictList.Header}">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Top" Text="{Binding ConflictList.Summary}" Foreground="#757575" Margin="6,4"
+                         ToolTip="Clashes still to come, on every corridor, by the forecast without knock-on. Pick one to show it on the graph." />
+              <ListBox x:Name="ConflictsList" ItemsSource="{Binding ConflictList.Rows}" SelectedItem="{Binding ConflictList.Selected}"
+                       BorderThickness="0,1,0,0" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ToolTip="{Binding Tip}">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="58" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="52" />
+                      </Grid.ColumnDefinitions>
+                      <Border Grid.Column="0" Background="#FDECEA" BorderBrush="#E51A1A" BorderThickness="1" CornerRadius="2" Margin="0,1,6,1"
+                              ToolTip="{Binding Kind}">
+                        <TextBlock Text="{Binding Badge}" Foreground="#B71C1C" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                      </Border>
+                      <TextBlock Grid.Column="1" Text="{Binding Time}" FontFamily="Consolas" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Text="{Binding Where}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,6,0" />
+                      <TextBlock Grid.Column="3" Text="{Binding Trains}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="4" Text="{Binding Severity}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </DockPanel>
+          </TabItem>
+          <TabItem Header="History">
+            <DockPanel>
+              <DockPanel DockPanel.Dock="Top" Margin="6,4">
+                <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="↷ Redo" Command="{Binding RedoCommand}"
+                        ToolTip="{Binding RedoTip}" ToolTipService.ShowOnDisabled="True" />
+                <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="↶ Undo" Command="{Binding UndoCommand}"
+                        ToolTip="{Binding UndoTip}" ToolTipService.ShowOnDisabled="True" />
+                <TextBlock Text="Edit history" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding History.Summary}" Foreground="#757575" Margin="8,0,0,0" VerticalAlignment="Center" />
+              </DockPanel>
+              <ListBox x:Name="HistoryList" ItemsSource="{Binding History.Entries}" BorderThickness="0,1,0,0" HorizontalContentAlignment="Stretch"
+                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Left" Text="{Binding Number, StringFormat={}{0}.}" Foreground="#9E9E9E" Width="26" />
+                      <TextBlock DockPanel.Dock="Left" Text="⚠ " Foreground="#EF6C00" ToolTip="{Binding Warnings}"
+                                 Visibility="{Binding Warnings, Converter={StaticResource NotNull}}" />
+                      <TextBlock x:Name="EntryText" Text="{Binding Description}" TextWrapping="Wrap" />
+                    </DockPanel>
+                    <DataTemplate.Triggers>
+                      <DataTrigger Binding="{Binding IsUndone}" Value="True">
+                        <Setter TargetName="EntryText" Property="Foreground" Value="#9E9E9E" />
+                        <Setter TargetName="EntryText" Property="FontStyle" Value="Italic" />
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </DockPanel>
+          </TabItem>
+        </TabControl>
       </Grid>
     </Grid>
   </DockPanel>

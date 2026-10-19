@@ -220,6 +220,9 @@ public sealed record GraphViewport(double TimeStart, double TimeEnd, double Axis
     /// <summary>The same time range, showing the whole corridor.</summary>
     public GraphViewport WithFullAxis() => this with { AxisStart = FullAxisStart, AxisEnd = FullAxisEnd };
 
+    /// <summary>The same corridor span, moved to centre on an axis position (never past either padded end).</summary>
+    public GraphViewport CentredOnAxis(double axis) => WithAxis(axis - (AxisSpan / 2), AxisSpan);
+
     /// <summary>True if the whole corridor is in view.</summary>
     public bool ShowsFullAxis => AxisStart <= FullAxisStart + 1e-9 && AxisEnd >= FullAxisEnd - 1e-9;
 

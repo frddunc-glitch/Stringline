@@ -73,6 +73,12 @@ public sealed record TrainForecast(
     bool PossiblyStopped = false,
     int KnockOnSeconds = 0)
 {
+    /// <summary>
+    /// Where a block in force over a run held the train at the point it runs from, in the order they happened. A
+    /// train already on its way is not held, so it has none for that run.
+    /// </summary>
+    public IReadOnlyList<BlockHold> BlockHolds { get; init; } = [];
+
     /// <summary>The index in <see cref="Points"/> of the first point with a forecast time, or -1 if none.</summary>
     public int FirstForecast
     {
@@ -105,6 +111,16 @@ public sealed record TrainForecast(
     public override string ToString() => $"{Headcode} {Status}{(FinalDelaySeconds is { } d ? $" {d:+0;-0}s" : string.Empty)}";
 }
 
+/// <summary>A train held by a block (<c>06-…md</c> §2): it would have left point <paramref name="Index"/> at <paramref name="Departure"/>, into the block.</summary>
+/// <param name="Index">The plan point it is held at.</param>
+/// <param name="ToIndex">The next timed point, at the other end of the run the block covers.</param>
+/// <param name="DisruptionId">The block's <see cref="Disruption.Id"/>.</param>
+/// <param name="HeldUntil">The block's end: when it leaves instead.</param>
+public sealed record BlockHold(int Index, int ToIndex, string DisruptionId, SimTime Departure, SimTime HeldUntil)
+{
+    public int Seconds => HeldUntil - Departure;
+}
+
 /// <summary>Settings for the <see cref="Forecaster"/>.</summary>
 public sealed record ForecastOptions
 {
@@ -127,8 +143,13 @@ public sealed record ForecastOptions
 /// </summary>
 /// <param name="Now">The sim time it was made for; no forecast time is before it. Null when there is no clock.</param>
 /// <param name="Interaction">True if the interaction pass ran.</param>
-public sealed class Forecast(SimTime? Now, bool Interaction, IReadOnlyList<TrainForecast> Trains)
+/// <param name="Independent">
+/// With the interaction pass, the forecast without it (steps 1–3: trains run through each other), which conflicts are
+/// found on (S14); null when this forecast is that one.
+/// </param>
+public sealed class Forecast(SimTime? Now, bool Interaction, IReadOnlyList<TrainForecast> Trains, Forecast? Independent = null)
 {
+    private readonly Forecast? _independent = Independent;
     private Dictionary<TrainId, TrainForecast>? _byTrain;
 
     public static Forecast Empty { get; } = new(null, false, []);
@@ -136,6 +157,9 @@ public sealed class Forecast(SimTime? Now, bool Interaction, IReadOnlyList<Train
     public SimTime? Now { get; } = Now;
 
     public bool Interaction { get; } = Interaction;
+
+    /// <summary>The forecast without the interaction pass: this one if it did not run.</summary>
+    public Forecast Independent => _independent ?? this;
 
     /// <summary>In plan order.</summary>
     public IReadOnlyList<TrainForecast> Trains { get; } = Trains ?? throw new ArgumentNullException(nameof(Trains));

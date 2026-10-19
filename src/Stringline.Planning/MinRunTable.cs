@@ -80,14 +80,20 @@ public sealed class MinRunTable
     /// <summary>
     /// <see cref="Along(IReadOnlyList{PlannedPoint}, int, int)"/>, lengthened by the speed restriction that lengthens it most among those in force at
     /// <paramref name="depart"/> and covering the run. With no minimum known, <paramref name="fallback"/> is lengthened
-    /// instead; null if that is null too.
+    /// instead; null if that is null too. A <paramref name="ceiling"/> (such as the train's own booked run) caps the
+    /// minimum before it is lengthened.
     /// </summary>
-    public int? Along(IReadOnlyList<PlannedPoint> points, int from, int to, SimTime? depart, IEnumerable<Disruption> disruptions, int? fallback = null)
+    public int? Along(IReadOnlyList<PlannedPoint> points, int from, int to, SimTime? depart, IEnumerable<Disruption> disruptions, int? fallback = null, int? ceiling = null)
     {
         ArgumentNullException.ThrowIfNull(disruptions);
         if ((Along(points, from, to) ?? fallback) is not { } min)
         {
             return null;
+        }
+
+        if (ceiling is { } cap && cap < min)
+        {
+            min = Math.Max(0, cap);
         }
 
         var result = min;

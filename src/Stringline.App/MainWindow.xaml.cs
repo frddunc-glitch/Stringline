@@ -23,6 +23,8 @@ public partial class MainWindow : Window
         DataContext = viewModel;
         Graph.Describer = viewModel.Describe;
         Graph.AnnotationDescriber = viewModel.DescribeAt;
+        Graph.ConflictDescriber = viewModel.DescribeConflictAt;
+        Graph.ConflictClicker = viewModel.ClickConflictAt;
         Graph.Editor = viewModel;
         Graph.PathClicked += (_, hit) => viewModel.SelectPath(hit);
         viewModel.History.PropertyChanged += (_, e) =>
@@ -30,6 +32,13 @@ public partial class MainWindow : Window
             if (e.PropertyName == nameof(EditHistoryViewModel.Latest) && viewModel.History.Latest is { } latest)
             {
                 HistoryList.ScrollIntoView(latest);
+            }
+        };
+        viewModel.ConflictList.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ConflictsViewModel.Selected) && viewModel.ConflictList.Selected is { } selected)
+            {
+                ConflictsList.ScrollIntoView(selected);
             }
         };
         _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Render, (_, _) => Graph.SetNow(viewModel.Tick()), Dispatcher);
@@ -58,7 +67,8 @@ public partial class MainWindow : Window
         finally
         {
             _closed = true;
-            Close();
+            // Later, not here: if the session was already over, the dispose finished at once and this window is still closing.
+            _ = Dispatcher.BeginInvoke(Close);
         }
     }
 

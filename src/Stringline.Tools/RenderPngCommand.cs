@@ -35,11 +35,12 @@ internal static class RenderPngCommand
         var colour = new Option<GraphColourMode>("--colour") { Description = "Colour actual lines by category or by delay band.", DefaultValueFactory = _ => GraphColourMode.Category };
         var noForecast = new Option<bool>("--no-forecast") { Description = "Leave out the forecast layer (drawn with --log)." };
         var noKnockOn = new Option<bool>("--no-knock-on") { Description = "Forecast each train on its own, without knock-on delay from the others." };
+        var noConflicts = new Option<bool>("--no-conflicts") { Description = "Leave out the conflict marks (found with --log, unless --no-forecast)." };
         var verbose = new Option<bool>("--verbose") { Description = "Debug logging." };
 
         var command = new Command("render-png", "Draw a corridor's train graph (WTT, actuals and forecast) to a PNG.")
         {
-            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, vertical, colour, noForecast, noKnockOn, verbose,
+            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, vertical, colour, noForecast, noKnockOn, noConflicts, verbose,
         };
 
         command.SetAction((parse, cancellationToken) => RunAsync(
@@ -50,6 +51,7 @@ internal static class RenderPngCommand
                 Colour = parse.GetValue(colour),
                 NoForecast = parse.GetValue(noForecast),
                 NoKnockOn = parse.GetValue(noKnockOn),
+                NoConflicts = parse.GetValue(noConflicts),
             },
             parse.InvocationConfiguration.Output,
             parse.InvocationConfiguration.Error,
@@ -81,6 +83,9 @@ internal static class RenderPngCommand
 
         /// <summary>Forecast without the interaction pass.</summary>
         public bool NoKnockOn { get; init; }
+
+        /// <summary>Leave out the conflict marks.</summary>
+        public bool NoConflicts { get; init; }
     }
 
     /// <returns>0 on success, 2 on bad arguments or a file that cannot be read or written.</returns>
@@ -136,6 +141,7 @@ internal static class RenderPngCommand
 
         IReadOnlyCollection<Core.Live.LiveTrain> live = [];
         Forecast? forecast = null;
+        ConflictSet? conflicts = null;
         var now = at;
         if (recording is not null)
         {
@@ -144,15 +150,21 @@ internal static class RenderPngCommand
             now ??= state.Clock.HasTime ? state.Clock.LastReported : null;
             if (!settings.NoForecast)
             {
-                forecast = Forecaster.Run(new ForecastRequest(WorkingPlan.FromTimetable(tt))
+                var plan = WorkingPlan.FromTimetable(tt);
+                var network = ForecastNetwork.For(profile, tt);
+                forecast = Forecaster.Run(new ForecastRequest(plan)
                 {
                     LiveTrains = live,
                     Now = now,
                     SessionStart = state.SessionStart,
                     EntryDelays = state.EntryDelays,
-                    Network = ForecastNetwork.For(profile, tt),
+                    Network = network,
                     Options = new ForecastOptions { Interaction = !settings.NoKnockOn },
                 });
+                if (!settings.NoConflicts)
+                {
+                    conflicts = ConflictDetector.Detect(new ConflictRequest(plan, forecast) { Network = network });
+                }
             }
         }
 
@@ -165,6 +177,7 @@ internal static class RenderPngCommand
             ShowWtt = !settings.NoWtt,
             ColourMode = settings.Colour,
             Forecast = forecast,
+            Conflicts = conflicts,
         });
         var viewport = GraphViewport.Around(now.Value, (int)Math.Round(settings.Hours * SimTime.SecondsPerHour), settings.Width, settings.Height, settings.NowAt,
             orientation: settings.Vertical ? GraphOrientation.Vertical : GraphOrientation.Horizontal);
@@ -188,7 +201,8 @@ internal static class RenderPngCommand
         var visible = scene.Paths.Count(p => viewport.Overlaps(p.TimeMin, p.TimeMax, p.AxisMin, p.AxisMax));
         await output.WriteLineAsync(
             $"Wrote {settings.Output.Name}: {corridor.Id} ({corridor.Name}), {viewport.TimeStart.ToSimTime()}–{viewport.TimeEnd.ToSimTime()}, " +
-            $"now {now}, {visible} paths in view ({scene.InLayer(GraphLayer.Actual).Count()} actual, {scene.InLayer(GraphLayer.Forecast).Count()} forecast in all).").ConfigureAwait(false);
+            $"now {now}, {visible} paths in view ({scene.InLayer(GraphLayer.Actual).Count()} actual, {scene.InLayer(GraphLayer.Forecast).Count()} forecast in all)" +
+            (conflicts is null ? "." : $", {scene.Conflicts.Count} of {conflicts.Count} conflicts on this corridor.")).ConfigureAwait(false);
         return 0;
     }
 

@@ -682,6 +682,93 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - Track choices are worked out from the ends shown when the dialog opens; if the ends are changed, the list is not refreshed (a typed line code still works).
 - The Disruptions toggle is not remembered between runs.
 
+## 2026-10-19 — S14: Conflict detection
+
+### Done
+- **Portable parts (tested on Linux):**
+  - Planning:
+    - **`ConflictDetector`** (`ConflictRequest` → `ConflictSet` of `Conflict`s) finds every kind in `06-…md` §3: headway, overtake, single line, platform, disruption and unrealistic run time. The rules are in `06-…md` §3.
+    - **`SectionOccupancy<T>`**: the interaction pass's section rules (headway, single line, booked spacing, tracks side by side), moved out of `Forecaster` unchanged so the detector uses exactly the same ones. It also names the train in the way (`Blocker`).
+    - **`Forecast.Independent`**: the forecast without the interaction pass, kept alongside the full one. This costs nothing extra; it was already computed.
+    - **`TrainForecast.BlockHolds`**: where a block held a train (`BlockHold`).
+    - **`MinRunTable.Along(…, ceiling)`**: a train's own booked run caps its minimum.
+    - **`PlanningEngine`** detects conflicts after every forecast (it logs if detection fails or is slow) and publishes `PlanSnapshot.Conflicts`. `PlanningEngineOptions.Conflicts` holds the `ConflictOptions`.
+  - Graph:
+    - `GraphConflicts` and `GraphConflict`: the scene, the highlight and ring geometry, the hit test and the tooltip.
+    - `GraphScene.Conflicts`, `GraphSceneRequest.Conflicts`/`ShowConflicts`, `GraphSelection.ConflictId` and `GraphTheme.Conflict`.
+    - Highlights draw under the trains and rings over them.
+    - `GraphViewport.CentredOnAxis` and `GraphNavigator.CentreOn(time, axis)`.
+  - Tools: `render-png` marks conflicts with `--log` (`--no-conflicts` turns them off) and counts them in its output line. The quick benchmark times detection.
+- **App:**
+  - The **Conflicts tab** beside History (`ConflictsViewModel`). Its rows are updated in place, so the selection and scroll position survive live updates.
+  - **Focus**: picking a row or clicking a ring selects train A, switches corridor if needed, stops following and centres the view on the conflict.
+  - The ring tooltip comes before the train's, and clicking a ring picks the conflict.
+  - A Conflicts box on the toolbar, and View → "Show conflicts".
+  - "N conflicts" in the status bar.
+- **Fixed** (an S8 bug): closing the window after a replay had finished logged "Cannot … Close … while a Window is closing". The dispose finished at once, so `Close()` ran while the window was still closing. The second close is now deferred.
+- **Tests:**
+  - Planning +23 (184):
+    - Golden scenarios for every kind:
+      - loop: on time, headway, overtake, booked spacing allowed, a train already on its way, merged sections, the threshold;
+      - single line: crossing as booked, and head-on;
+      - junction;
+      - platform: trains in turn, a late occupant, a platform change, a next working formed in the platform;
+      - block: a hold, and a re-plan that clears it;
+      - run time: a restriction added later, and a booked run never unrealistic;
+      - determinism.
+    - Waterloo fixtures: the on-time day, and two recordings checked half way and at the end. Nothing is in the past, nothing is under 30 s, and each run takes under 2 s.
+    - The engine publishing conflicts, and undoing them.
+  - Graph +11 (195): the scene, hiding, building from a snapshot, highlights in both orientations, the one-location band, the hit test, the tooltip, colours, selection, and a PNG snapshot.
+  - App +6 (70):
+    - row wording, in-place sync with selection, and selecting by ID;
+    - on Waterloo: a block's conflicts listed, picked, ringed, clicked, hidden and undone;
+    - focusing a conflict on another corridor, and one on no corridor.
+  - Totals: 1 235 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 103, Planning 184, Graph 195, Tools 57, App 70).
+    - Green on Windows (Debug).
+    - Green on Linux (`sdk:10.0` container, portable filter, Release: 1 165), including the new PNG snapshot.
+    - The new App panel test passed 5 runs in a row.
+- **Measured** (Release, `--quick`, Waterloo): independent forecast 11.8 ms, with knock-on 25.1 ms, conflicts 9.1 ms. Forecast and conflicts together take about 34 ms, inside FC-2's 50 ms budget.
+- **Tried in the app** (the Waterloo 4× replay played to its end, and screenshotted):
+  - The Conflicts tab showed 25 conflicts: headways and platforms at Waterloo, where late trains bunch at the now line.
+  - The status bar showed "25 conflicts", and the rings were on the graph.
+  - It closed cleanly, with nothing logged above Information.
+  - Picking rows and clicking rings were driven only by the view-model tests, not by hand.
+
+### Decisions
+- **Fred's choices:**
+  - Conflicts are checked on the **forecast without knock-on** (actuals, then the plan with lateness). The full forecast's knock-on is shown with each one.
+  - **WTT-booked spacing is allowed**, as in the forecaster.
+  - The panel is a **tab beside History**.
+  - The list shows **upcoming conflicts on all corridors**; the graph marks those on the corridor shown.
+  - Clashes **under 30 s** are hidden.
+  - The **platform re-occupation margin is 1 minute**.
+- **The train that gives way is the one that enters the section or platform second.** A train already on its way into a section, or already at the platform, is never reported as A, because nothing can be re-planned there. So no conflict lies wholly in the past.
+- **A disruption conflict is a forecast block hold**, not "the plan runs through a block". A train late enough to miss the block has no conflict, and holding the train in the plan until the block ends clears it.
+- **A pair that clashes section after section is one conflict** (within 10 min), so a late train catching another does not fill the list.
+- **Platforms:**
+  - A train formed from another holds the platform from the other's arrival, booked and forecast.
+  - Trains associated there by any WTT activity are not checked against each other.
+  - Without the formed-from rule, Waterloo's on-time day gave 115 false platform clashes; with it, 1.
+- **A platform highlight shows the wait**: from when A is due until it could get in. Showing the occupant's whole stay could reach back hours.
+- **Severity in the list is in whole minutes, rounded up** ("3 min"), or in seconds under a minute. The exact delay is in the tooltip.
+
+### Next
+- S15: suggestions per conflict.
+  - `Conflict.PointIndex` is A's point where it meets the clash (or the point it runs from into it): the natural place to hold. `SeveritySeconds` is the hold.
+  - Re-run the forecaster and `ConflictDetector` for each candidate. That takes about 35 ms on Waterloo in Release; limiting it to a time horizon, or to the trains involved, would make several candidates cheap.
+  - The panel's rows can expand to show suggestions.
+- The S12 idea still stands: a drag preview could check the dragged train's conflicts against the preview plan.
+
+### Known issues
+- **Not tried by hand.** 👤 Fred: on a replay, please:
+  - pick rows in the Conflicts tab and click rings on the graph. Does the focus (corridor, centring, selection) feel right?
+  - judge whether the rings and red highlights are too strong or too faint, and whether the list is useful or too long on a busy sim;
+  - add a block and check its conflicts, then hold a train in the plan and check that its conflict goes.
+- **Conflicts bunch at the now line.** On a late-running sim, trains whose forecast is floored to now bunch together, so several headway and platform conflicts appear "at now". They are real (the trains are late), but they stay listed until the trains move.
+- **Platform occupation is partly unchecked.** A terminating train with no next working occupies its platform only at the instant it arrives. A train that starts from a platform (not formed from another) occupies it only from its departure. So the time a stabled train stands in a platform is not checked.
+- The platform margin and threshold are fixed defaults in `ConflictOptions`. There is no setting for them in the app yet (S18's settings page).
+- Picking the row that is already selected does not focus the graph again; pick another row, or click its ring.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
@@ -702,3 +789,6 @@ New from S6:
 New from S11:
 7. The forecaster does not yet use the WTT's **rules** (for example "X appears after Y leaves", 331 at Waterloo). They would hold an entering train until another has gone. Should S13/S14 apply them to entry forecasts? (Question 5, whether rule `Time` is in seconds, is still open: S11 did not need the rules.)
 8. Is a **minute's tolerance** right for booked single-line crossings? The forecaster keeps a booked overlap of up to 60 s between opposing trains as rounding, the same as the single-line hint (S6).
+
+New from S14:
+9. Is **1 minute** right as the default platform re-occupation margin, and **30 s** as the least conflict shown, once you have tried them on a busy sim? Both are in `ConflictOptions`.

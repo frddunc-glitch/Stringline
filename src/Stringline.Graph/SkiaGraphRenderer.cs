@@ -120,10 +120,12 @@ public sealed class SkiaGraphRenderer : IDisposable
             DrawDisruption(canvas, disruption, viewport, plot);
         }
 
+        DrawConflictHighlights(canvas, scene, viewport, plot, selection?.ConflictId);
         DrawPaths(canvas, scene, viewport, selection, tiles);
         DrawGhosts(canvas, ghosts, viewport);
         DrawNow(canvas, scene, viewport, plot);
         DrawHeadcodes(canvas, viewport, plot);
+        DrawConflictRings(canvas, scene, viewport, plot, selection?.ConflictId);
         DrawNotes(canvas, scene, viewport, plot);
         if (draft is not null)
         {
@@ -373,6 +375,44 @@ public sealed class SkiaGraphRenderer : IDisposable
         if (left + width + 3 <= rect.Right && rect.Bottom - top >= GraphAnnotations.LabelFontSize + 3)
         {
             canvas.DrawText(text, left, top + GraphAnnotations.LabelFontSize + 1, SKTextAlign.Left, _annotationFont, Fill(Darken(colour)));
+        }
+    }
+
+    /// <summary>Each conflict's section (or location) over the time it covers, in translucent red under the trains; the selected one stronger.</summary>
+    private void DrawConflictHighlights(SKCanvas canvas, GraphScene scene, GraphViewport viewport, SKRect plot, string? selected)
+    {
+        foreach (var conflict in scene.Conflicts)
+        {
+            var rect = GraphConflicts.RectOf(conflict, viewport).ToSk();
+            if (!rect.IntersectsWith(plot))
+            {
+                continue;
+            }
+
+            var isSelected = conflict.Id == selected;
+            canvas.DrawRect(rect, Fill(Theme.Conflict with { A = (byte)(isSelected ? 0x40 : 0x1C) }));
+            if (isSelected)
+            {
+                canvas.DrawRect(rect, Stroke(Theme.Conflict with { A = 0xC0 }, 1));
+            }
+        }
+    }
+
+    /// <summary>A red ring where each conflict's train meets it (<c>05-…md</c> §2), over the trains; the selected one heavier.</summary>
+    private void DrawConflictRings(SKCanvas canvas, GraphScene scene, GraphViewport viewport, SKRect plot, string? selected)
+    {
+        foreach (var conflict in scene.Conflicts)
+        {
+            var ring = GraphConflicts.RingOf(conflict, viewport);
+            float x = (float)ring.X, y = (float)ring.Y, r = GraphConflicts.RingRadius;
+            if (x + r < plot.Left || x - r > plot.Right || y + r < plot.Top || y - r > plot.Bottom)
+            {
+                continue;
+            }
+
+            var isSelected = conflict.Id == selected;
+            canvas.DrawCircle(x, y, r + 1.5f, Stroke(Theme.Halo, 2));
+            canvas.DrawCircle(x, y, isSelected ? r + 2 : r, Stroke(Theme.Conflict, isSelected ? 3 : 2));
         }
     }
 

@@ -80,6 +80,9 @@ public sealed record GraphTheme
     /// <summary>A note's marker and the border of its label.</summary>
     public Colour NoteBorder { get; init; } = new(0x8D, 0x6E, 0x00);
 
+    /// <summary>A conflict's ring and highlight (<c>05-…md</c> §2).</summary>
+    public Colour Conflict { get; init; } = new(0xE5, 0x1A, 0x1A);
+
     /// <summary>Spacing of a block's hatching, in pixels.</summary>
     public float HatchSpacing { get; init; } = 7;
 

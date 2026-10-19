@@ -8,6 +8,9 @@ namespace Stringline.Graph;
 /// </summary>
 public sealed record GraphSelection(TrainId? Train, string? LiveUid)
 {
+    /// <summary>A conflict picked in the conflicts panel (S14): its ring and highlight draw stronger.</summary>
+    public string? ConflictId { get; init; }
+
     /// <summary>The selection a path belongs to: its WTT train and, for an actual path, its live train.</summary>
     public static GraphSelection Of(GraphPath path)
     {

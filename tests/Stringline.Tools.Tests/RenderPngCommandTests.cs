@@ -47,7 +47,7 @@ public sealed class RenderPngCommandTests : IDisposable
         exit.Should().Be(0, error);
         error.Should().BeEmpty();
         output.Should().StartWith("Wrote graph.png: main (WLOO – WIMB), 06:00:00–09:00:00, now 07:00:00, ");
-        output.Should().MatchRegex(@"\d+ paths in view \(\d+ actual, [1-9]\d* forecast in all\)\.");
+        output.Should().MatchRegex(@"\d+ paths in view \(\d+ actual, [1-9]\d* forecast in all\), \d+ of \d+ conflicts on this corridor\.");
         using var bitmap = SKBitmap.Decode(Out());
         (bitmap.Width, bitmap.Height).Should().Be((1600, 900));
     }

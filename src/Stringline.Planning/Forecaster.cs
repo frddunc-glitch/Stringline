@@ -89,7 +89,7 @@ public static class Forecaster
             result[i] = knockOn == 0 ? with : with with { KnockOnSeconds = knockOn };
         }
 
-        return new Forecast(request.Now, true, result);
+        return new Forecast(request.Now, true, result, new Forecast(request.Now, false, independent));
     }
 
     /// <summary>The live train and working matched to each WTT train.</summary>
@@ -120,7 +120,7 @@ public static class Forecaster
         private readonly int? _now;
         private readonly List<Runner> _runners = [];
         private readonly PriorityQueue<Runner, (int Time, int Priority, int Order)> _queue = new();
-        private readonly Dictionary<int, Occupancy> _occupancy = [];
+        private readonly Dictionary<int, SectionOccupancy<Runner>> _occupancy = [];
         private readonly Dictionary<Headcode, Runner> _firstNotStarted = [];
 
         public Pass(ForecastRequest request, bool interaction)
@@ -419,7 +419,12 @@ public static class Forecaster
                     break;
                 }
 
-                var moved = AfterBlocks(points, c, n, d, run);
+                var moved = AfterBlocks(points, c, n, d, run, out var block);
+                if (block is not null)
+                {
+                    r.BlockHolds.Add(new BlockHold(c, n, block.Id, new SimTime(d), new SimTime(moved)));
+                }
+
                 if (moved == d && route is not null)
                 {
                     moved = d + Hold(route, r, booked, d, run);
@@ -464,17 +469,19 @@ public static class Forecaster
             return Math.Max(min, Math.Min(plannedRun, plannedArrive - d));
         }
 
-        /// <summary>The departure, moved to the end of any block in force over the run.</summary>
-        private int AfterBlocks(IReadOnlyList<PlannedPoint> points, int c, int n, int d, int run)
+        /// <summary>The departure, moved to the end of any block in force over the run (<paramref name="block"/>).</summary>
+        private int AfterBlocks(IReadOnlyList<PlannedPoint> points, int c, int n, int d, int run, out Disruption? block)
         {
-            foreach (var block in _plan.Disruptions)
+            foreach (var disruption in _plan.Disruptions)
             {
-                if (block.Kind == DisruptionKind.Block && d < block.End.Seconds && d + run > block.Start.Seconds && block.AppliesTo(points, c, n))
+                if (disruption.Kind == DisruptionKind.Block && d < disruption.End.Seconds && d + run > disruption.Start.Seconds && disruption.AppliesTo(points, c, n))
                 {
-                    return block.End.Seconds;
+                    block = disruption;
+                    return disruption.End.Seconds;
                 }
             }
 
+            block = null;
             return d;
         }
 
@@ -590,11 +597,11 @@ public static class Forecaster
                 ? (d.Seconds, a.Seconds)
                 : null;
 
-        private Occupancy OccupancyOf(ForecastSection section)
+        private SectionOccupancy<Runner> OccupancyOf(ForecastSection section)
         {
             if (!_occupancy.TryGetValue(section.Id, out var o))
             {
-                _occupancy[section.Id] = o = new Occupancy(section);
+                _occupancy[section.Id] = o = new SectionOccupancy<Runner>(section);
             }
 
             return o;
@@ -609,7 +616,7 @@ public static class Forecaster
                 var shift = 0;
                 foreach (var step in route)
                 {
-                    var x = Window.Of(step, d + total, run, booked);
+                    var x = SectionWindow.Of(step, d + total, run, booked);
                     shift = Math.Max(shift, OccupancyOf(step.Section).Shift(x, r, out _));
                 }
 
@@ -628,172 +635,12 @@ public static class Forecaster
         {
             foreach (var step in route)
             {
-                var x = Window.Of(step, d, run, booked);
+                var x = SectionWindow.Of(step, d, run, booked);
                 var occupancy = OccupancyOf(step.Section);
                 occupancy.Shift(x, r, out var track);
-                occupancy.Add(new Reservation(r, x, track));
+                occupancy.Add(new SectionReservation<Runner>(r, x, track));
             }
         }
-    }
-
-    /// <summary>One train's time in one section, as forecast and as booked.</summary>
-    private readonly record struct Window(bool Down, int Enter, int Exit, int? BookedEnter, int? BookedExit)
-    {
-        public static Window Of(RouteStep step, int depart, int run, (int Depart, int Arrive)? booked)
-        {
-            int? bookedEnter = null, bookedExit = null;
-            if (booked is { } b)
-            {
-                var bookedRun = b.Arrive - b.Depart;
-                bookedEnter = b.Depart + (int)Math.Round(bookedRun * step.EnterShare);
-                bookedExit = b.Depart + (int)Math.Round(bookedRun * step.ExitShare);
-            }
-
-            return new Window(step.Down, depart + (int)Math.Round(run * step.EnterShare), depart + (int)Math.Round(run * step.ExitShare), bookedEnter, bookedExit);
-        }
-
-        public Window Shifted(int seconds) => this with { Enter = Enter + seconds, Exit = Exit + seconds };
-    }
-
-    private sealed record Reservation(Runner Runner, Window Window, int Track);
-
-    /// <summary>The trains through one section so far, in entry order, and the rules for one more.</summary>
-    private sealed class Occupancy(ForecastSection section)
-    {
-        private readonly List<Reservation> _reservations = [];
-        private int _longest;
-
-        public void Add(Reservation reservation)
-        {
-            var at = _reservations.FindLastIndex(r => r.Window.Enter <= reservation.Window.Enter) + 1;
-            _reservations.Insert(at, reservation);
-            _longest = Math.Max(_longest, reservation.Window.Exit - reservation.Window.Enter);
-        }
-
-        /// <summary>The least delay that lets <paramref name="x"/> through, and the track it then takes.</summary>
-        public int Shift(Window x, Runner runner, out int track)
-        {
-            var tracks = section.TracksFor(x.Down);
-            var best = int.MaxValue;
-            track = 0;
-            for (var t = 0; t < tracks; t++)
-            {
-                var shift = ShiftOnTrack(x, runner, t);
-                if (shift < best)
-                {
-                    best = shift;
-                    track = t;
-                }
-
-                if (best == 0)
-                {
-                    break;
-                }
-            }
-
-            return best;
-        }
-
-        private int ShiftOnTrack(Window x, Runner runner, int track)
-        {
-            var total = 0;
-            var h = section.HeadwaySeconds;
-            for (var settle = 0; settle < MaxSettle; settle++)
-            {
-                var w = x.Shifted(total);
-                var shift = 0;
-                foreach (var r in Near(w))
-                {
-                    if (ReferenceEquals(r.Runner, runner))
-                    {
-                        continue;
-                    }
-
-                    if (r.Window.Down == w.Down)
-                    {
-                        if (r.Track == track)
-                        {
-                            shift = Math.Max(shift, SameWay(r.Window, w, h));
-                        }
-                    }
-                    else if (section.SingleLine)
-                    {
-                        shift = Math.Max(shift, Opposing(r.Window, w, h));
-                    }
-                }
-
-                if (shift == 0)
-                {
-                    break;
-                }
-
-                total += shift;
-            }
-
-            return total;
-        }
-
-        /// <summary>Reservations that could clash with <paramref name="w"/>: entering no more than the longest stay plus the headway before it.</summary>
-        private IEnumerable<Reservation> Near(Window w)
-        {
-            var from = w.Enter - _longest - section.HeadwaySeconds - 1;
-            var to = w.Exit + section.HeadwaySeconds + 1;
-            var lo = 0;
-            var hi = _reservations.Count;
-            while (lo < hi)
-            {
-                var mid = (lo + hi) / 2;
-                if (_reservations[mid].Window.Enter < from)
-                {
-                    lo = mid + 1;
-                }
-                else
-                {
-                    hi = mid;
-                }
-            }
-
-            for (var i = lo; i < _reservations.Count && _reservations[i].Window.Enter <= to; i++)
-            {
-                yield return _reservations[i];
-            }
-        }
-
-        /// <summary>
-        /// Delay needed for <paramref name="x"/> to follow <paramref name="l"/> on the same track: the headway at both
-        /// ends, or the booked spacing if that is less. None if it already runs ahead of it by as much.
-        /// </summary>
-        private static int SameWay(Window l, Window x, int h)
-        {
-            if (x.Enter + Gap(x.BookedEnter, l.BookedEnter, h) <= l.Enter && x.Exit + Gap(x.BookedExit, l.BookedExit, h) <= l.Exit)
-            {
-                return 0; // x runs ahead of l
-            }
-
-            var enter = l.Enter + Gap(l.BookedEnter, x.BookedEnter, h) - x.Enter;
-            var exit = l.Exit + Gap(l.BookedExit, x.BookedExit, h) - x.Exit;
-            return Math.Max(0, Math.Max(enter, exit));
-        }
-
-        /// <summary>Delay needed for <paramref name="x"/> to enter a single line only once opposing <paramref name="l"/> has cleared it.</summary>
-        private static int Opposing(Window l, Window x, int h)
-        {
-            const int tolerance = ForecastNetwork.ParallelSeconds;
-            if (x.Exit + Gap(x.BookedExit, l.BookedEnter, h, tolerance) <= l.Enter)
-            {
-                return 0; // x is through before l comes
-            }
-
-            return Math.Max(0, l.Exit + Gap(l.BookedExit, x.BookedEnter, h, tolerance) - x.Enter);
-        }
-
-        /// <summary>
-        /// The spacing needed from a leader's time to a follower's: the headway, or the booked spacing if both are
-        /// booked in this order and it is less. Opposing trains on a single line may be booked to overlap by up to
-        /// <see cref="ForecastNetwork.ParallelSeconds"/> (booking rounding at a crossing loop), which is kept.
-        /// </summary>
-        private static int Gap(int? leader, int? follower, int h, int tolerance = 0) =>
-            leader is { } a && follower is { } b && b >= a - tolerance ? Math.Min(h, b - a) : h;
     }
 
     /// <summary>One train's state during a pass.</summary>
@@ -849,6 +696,9 @@ public static class Forecaster
 
         public bool Done { get; set; }
 
+        /// <summary>Where a block held the train (<see cref="TrainForecast.BlockHolds"/>).</summary>
+        public List<BlockHold> BlockHolds { get; } = [];
+
         /// <summary>Trains formed from this one, waiting for it to reach the point they form at.</summary>
         public List<(int Point, Runner Child, int Turnaround)> Waiting { get; } = [];
 
@@ -900,7 +750,7 @@ public static class Forecaster
                 points[k] = Result[k] ?? new ForecastPoint(k, p.Location, null, null, p.IsPass, ForecastBasis.None, null);
             }
 
-            return new TrainForecast(Train.Id, Train.Headcode, Status, points, LiveUid, PossiblyStopped);
+            return new TrainForecast(Train.Id, Train.Headcode, Status, points, LiveUid, PossiblyStopped) { BlockHolds = BlockHolds.Count == 0 ? [] : [.. BlockHolds] };
         }
 
         private static SimTime? ToTime(int? seconds) => seconds is { } s ? new SimTime(s) : null;

@@ -36,6 +36,7 @@ static void Quick()
     Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Forecast, Waterloo ({forecast.Trains} trains, {forecast.Points} points):"));
     Time("independent", 20, () => forecast.Independent());
     Time("with knock-on (both passes)", 20, () => forecast.WithKnockOn());
+    Time("conflicts", 20, () => forecast.Conflicts());
 
     static void Time(string what, int runs, Action action)
     {

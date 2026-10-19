@@ -114,5 +114,8 @@ public sealed record GraphScene(
     /// <summary>Notes pinned to this corridor (S13), drawn over the trains.</summary>
     public IReadOnlyList<GraphNote> Notes { get; init; } = [];
 
+    /// <summary>Conflicts on this corridor (S14): highlights under the trains, rings over them.</summary>
+    public IReadOnlyList<GraphConflict> Conflicts { get; init; } = [];
+
     public IEnumerable<GraphPath> InLayer(GraphLayer layer) => Paths.Where(p => p.Layer == layer);
 }
