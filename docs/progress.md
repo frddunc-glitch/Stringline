@@ -835,6 +835,68 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - Changing a corridor's locations re-measures it from the WTT straight away, which takes a moment on large sims.
 - A section whose two locations swap order (by moving one past the other) keeps its tracks, as `Refresh` already did, so its Up and Down tracks are then the wrong way round. Set its layout again.
 
+## 2026-10-19 — S15: Suggestion engine and regulation list
+
+### Done
+- **Portable parts (tested on Linux)**, in Planning:
+  - **`Suggester`**: rule-based resolutions for a conflict (FC-5). Hold the train that gives way; swap (hold the other); another platform; another line off a one-line block; retime a run planned too fast; and, only if allowed, terminate short or cancel for a block. Each is scored by re-forecasting the plan with it; the best 3 are offered. The rules are in `06-…md` §4.
+  - **`RegulationList`** (RP-9): the movements still to come at a location in plan order, with each train that is ahead of or behind others against the WTT's order.
+  - **`PlanSnapshot.Settings`** (`ForecastSettings`): the network and options the snapshot's forecast and conflicts were made with, so `SuggestionRequest.For(snapshot, conflict)` forecasts exactly as the engine does.
+  - `AcceptSuggestion` gains an optional `Title`, so the history reads "Suggestion: Hold 1F01 at A until 08:07 (+2 min)".
+- **App:**
+  - A **suggestions panel** under the conflicts list for the picked conflict: up to 3 rows, each with its cost, a tooltip of the trains it moves, Preview (ghosts of the changed plans) and Apply (one undoable edit). There is also an **Allow cancelling** box (remembered in `AppSettings.SuggestCancellations`). See `05-…md` §5.
+  - A **Regulation tab** between Conflicts and History, with a location box. "Regulation list at …" on the graph's right-click menu opens it there. See `05-…md` §6.
+- **Tests:**
+  - Planning +21 (205):
+    - golden scenarios for each kind: a hold at the origin, and the swap with its cost worked out by hand; a running train that cannot be held; priority weights; holding in the crossing loop; a free platform; a platform change taking the next working, or the train it is formed from; a block's hold, termination and cancellation; a line change; a retime;
+    - accepting a suggestion as one edit (and its JSON); determinism;
+    - Waterloo part way through both recordings: suggestions apply cleanly and to the half minute, and most resolve;
+    - the regulation list: order, out of order, the horizon and actuals, cancelled trains and clones, short termination;
+    - the engine's snapshot settings feeding a suggestion that is then applied.
+  - App +5 (98): on Waterloo, picking a block's conflict, previewing, applying and undoing; allowing cancelling (remembered); refusing a suggestion worked out on an older plan; the regulation list out of order after a hold; the menu item.
+  - Totals: 1 325 (Core 247, Architecture 9, Gateway 207, Timetable 163, Network 140, Planning 205, Graph 199, Tools 57, App 98).
+    - Green on Windows (Debug).
+    - Green on Linux (`sdk:10.0` container, portable filter, Release: 1 227).
+- **Measured** (Debug, Waterloo): 120–150 ms for a conflict with a hold and a swap; 450–520 ms for a platform conflict at Waterloo station (3 platforms tried). Release will be about three times faster.
+- **Tried in the app** (the Waterloo 4× replay played to its end, driven through UI Automation and screenshotted):
+  - Picking a headway conflict between two running trains showed "No suggestion: neither 1B92 nor 2L90 can wait anywhere before it".
+  - Picking a platform conflict at Waterloo showed three platform changes with their costs.
+  - The Regulation tab listed Waterloo's 311 movements in the next 3 hours.
+  - The app closed cleanly.
+  - Apply was driven only by the view-model tests.
+  - The run in the app found that platform changes were wrong for a train formed in the platform from another. It also found that "resolves" was too strict when the same pair clash again further on. Both are fixed and tested.
+
+### Decisions
+- **Fred's choices:**
+  - Suggestions are worked out **on selection**, not for every conflict.
+  - The regulation list is a **tab beside Conflicts**.
+  - **Preview shows the changed trains' plans** only.
+  - The **weight is priority / 50**, linear.
+- **Delay is measured against the forecast without the suggestion**, with knock-on if it is on: at each train's last point still to come within 90 min. So planning a hold that the knock-on forecast already predicts costs nothing, and trains that gain count against the cost.
+- **New platform clashes are added to the score** (weight × severity). The forecast does not hold trains for platforms, so otherwise a platform change into a busy platform looked free. Every new clash is added when the knock-on pass is off.
+- **Holds are to the half minute** (the departure time, not the length), and grow by what is still missing, up to 4 times, so a train that makes up time on the way is held enough.
+- **A train can wait** at a stop, at a platform it passes, or at its first point (entry included), and only where it has not yet left. A train already on its way past every such point gets no hold, and the panel says so.
+- **"Resolves"** means that this pair no longer clash in this way at this place (or the train is no longer held by the block, or no longer planned too fast). Another clash between them further on is its own conflict.
+- **Penalties**: 2 min for a platform or line change, 30 min for terminating short, 60 min for cancelling (`SuggestionOptions`).
+- **Line changes are offered only for blocks on one WTT line**: section tracks are chosen by the forecast itself, so a line change does not change a headway clash.
+- **The regulation list orders by plan time** (departure or pass, arrival for a termination) and shows the forecast beside it. It looks 3 hours ahead.
+- **A suggestion worked out on an older plan is not applied** (a shift is relative), and is worked out again.
+
+### Next
+- S16: session persistence and review. `AcceptSuggestion` (with its `Title`) already serialises.
+- Suggestions could be offered for a whole train (all its conflicts at once), or rolled into S20's optimiser.
+- The regulation list could be printed or exported with S17's reports.
+
+### Known issues
+- **Not tried by hand.** 👤 Fred, on a replay:
+  - pick conflicts and judge whether the suggestions are sensible, especially their order, and whether the "weighted delay" line means anything to you;
+  - try Preview and Apply, then Undo;
+  - use the Regulation tab while signalling and say whether it helps, what is missing (e.g. routes or lines) and whether 3 hours is right.
+- **Few suggestions on a busy sim.** Many conflicts at the now line are between trains already on their way, so nothing can be held, and they show none. Holding at a signal is not modelled.
+- **Platform changes often add clashes at Waterloo.** The free-platform check is by the forecast alone. A changed platform can still clash with trains formed or stabled there, so its score includes them and it is often ranked below a hold.
+- **Live refresh.** While the sim runs, suggestions are worked out again at most every 2 s, so a row can be up to 2 s out of date. Applying one checks the plan has not changed, not the live state.
+- **Not-yet-seen trains look very late in the regulation list.** Trains booked before now but not yet seen are forecast from now (as in S11), so the list shows them late at the top.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
@@ -861,3 +923,7 @@ New from S14:
 
 New from S14a:
 10. When you have tried line styles: are dashed and dotted categories distinct enough from the forecast's dashes, or should the forecast change instead (e.g. thinner, or dash-dot)?
+
+New from S15:
+11. Are the suggestion **penalties** right: 2 min for a platform or line change, 30 min for terminating short, 60 min for cancelling (all weighted like delay)? They are in `SuggestionOptions`.
+12. Should suggestions **hold a train at a signal** (e.g. outside a junction), which SimSig can do but the WTT does not time? That would give suggestions for trains already on their way.

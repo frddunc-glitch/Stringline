@@ -47,6 +47,9 @@ internal sealed record AppSettings
     /// <summary>The forecast includes knock-on delay from other trains (the interaction pass). On unless turned off.</summary>
     public bool ForecastKnockOn { get; init; } = true;
 
+    /// <summary>Suggestions may terminate a train short or cancel it, for a block (S15). Off unless turned on.</summary>
+    public bool SuggestCancellations { get; init; }
+
     /// <summary>The folder the last graph export went to.</summary>
     public string? LastExportFolder { get; init; }
 

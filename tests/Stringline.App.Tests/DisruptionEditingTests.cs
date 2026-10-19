@@ -38,7 +38,8 @@ public sealed class DisruptionEditingTests
         var at = await app.Ui.Run(() => In(vm, 0.5, 0.5));
 
         var menu = await app.Ui.Run(() => vm.MenuFor(null, at));
-        menu.Select(m => m.Header).Should().Equal("Add _block/possession here…", "Add _speed restriction here…", "Add _note here…");
+        menu.Select(m => m.Header).SkipLast(1).Should().Equal("Add _block/possession here…", "Add _speed restriction here…", "Add _note here…");
+        menu[^1].Header.Should().StartWith("Regulation _list at ", "S15: the regulation list for the nearest location");
 
         string[]? offered = null;
         app.Dialogs.Prompts.Enqueue(p =>

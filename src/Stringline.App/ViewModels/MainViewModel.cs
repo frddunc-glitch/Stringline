@@ -90,6 +90,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         InitEditing();
         InitConflicts();
         _settings = settingsStore.Load();
+        InitSuggestions();
         Snapshot = engine.Current;
         // Read them all first: setting any saves the view settings, which would overwrite the others.
         var (byDelay, vertical, knockOn) = (_settings.ColourByDelay, _settings.VerticalGraph, _settings.ForecastKnockOn);
@@ -234,6 +235,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     partial void OnSelectedCorridorChanged(CorridorTab? value)
     {
+        UpdateSuggestionPreview();
         if (KeepsViewOnTabChange(value))
         {
             if (value is not null)
@@ -603,6 +605,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
 
         SelectedCorridor = Corridors.FirstOrDefault(c => c.Id == previous) ?? Corridors.FirstOrDefault();
+        Regulation.SetLocations(loaded.Profile);
         var warnings = loaded.Import.Warnings.Count;
         var message = $"Loaded {(loaded.Timetable.Header.Name.Length > 0 ? loaded.Timetable.Header.Name : Path.GetFileName(path))}: {loaded.Timetable.Trains.Count} trains, {Corridors.Count} corridors"
             + (warnings > 0 ? $", {warnings} import warnings." : ".")
@@ -735,6 +738,8 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         Snapshot = snapshot;
         UpdateEditing();
         UpdateConflicts();
+        UpdateSuggestions();
+        Regulation.Update(snapshot);
         Trains.Update(snapshot, Profile);
         TrainsText = snapshot.Trains.Count == 0 ? string.Empty : StatusText.Trains(snapshot.Matches);
         if (snapshot.AreaId is { Length: > 0 } area)

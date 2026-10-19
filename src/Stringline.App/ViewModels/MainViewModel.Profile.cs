@@ -254,6 +254,7 @@ internal sealed partial class MainViewModel
             }
 
             SelectedCorridor = Corridors.FirstOrDefault(c => c.Id == previous) ?? Corridors.FirstOrDefault();
+            Regulation.SetLocations(profile);
         }
         finally
         {

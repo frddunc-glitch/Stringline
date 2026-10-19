@@ -106,6 +106,32 @@ public sealed class PlanningEngineForecastTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Snapshots_carry_what_the_forecast_was_made_with_so_suggestions_can_be_made_from_them()
+    {
+        var network = ForecastNetwork.Build([Line("main", 180, single: false, "A", "B", "C", "D")], WorkingPlanTests.Timetable());
+        _engine.SetTimetable(WorkingPlanTests.Timetable());
+        _engine.SetForecast(network, new ForecastOptions { DefaultDwellSeconds = 45 });
+        var loaded = await Snapshot(s => s.Plan.Count == 2 && s.Settings.Network == network);
+        loaded.Settings.Forecast.DefaultDwellSeconds.Should().Be(45);
+
+        var block = new Disruption("B1", DisruptionKind.Block, new Tiploc("A"), new Tiploc("B"), null, SimTime.Parse("06:00"), SimTime.Parse("07:30"));
+        (await _engine.Execute(new AddDisruption(block)).WaitAsync(Timeout)).Applied.Should().BeTrue();
+        var blocked = await Snapshot(s => s.PlanVersion > loaded.PlanVersion);
+        // The block holds both trains (and then 2B01 behind 1A01); suggest for 2B01's hold.
+        var conflict = blocked.Conflicts.All.Single(c => c.A == Slow && c.Kind == ConflictKind.Disruption);
+
+        var request = SuggestionRequest.For(blocked, conflict);
+        (request.Forecast.Network, request.Forecast.Options, request.Baseline, request.BaselineConflicts).Should().Be((network, blocked.Settings.Forecast, blocked.Forecast, blocked.Conflicts));
+        var hold = Suggester.Suggest(request)[0];
+        hold.Commands.Should().Equal(new ShiftTrain(Slow, 0, 30 * 60));
+
+        (await _engine.Execute(hold.ToCommand()).WaitAsync(Timeout)).Applied.Should().BeTrue();
+        var applied = await Snapshot(s => s.PlanVersion > blocked.PlanVersion);
+        applied.Conflicts.All.Should().NotContain(c => c.A == Slow && c.Kind == ConflictKind.Disruption);
+        applied.History.UndoDescription.Should().Be("Suggestion: Hold 2B01 at A until 07:30 (+30 min)");
+    }
+
+    [Fact]
     public async Task Entry_delays_reach_the_snapshot_and_the_forecast()
     {
         _engine.SetTimetable(WorkingPlanTests.Timetable());

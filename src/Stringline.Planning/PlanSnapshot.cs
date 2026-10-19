@@ -20,6 +20,10 @@ namespace Stringline.Planning;
 /// <param name="EntryDelays">The sim's expected entry delays by headcode (<c>train_delay</c>), for trains not yet entered.</param>
 /// <param name="Forecast">Every train's forecast as of this snapshot (S11).</param>
 /// <param name="Conflicts">The plan's conflicts as of this snapshot (S14).</param>
+/// <param name="Settings">
+/// The sections and settings the forecast and conflicts were made with (S15), so a reader can make more of the same
+/// (suggestions).
+/// </param>
 public sealed class PlanSnapshot(
     long Sequence,
     WorkingTimetable? Timetable,
@@ -33,7 +37,8 @@ public sealed class PlanSnapshot(
     long PlanVersion = 0,
     IReadOnlyDictionary<Headcode, int>? EntryDelays = null,
     Forecast? Forecast = null,
-    ConflictSet? Conflicts = null)
+    ConflictSet? Conflicts = null,
+    ForecastSettings? Settings = null)
 {
     private Dictionary<TrainId, (LiveTrain Train, int Working)>? _byTrain;
     private Dictionary<string, LiveTrain>? _byUid;
@@ -63,6 +68,8 @@ public sealed class PlanSnapshot(
     public Forecast Forecast { get; } = Forecast ?? Forecast.Empty;
 
     public ConflictSet Conflicts { get; } = Conflicts ?? ConflictSet.Empty;
+
+    public ForecastSettings Settings { get; } = Settings ?? ForecastSettings.Default;
 
     /// <summary>Before anything has happened.</summary>
     public static PlanSnapshot Empty { get; } = new(0, null, [], SimClockReading.None, new MatchSummary(0, 0, 0, 0, 0, new Dictionary<MatchMethod, int>()), 0, null);
@@ -100,4 +107,10 @@ public sealed class PlanSnapshot(
 
         return map;
     }
+}
+
+/// <summary>What a forecast and its conflicts are made with: the sections and the settings (S15).</summary>
+public sealed record ForecastSettings(ForecastNetwork Network, ForecastOptions Forecast, ConflictOptions Conflicts)
+{
+    public static ForecastSettings Default { get; } = new(ForecastNetwork.Empty, new ForecastOptions(), new ConflictOptions());
 }

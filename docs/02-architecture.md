@@ -117,7 +117,10 @@ GraphHover           // S8: GraphHit + scene + PlanSnapshot → HoverInfo (locat
 
 // Stringline.Planning (S8, S10, S11)
 PlanningEngine       // single writer: queue of GatewayEvents, SetTimetable/Clear, SetForecast(network, options) and plan Execute/Undo/Redo (Tasks) → LiveState + WorkingPlan → Forecaster → PlanSnapshot at most every 100 ms (plan changes at once); keeps the session's events so a timetable loaded mid-session rebuilds the matches
-PlanSnapshot         // immutable: timetable, live trains, SimClockReading (interpolate on any thread), match summary, WorkingPlan, PlanHistory, PlanVersion, EntryDelays, Forecast; FindByTrain/FindByUid
+PlanSnapshot         // immutable: timetable, live trains, SimClockReading (interpolate on any thread), match summary, WorkingPlan, PlanHistory, PlanVersion, EntryDelays, Forecast; FindByTrain/FindByUid; S14: Conflicts; S15: Settings (ForecastSettings: the network, forecast and conflict options it was made with)
+ConflictDetector     // S14, pure: ConflictRequest(plan, forecast, network, options) → ConflictSet (06-…md §3)
+Suggester            // S15, pure: SuggestionRequest(forecast request, conflict, options; baseline forecast and conflicts) → Suggestion[] (hold, swap, platform, line, retime, terminate, cancel), scored by re-forecasting (06-…md §4); Suggestion.ToCommand() → AcceptSuggestion
+RegulationList       // S15, pure: plan + forecast + location + now → RegulationRow[] in plan order, with trains ahead of / behind others against the WTT order (RP-9)
 Forecaster           // S11, pure: ForecastRequest(plan, live trains, now, session start, entry delays, ForecastNetwork, ForecastOptions) → Forecast; one event queue, independent and interaction passes (06-…md §2)
 ForecastNetwork      // S11: the profile's corridor sections as resources (headway, single line, tracks each way widened to what the WTT uses at once), category priorities; built once per timetable and profile
 WorkingPlan          // S10, immutable: WTT + commands (06-…md §1). TrainPlan(Id, Headcode, CategoryId, Origin Wtt|Clone, Source, Points, Cancelled, TerminatesAt, IsModified) of PlannedPoints; Disruptions; Notes (S13); LiveLinks; MinRunTable; Apply/ApplyAll(commands), NewCloneId, NewDisruptionId, NewNoteId

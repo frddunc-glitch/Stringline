@@ -76,6 +76,7 @@ public sealed partial class PlanningEngine
     private (long State, long Plan, long Settings) _forecastKey = (-1, -1, -1);
     private Forecast _forecast = Forecast.Empty;
     private ConflictSet _conflicts = ConflictSet.Empty;
+    private ForecastSettings _settings = ForecastSettings.Default;
     private IReadOnlyDictionary<Headcode, int> _entryDelays = new Dictionary<Headcode, int>();
 
     public PlanningEngine(PlanningEngineOptions? options = null, TimeProvider? timeProvider = null, ILoggerFactory? loggerFactory = null)
@@ -442,7 +443,8 @@ public sealed partial class PlanningEngine
             _planVersion,
             _entryDelays,
             _forecast,
-            _conflicts);
+            _conflicts,
+            _settings);
         _publishedVersion = _state.Version;
         _lastPublish = _time.GetUtcNow();
         Volatile.Write(ref _current, snapshot);
@@ -476,6 +478,7 @@ public sealed partial class PlanningEngine
         }
 
         _forecastKey = key;
+        _settings = new ForecastSettings(_network, _forecastOptions, _options.Conflicts);
         _entryDelays = new Dictionary<Headcode, int>(_state.EntryDelays);
         var started = _time.GetTimestamp();
         try

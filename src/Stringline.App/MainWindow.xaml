@@ -413,11 +413,46 @@
         <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#EEEEEE" />
 
         <!-- Conflicts (FC-4, S14) and edit history (RP-7), as tabs (Fred) -->
-        <TabControl Grid.Row="2" BorderThickness="0,1,0,0" Padding="0">
+        <TabControl Grid.Row="2" BorderThickness="0,1,0,0" Padding="0" SelectedIndex="{Binding SideTab}">
           <TabItem Header="{Binding ConflictList.Header}">
             <DockPanel>
               <TextBlock DockPanel.Dock="Top" Text="{Binding ConflictList.Summary}" Foreground="#757575" Margin="6,4"
-                         ToolTip="Clashes still to come, on every corridor, by the forecast without knock-on. Pick one to show it on the graph." />
+                         ToolTip="Clashes still to come, on every corridor, by the forecast without knock-on. Pick one to show it on the graph and see suggestions." />
+              <!-- Suggestions for the picked conflict (FC-5, S15) -->
+              <Border x:Name="SuggestionsPanel" DockPanel.Dock="Bottom" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Background="#FAFAFA"
+                      MaxHeight="240" Visibility="{Binding SuggestionPanel.IsVisible, Converter={StaticResource BoolToVisibility}}">
+                <DockPanel Margin="6,4">
+                  <DockPanel DockPanel.Dock="Top">
+                    <CheckBox DockPanel.Dock="Right" Content="Allow cancelling" IsChecked="{Binding SuggestionPanel.AllowCancellation}" VerticalAlignment="Center"
+                              ToolTip="Also suggest terminating a train short, or cancelling one not yet started, for a block." />
+                    <TextBlock Text="{Binding SuggestionPanel.Heading}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                               ToolTip="{Binding SuggestionPanel.Heading}" />
+                  </DockPanel>
+                  <TextBlock DockPanel.Dock="Top" Text="{Binding SuggestionPanel.Status}" Foreground="#757575" TextWrapping="Wrap" Margin="0,4,0,0"
+                             Visibility="{Binding SuggestionPanel.Status, Converter={StaticResource NotNull}}" />
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding SuggestionPanel.Rows}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <DockPanel Margin="0,4,0,0" ToolTip="{Binding Tip}" Background="Transparent">
+                            <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="Apply" VerticalAlignment="Top"
+                                    Command="{Binding DataContext.ApplySuggestionCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"
+                                    ToolTip="Make this change to the plan, as one edit you can undo." />
+                            <ToggleButton DockPanel.Dock="Right" Content="Preview" Padding="8,2" Margin="2,0" VerticalAlignment="Top"
+                                          IsChecked="{Binding IsPreviewed, Mode=OneWay}"
+                                          Command="{Binding DataContext.PreviewSuggestionCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"
+                                          ToolTip="Draw the plans it changes on the graph." />
+                            <StackPanel>
+                              <TextBlock Text="{Binding Title}" TextWrapping="Wrap" />
+                              <TextBlock Text="{Binding Detail}" Foreground="#616161" FontSize="11" TextWrapping="Wrap" />
+                            </StackPanel>
+                          </DockPanel>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </ScrollViewer>
+                </DockPanel>
+              </Border>
               <ListBox x:Name="ConflictsList" ItemsSource="{Binding ConflictList.Rows}" SelectedItem="{Binding ConflictList.Selected}"
                        BorderThickness="0,1,0,0" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
@@ -442,6 +477,43 @@
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
+            </DockPanel>
+          </TabItem>
+          <!-- Regulation list (RP-9, S15) -->
+          <TabItem Header="Regulation">
+            <DockPanel>
+              <DockPanel DockPanel.Dock="Top" Margin="6,4">
+                <TextBlock Text="At" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <ComboBox x:Name="RegulationLocations" ItemsSource="{Binding Regulation.Locations}" SelectedItem="{Binding Regulation.Location}"
+                          DisplayMemberPath="Name" MinWidth="160" IsEditable="False"
+                          ToolTip="The location to list; or right-click a location on the graph and choose Regulation list." />
+              </DockPanel>
+              <TextBlock DockPanel.Dock="Top" Text="{Binding Regulation.Summary}" Foreground="#757575" Margin="6,0,6,4" TextWrapping="Wrap"
+                         ToolTip="Movements still to come here, in the order of the working plan. Bold amber rows are out of WTT order." />
+              <ListView x:Name="RegulationList" ItemsSource="{Binding Regulation.Rows}" BorderThickness="0,1,0,0">
+                <ListView.ItemContainerStyle>
+                  <Style TargetType="ListViewItem">
+                    <Setter Property="ToolTip" Value="{Binding Tip}" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding OutOfOrder}" Value="True">
+                        <Setter Property="Foreground" Value="#E65100" />
+                        <Setter Property="FontWeight" Value="SemiBold" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.View>
+                  <GridView>
+                    <GridViewColumn Header="Plan" DisplayMemberBinding="{Binding Time}" Width="56" />
+                    <GridViewColumn Header="Train" DisplayMemberBinding="{Binding Headcode}" Width="48" />
+                    <GridViewColumn Header="Does" DisplayMemberBinding="{Binding Move}" Width="96" />
+                    <GridViewColumn Header="Plat" DisplayMemberBinding="{Binding Platform}" Width="36" />
+                    <GridViewColumn Header="Fcst" DisplayMemberBinding="{Binding Forecast}" Width="56" />
+                    <GridViewColumn Header="Late" DisplayMemberBinding="{Binding Delay}" Width="36" />
+                    <GridViewColumn Header="Order" DisplayMemberBinding="{Binding Order}" Width="120" />
+                  </GridView>
+                </ListView.View>
+              </ListView>
             </DockPanel>
           </TabItem>
           <TabItem Header="History">

@@ -159,6 +159,7 @@ internal sealed partial class MainViewModel : IGraphEditor
         }
 
         _drag = drag;
+        ClearSuggestionPreview();
         _ghostUntil = null;
         EditStatus = drag.Preview.Status;
         Ghosts = null;
@@ -293,6 +294,13 @@ internal sealed partial class MainViewModel : IGraphEditor
             {
                 items.Add(new PlanMenuItem("_Match automatically", new AsyncRelayCommand(() => ExecuteAsync(new UnlinkLiveTrain(live.SimUid, headcode)))));
             }
+        }
+
+        if (point is not null)
+        {
+            var location = point.Location;
+            items.Add(PlanMenuItem.Separator);
+            items.Add(new PlanMenuItem($"Regulation _list at {Name(location)}", new RelayCommand(() => ShowRegulation(location))));
         }
 
         return items;

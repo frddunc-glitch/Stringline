@@ -453,6 +453,9 @@ public sealed record UnlinkLiveTrain(string SimUid, Headcode Headcode) : IPlanCo
 /// <summary>A suggestion's commands applied as one step: all of them, or (if any fails) none.</summary>
 public sealed record AcceptSuggestion(string SuggestionId, IReadOnlyList<IPlanCommand> Commands) : IPlanCommand
 {
+    /// <summary>What the suggestion does, for the edit history (S15: <see cref="Suggestion.Describe"/>); its steps if none.</summary>
+    public string? Title { get; init; }
+
     public PlanCommandResult Apply(WorkingPlanBuilder b)
     {
         ArgumentNullException.ThrowIfNull(b);
@@ -477,7 +480,8 @@ public sealed record AcceptSuggestion(string SuggestionId, IReadOnlyList<IPlanCo
     }
 
     public string Describe(WorkingPlan plan) =>
-        Commands is { Count: > 0 } ? $"Accept suggestion: {string.Join("; ", Commands.Select(c => c.Describe(plan)))}" : "Accept suggestion";
+        !string.IsNullOrWhiteSpace(Title) ? $"Suggestion: {Title}"
+        : Commands is { Count: > 0 } ? $"Accept suggestion: {string.Join("; ", Commands.Select(c => c.Describe(plan)))}" : "Accept suggestion";
 }
 
 /// <summary>Shared checks for the commands.</summary>
