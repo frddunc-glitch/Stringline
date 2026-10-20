@@ -227,6 +227,7 @@ Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fi
   - Llangollen single line unchanged;
   - `ProfileJson` round trip with the source.
 - Update `06-…md` §3 with the rule.
+- *Built in S27:* Fred chose "only tighten": a WTT figure is used only where it is less than the default, as one above it added false conflicts on Waterloo's Windsor lines. The observed spacing is built (`corridors --headways --log`). See `06-…md` §3.
 
 ### S28 — User guide, in-app help and wiki (#4)
 - **Guide in the repo** (`docs/user-guide/`, Australian English, railway terms as SimSig uses them). Its parts:

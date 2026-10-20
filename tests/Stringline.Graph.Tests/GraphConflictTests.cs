@@ -1,5 +1,6 @@
 using SkiaSharp;
 using Stringline.Core;
+using Stringline.Network;
 using Stringline.Planning;
 using static Stringline.Graph.Tests.TestData;
 
@@ -147,6 +148,21 @@ public sealed class GraphConflictTests
         info.ValueOf("Tip").Should().Be("Click to focus it and see suggestions", "no suggestion has been worked out");
         GraphConflicts.Describe(scene.Conflicts[0], scene).ValueOf("Knock-on").Should().BeNull("there is none");
         GraphConflicts.Describe(scene.Conflicts[0], scene).Heading.Should().Be("Platform: 2B02 due in platform 1 before 1A01 clears it");
+    }
+
+    [Fact]
+    public void The_tooltip_names_the_headway_and_where_it_comes_from()
+    {
+        var scene = Scene();
+        var wtt = new GraphConflict(Headway with { HeadwaySeconds = 150, HeadwaySource = HeadwaySource.Wtt }, TwoThirds, Third, TwoThirds);
+        var hand = new GraphConflict(Headway with { HeadwaySeconds = 120, HeadwaySource = HeadwaySource.Hand }, TwoThirds, Third, TwoThirds);
+
+        var info = GraphConflicts.Describe(wtt, scene);
+
+        info.ValueOf("Headway").Should().Be("2 min 30 s (from the WTT)");
+        info.Lines.Select(l => l.Label).Should().ContainInOrder("When", "Headway", "Resolve");
+        GraphConflicts.Describe(hand, scene).ValueOf("Headway").Should().Be("2 min (set by hand)");
+        GraphConflicts.Describe(scene.Conflicts[0], scene).ValueOf("Headway").Should().BeNull("a platform has no headway");
     }
 
     [Fact]

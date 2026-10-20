@@ -1,5 +1,6 @@
 using Stringline.Core;
 using Stringline.Core.Timetables;
+using Stringline.Network;
 using static Stringline.Planning.Tests.ForecastTesting;
 using static Stringline.Timetable.Tests.Live.TestTimetable;
 
@@ -64,8 +65,27 @@ public sealed class ConflictScenarioTests
         c.PointIndex.Should().Be(1);
         c.KnockOnSeconds.Should().Be(120);
         c.Summary.Should().Be("1F01 too close behind 2S01");
+        (c.HeadwaySeconds, c.HeadwaySource).Should().Be((180, (HeadwaySource?)HeadwaySource.Default), "the section's headway is named (#7)");
         conflicts.Involving(Stopper).Should().ContainSingle();
         conflicts.Find(c.Id).Should().BeSameAs(c);
+    }
+
+    [Fact]
+    public void Headway_from_the_wtt_judges_the_clash_and_is_named()
+    {
+        // As above, on a line the WTT books 2 min apart: 1F01 must leave C 2 min after 2S01 (08:14), so 1 min too close.
+        var timetable = LoopTimetable();
+        var line = Line("main", 180, single: false, "A", "B", "C");
+        var wtt = line with { Sections = [.. line.Sections.Select(s => (s with { BookedHeadwaySeconds = 120 }).ResolveHeadway(180))] };
+        var conflicts = Detect(WorkingPlan.FromTimetable(timetable), ForecastNetwork.Build([wtt], timetable), "08:05", live:
+        [
+            Running("10", "1F01", Passed("A", "08:05")),
+            Running("11", "2S01", Dep("A", "07:55"), Arr("B", "07:59")),
+        ]);
+
+        var c = conflicts.All.Should().ContainSingle().Subject;
+        (c.Kind, c.SeveritySeconds).Should().Be((ConflictKind.Headway, 60));
+        (c.HeadwaySeconds, c.HeadwaySource).Should().Be((120, (HeadwaySource?)HeadwaySource.Wtt));
     }
 
     [Fact]

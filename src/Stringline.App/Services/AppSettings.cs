@@ -140,6 +140,12 @@ internal sealed record PlanningSettings
 
     public int MinConflictSeconds { get; init; } = Conflict.MinSeveritySeconds;
 
+    /// <summary>
+    /// The headway for sections with neither a hand-set nor a WTT headway, unless the sim's profile sets its own
+    /// (S27, <c>06-…md</c> §3).
+    /// </summary>
+    public int DefaultHeadwaySeconds { get; init; } = Network.Section.StandardHeadwaySeconds;
+
     public double PlatformChangePenalty { get; init; } = Suggestion.PlatformChangePenalty;
 
     public double LineChangePenalty { get; init; } = Suggestion.LineChangePenalty;

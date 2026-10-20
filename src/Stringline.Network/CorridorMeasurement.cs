@@ -21,8 +21,15 @@ public sealed record LocationStats(Tiploc Tiploc, int Calls, int Stops, IReadOnl
 /// <param name="DownRuns">Timed Down runs.</param>
 /// <param name="UpRuns">Timed Up runs.</param>
 /// <param name="OpposingOverlaps">Pairs of an Up and a Down run booked in the section at the same time for more than a minute (or half the shorter run).</param>
-public sealed record SectionStats(int? MinRunDownSeconds, int? MinRunUpSeconds, int DownRuns, int UpRuns, int OpposingOverlaps)
+/// <param name="Headway">The headway the WTT books trains to here; <see cref="BookedHeadway.None"/> if not measured.</param>
+public sealed record SectionStats(int? MinRunDownSeconds, int? MinRunUpSeconds, int DownRuns, int UpRuns, int OpposingOverlaps, BookedHeadway? Headway = null)
 {
+    /// <summary>The headway the WTT books trains to here; never null (<see cref="BookedHeadway.None"/> if not measured).</summary>
+    public BookedHeadway? Headway { get; init; } = Headway ?? BookedHeadway.None;
+
+    /// <summary>The headway the WTT books trains to here.</summary>
+    public BookedHeadway BookedHeadway => Headway ?? BookedHeadway.None;
+
     /// <summary>The fastest timed run in either direction, if any.</summary>
     public int? MinRunSeconds => (MinRunDownSeconds, MinRunUpSeconds) switch
     {
@@ -265,7 +272,7 @@ public sealed record CorridorMeasurement(IReadOnlyList<LocationStats> Locations,
             }
         }
 
-        public SectionStats ToStats() => new(_minDown, _minUp, _down.Count, _up.Count, CountOverlaps());
+        public SectionStats ToStats() => new(_minDown, _minUp, _down.Count, _up.Count, CountOverlaps(), BookedHeadway.Derive(_down, _up));
 
         /// <summary>Opposing pairs booked in the section together for more than <see cref="OverlapToleranceSeconds"/> (or half the shorter run).</summary>
         private int CountOverlaps()

@@ -16,6 +16,7 @@ namespace Stringline.Planning;
 /// <param name="SingleLine">One bi-directional track: opposing trains may not be in it at once.</param>
 /// <param name="DownTracks">How many trains can run Down through it side by side (see <see cref="ForecastNetwork"/>).</param>
 /// <param name="UpTracks">How many trains can run Up through it side by side.</param>
+/// <param name="HeadwaySource">Where <see cref="HeadwaySeconds"/> comes from: set by hand, the WTT, or the default.</param>
 public sealed record ForecastSection(
     int Id,
     Tiploc From,
@@ -25,7 +26,8 @@ public sealed record ForecastSection(
     int DownTracks,
     int UpTracks,
     int MinRunDownSeconds,
-    int MinRunUpSeconds)
+    int MinRunUpSeconds,
+    HeadwaySource HeadwaySource = HeadwaySource.Default)
 {
     public int TracksFor(bool down) => down ? DownTracks : UpTracks;
 
@@ -53,7 +55,7 @@ internal readonly record struct RouteStep(ForecastSection Section, bool Down, do
 public sealed class ForecastNetwork
 {
     /// <summary>Two booked runs the same way entering or leaving a section closer together than this are on different tracks.</summary>
-    public const int ParallelSeconds = 60;
+    public const int ParallelSeconds = BookedHeadway.ParallelSeconds;
 
     private readonly IReadOnlyList<Corridor> _corridors;
     private readonly Dictionary<LocationPair, ForecastSection> _sections;
@@ -100,7 +102,8 @@ public sealed class ForecastNetwork
                         Math.Max(1, s.Tracks.Count(t => t.Direction != TrackDirection.Up)),
                         Math.Max(1, s.Tracks.Count(t => t.Direction != TrackDirection.Down)),
                         Math.Max(1, s.MinRunFor(TrackDirection.Down)),
-                        Math.Max(1, s.MinRunFor(TrackDirection.Up)));
+                        Math.Max(1, s.MinRunFor(TrackDirection.Up)),
+                        s.HeadwaySource);
                 }
             }
         }
@@ -223,23 +226,5 @@ public sealed class ForecastNetwork
     }
 
     /// <summary>Greedy track assignment of booked runs in entry order: the number of tracks used.</summary>
-    internal static int TracksNeeded(List<(int Enter, int Exit)> runs)
-    {
-        runs.Sort();
-        var last = new List<(int Enter, int Exit)>();
-        foreach (var run in runs)
-        {
-            var track = last.FindIndex(t => run.Enter >= t.Enter + ParallelSeconds && run.Exit >= t.Exit + ParallelSeconds);
-            if (track < 0)
-            {
-                last.Add(run);
-            }
-            else
-            {
-                last[track] = run;
-            }
-        }
-
-        return last.Count;
-    }
+    internal static int TracksNeeded(List<(int Enter, int Exit)> runs) => BookedHeadway.TracksNeeded(runs);
 }

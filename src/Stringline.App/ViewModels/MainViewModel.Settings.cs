@@ -2,7 +2,9 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using Stringline.App.Services;
+using Stringline.Network.Profiles;
 using Stringline.Persistence;
+using Stringline.Planning;
 
 namespace Stringline.App.ViewModels;
 
@@ -66,6 +68,14 @@ internal sealed partial class MainViewModel
         ForecastKnockOn = next.ForecastKnockOn;
         ClockSize = next.ClockSize;
         SuggestionPanel.AllowCancellation = next.SuggestCancellations;
+        if (before.Planning.DefaultHeadwaySeconds != next.Planning.DefaultHeadwaySeconds && _timetable is { } loaded)
+        {
+            // #7: the sections on the default headway take the new one.
+            var profile = WithGlobalHeadway(loaded.Profile);
+            _timetable = loaded with { Profile = profile };
+            _engine.SetForecast(ForecastNetwork.For(profile, loaded.Timetable));
+        }
+
         if (before.Planning != next.Planning)
         {
             _engine.SetForecast(options: next.Planning.ToForecastOptions(next.ForecastKnockOn), conflicts: next.Planning.ToConflictOptions());
@@ -77,6 +87,9 @@ internal sealed partial class MainViewModel
             AskToTidySessions(days);
         }
     }
+
+    /// <summary>The profile with the global default headway from the settings (#7), which the profile file does not hold.</summary>
+    private StringlineProfile WithGlobalHeadway(StringlineProfile profile) => profile.WithGlobalHeadway(_settings.Planning.DefaultHeadwaySeconds);
 
     /// <summary>At start-up: delete saved sessions older than the settings keep, if the user asked for that.</summary>
     /// <param name="keep">A session named on the command line, kept whatever its age.</param>

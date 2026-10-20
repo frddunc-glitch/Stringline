@@ -167,7 +167,7 @@ public sealed class ProfileTests : IDisposable
     {
         var json = ProfileJson.Serialize(Sample());
 
-        json.Should().StartWith("{\n  \"version\": 1,\n  \"areaId\": \"test\",").And.EndWith("}\n");
+        json.Should().StartWith("{\n  \"version\": 2,\n  \"areaId\": \"test\",").And.EndWith("}\n");
         json.Should().Contain("\"tiploc\": \"A\"").And.Contain("\"axis\": \"Derived\"").And.Contain("\"direction\": \"Up\"");
         json.Should().Contain("\"locationNames\": {\n    \"A\": \"Aston\",");
         json.Should().Contain("\"colour\": \"#1976D2\"");
@@ -196,7 +196,7 @@ public sealed class ProfileTests : IDisposable
 
         var profile = ProfileJson.Deserialize(json);
 
-        profile.Version.Should().Be(1, "a missing version is the current one");
+        profile.Version.Should().Be(StringlineProfile.CurrentVersion, "a missing version is the current one");
         profile.Corridors[0].Axis.Should().Be(AxisMode.Derived);
         profile.Corridors[0].Locations[0].Tiploc.Should().Be(new Tiploc("A"));
         profile.Corridors[0].Locations[1].DistanceKm.Should().Be(2.5);
@@ -208,7 +208,7 @@ public sealed class ProfileTests : IDisposable
     [Theory]
     [InlineData("not json", "Not a valid profile*")]
     [InlineData("null", "*empty*")]
-    [InlineData("""{ "version": 2, "areaId": "x" }""", "*version 2*newer*")]
+    [InlineData("""{ "version": 3, "areaId": "x" }""", "*version 3*newer*")]
     [InlineData("""{ "areaId": " " }""", "*no areaId*")]
     [InlineData("""{ "version": 1 }""", "Not a valid profile*")]
     [InlineData("""{ "areaId": "x", "categories": [ { "categoryId": "X", "name": "X", "priority": 5, "colour": "red" } ] }""", "Not a valid profile*colour*")]

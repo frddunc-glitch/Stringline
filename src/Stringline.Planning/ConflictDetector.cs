@@ -244,6 +244,8 @@ public static class ConflictDetector
                             Start = new SimTime(Math.Min(x.Window.Enter, l.Window.Enter)),
                             End = new SimTime(Math.Max(x.Window.Exit, l.Window.Exit)),
                             PointIndex = x.Run.From,
+                            HeadwaySeconds = x.Section.HeadwaySeconds,
+                            HeadwaySource = x.Section.HeadwaySource,
                         };
                         raw.Add((conflict, x));
                     }
@@ -274,6 +276,8 @@ public static class ConflictDetector
                     {
                         To = c.To,
                         SeveritySeconds = Math.Max(current.SeveritySeconds, c.SeveritySeconds),
+                        HeadwaySeconds = c.SeveritySeconds > current.SeveritySeconds ? c.HeadwaySeconds : current.HeadwaySeconds,
+                        HeadwaySource = c.SeveritySeconds > current.SeveritySeconds ? c.HeadwaySource : current.HeadwaySource,
                         Start = c.Start < current.Start ? c.Start : current.Start,
                         End = c.End > current.End ? c.End : current.End,
                     };

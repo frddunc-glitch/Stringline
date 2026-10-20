@@ -41,7 +41,7 @@ Uninstalling leaves your settings, profiles, sessions and logs in place (see [Wh
 
 **No sim running?** Session ▸ Open replay… (Ctrl+O) plays a recording (`.sslog`) as if it were live. Try `tests/fixtures/waterloo-4x.sslog` with `waterloo 2010.WTT` from this repository.
 
-**Profiles.** The first time you load a sim's timetable, Stringline works out its corridors (the line diagrams the graph is drawn along). Tools ▸ Edit profile… lets you rename locations (handy for a long name the graph has to shorten; hover over a label for its full name), reorder or add corridors, set distances, headways and line layouts, and choose category colours.
+**Profiles.** The first time you load a sim's timetable, Stringline works out its corridors (the line diagrams the graph is drawn along). Tools ▸ Edit profile… lets you rename locations (handy for a long name the graph has to shorten; hover over a label for its full name), reorder or add corridors, set distances, headways and line layouts, and choose category colours. Each section's headway is worked out from the timetable where its trains are booked closer than the default (3 min, in Tools ▸ Options), and the editor shows where each one comes from. A headway you type in is kept.
 
 ## Options
 

@@ -151,13 +151,15 @@ internal sealed class CorridorLocationRow(ProfileEditorViewModel editor, string 
     }
 }
 
-/// <summary>A section of the selected corridor: its tracks and headway.</summary>
+/// <summary>A section of the selected corridor: its tracks, and its headway and where that comes from.</summary>
 internal sealed class SectionRow(ProfileEditorViewModel editor, string corridorId, int index) : ProfileEditorRow(editor)
 {
     private string _label = string.Empty;
     private string _layout = string.Empty;
     private string _tracks = string.Empty;
     private string _headway = string.Empty;
+    private string _headwaySource = string.Empty;
+    private string _headwayTip = string.Empty;
     private string _minRun = string.Empty;
 
     public int Index { get; } = index;
@@ -191,12 +193,19 @@ internal sealed class SectionRow(ProfileEditorViewModel editor, string corridorI
             TrackLayouts.TryParse(value, out var tracks, out var error) ? tracks : throw new ProfileEditException(error!)));
     }
 
-    /// <summary>The headway as <c>m:ss</c>.</summary>
+    /// <summary>The headway as <c>m:ss</c>. Typing one sets it by hand; clearing it goes back to the WTT's or the default.</summary>
     public string Headway
     {
         get => _headway;
-        set => Edit(value?.Trim() ?? string.Empty, _headway, nameof(Headway), p => p.WithHeadway(corridorId, Index, ProfileEditorText.ParseDuration(value, "headway")));
+        set => Edit(value?.Trim() ?? string.Empty, _headway, nameof(Headway), p => p.WithHeadway(
+            corridorId, Index, string.IsNullOrWhiteSpace(value) ? null : ProfileEditorText.ParseDuration(value, "headway")));
     }
+
+    /// <summary>Where the headway comes from: "Hand", "WTT" or "Default" (#7).</summary>
+    public string HeadwaySource => _headwaySource;
+
+    /// <summary>Why the section has its headway, and what the WTT books there, for the source's tooltip.</summary>
+    public string HeadwayTip => _headwayTip;
 
     /// <summary>The fastest booked run, from the WTT: "1:30 (12 runs)".</summary>
     public string MinRun => _minRun;
@@ -209,6 +218,8 @@ internal sealed class SectionRow(ProfileEditorViewModel editor, string corridorI
         Show(ref _layout, TrackLayouts.Describe(section.Tracks), nameof(Layout));
         Show(ref _tracks, TrackLayouts.Format(section.Tracks), nameof(Tracks));
         Show(ref _headway, ProfileEditorText.FormatDuration(section.DefaultHeadwaySeconds), nameof(Headway));
+        Show(ref _headwaySource, HeadwaySources.Name(section.HeadwaySource), nameof(HeadwaySource));
+        Show(ref _headwayTip, ProfileEditorText.HeadwayTip(section, profile), nameof(HeadwayTip));
         var runs = section.Samples == 1 ? "1 run" : $"{section.Samples} runs";
         Show(ref _minRun, $"{ProfileEditorText.FormatDuration(section.MinRunSeconds)} ({runs})", nameof(MinRun));
         if (IsSingleLine != section.IsSingleLine)
@@ -331,4 +342,26 @@ internal static class ProfileEditorText
     }
 
     public static string FormatDuration(int seconds) => string.Create(CultureInfo.InvariantCulture, $"{seconds / 60}:{seconds % 60:00}");
+
+    /// <summary>
+    /// Why a section has its headway (#7), e.g. "From the WTT, being less than the global default, 3:00. The WTT books
+    /// trains here 2:00 apart (5th percentile of 812 pairs)."
+    /// </summary>
+    public static string HeadwayTip(Section section, StringlineProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(section);
+        ArgumentNullException.ThrowIfNull(profile);
+        var booked = section.BookedHeadwaySeconds is { } b
+            ? string.Create(CultureInfo.InvariantCulture, $"The WTT books trains here {FormatDuration(b)} apart ({BookedHeadway.Percentile:0}th percentile of {section.BookedHeadwayPairs} pairs).")
+            : string.Create(CultureInfo.InvariantCulture, $"Too few trains follow each other here in the WTT to tell ({section.BookedHeadwayPairs} pairs; {BookedHeadway.MinPairs} needed).");
+        var fallback = profile.DefaultHeadwaySeconds is { } own ? $"the profile's default, {FormatDuration(own)}" : $"the global default, {FormatDuration(profile.GlobalHeadwaySeconds)}";
+        return section.HeadwaySource switch
+        {
+            Network.HeadwaySource.Hand => $"Set by hand: clear it to go back to the WTT's or the default. {booked}",
+            Network.HeadwaySource.Wtt => $"From the WTT, being less than {fallback}. {booked}",
+            _ => section.BookedHeadwaySeconds is null ? $"{Capital(fallback)}. {booked}" : $"{Capital(fallback)}: the WTT books trains here no closer. {booked}",
+        };
+    }
+
+    private static string Capital(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 }

@@ -42,7 +42,7 @@ public sealed class CorridorBuilderTests
             Name = "My line",
             Axis = AxisMode.Distance,
             Locations = [created.Locations[0] with { DistanceKm = 0, Platforms = 4 }, created.Locations[1] with { DistanceKm = 8 }, created.Locations[2] with { DistanceKm = 10 }],
-            Sections = [created.Sections[0] with { Tracks = Section.SingleLine, DefaultHeadwaySeconds = 300, MinRunSeconds = 1 }, created.Sections[1]],
+            Sections = [created.Sections[0] with { Tracks = Section.SingleLine, DefaultHeadwaySeconds = 300, HeadwaySource = HeadwaySource.Hand, MinRunSeconds = 1 }, created.Sections[1]],
         };
 
         var refreshed = CorridorBuilder.Refresh(edited, Line);
@@ -52,7 +52,8 @@ public sealed class CorridorBuilderTests
         refreshed.Locations[0].Platforms.Should().Be(4);
         refreshed.Locations[2].Platforms.Should().Be(2);
         refreshed.Sections[0].Tracks.Should().BeSameAs(Section.SingleLine);
-        refreshed.Sections[0].DefaultHeadwaySeconds.Should().Be(300);
+        refreshed.Sections[0].DefaultHeadwaySeconds.Should().Be(300, "it was set by hand");
+        refreshed.Sections[0].HeadwaySource.Should().Be(HeadwaySource.Hand);
         refreshed.Sections[0].MinRunSeconds.Should().Be(120, "derived values are recomputed");
         refreshed.Locations.Select(l => l.AxisPosition).Should().Equal(0, 0.8, 1);
     }

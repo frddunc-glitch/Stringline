@@ -131,7 +131,8 @@ public static class GraphConflicts
     }
 
     /// <summary>
-    /// The tooltip (#12): the kind and what clashes, the trains, where and when, the delay to resolve it, the knock-on,
+    /// The tooltip (#12): the kind and what clashes, the trains, where and when, the section's headway and where it comes
+    /// from (#7), the delay to resolve it, the knock-on,
     /// and the best suggestion if one has been worked out, else how to get one.
     /// </summary>
     /// <param name="suggestion">The top suggestion for this conflict, worded, if the suggestions panel has one.</param>
@@ -145,8 +146,14 @@ public static class GraphConflicts
             new("Trains", TrainsOf(c)),
             new("Where", c.To is { } to && to != c.Where ? $"{NameOf(scene, c.Where)} – {NameOf(scene, to)}" : NameOf(scene, c.Where)),
             new("When", c.End > c.Start ? $"{c.When} (clash {c.Start.ToString("H", CultureInfo.InvariantCulture)}–{c.End.ToString("H", CultureInfo.InvariantCulture)})" : c.When.ToString()),
-            new("Resolve", $"delay {c.HeadcodeA} {PlanText.Duration(c.SeveritySeconds)}"),
         };
+        if (c.HeadwaySeconds is { } headway)
+        {
+            // #7: the headway the clash was judged by, and where it came from.
+            lines.Add(new HoverLine("Headway", $"{PlanText.Duration(headway)} ({HeadwaySources.Describe(c.HeadwaySource ?? HeadwaySource.Default)})"));
+        }
+
+        lines.Add(new HoverLine("Resolve", $"delay {c.HeadcodeA} {PlanText.Duration(c.SeveritySeconds)}"));
         if (c.KnockOnSeconds >= SimTime.SecondsPerMinute)
         {
             lines.Add(new HoverLine("Knock-on", $"{c.HeadcodeA} {PlanText.Duration(c.KnockOnSeconds)} late by the forecast"));

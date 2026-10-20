@@ -16,7 +16,8 @@ public sealed class ProfileEditException(string message) : Exception(message);
 /// <para>
 /// Edits that change a corridor's locations take the timetable, so the new sections' minimum run times, the platforms
 /// and the axis are measured from it, as <see cref="CorridorBuilder.Refresh"/> does. A section keeps its tracks and
-/// headway while its two locations stay neighbours; a new pair of neighbours gets a double line and the standard headway.
+/// headway while its two locations stay neighbours; a new pair of neighbours gets a double line, and its headway is
+/// worked out from the WTT and the profile's default (<see cref="Section.ResolveHeadway"/>).
 /// </para>
 /// </summary>
 public static class ProfileEdits
@@ -85,7 +86,7 @@ public static class ProfileEdits
         }
 
         var list = profile.Corridors.ToList();
-        list.Insert(Math.Clamp(index ?? list.Count, 0, list.Count), corridor);
+        list.Insert(Math.Clamp(index ?? list.Count, 0, list.Count), CorridorBuilder.ResolveHeadways(corridor, profile.FallbackHeadwaySeconds));
         return Checked(profile with { Corridors = list });
     }
 
@@ -109,7 +110,7 @@ public static class ProfileEdits
         }
 
         var id = NewCorridorId(profile, name);
-        var corridor = Measured(new Corridor(id, name.Trim(), [new(first, 0), new(last, 1)], []), timetable);
+        var corridor = Measured(new Corridor(id, name.Trim(), [new(first, 0), new(last, 1)], []), timetable, profile.FallbackHeadwaySeconds);
         return profile.AddCorridor(corridor);
     }
 
@@ -280,15 +281,36 @@ public static class ProfileEdits
         return profile.EditSection(id, index, s => s with { Tracks = tracks.ToList() });
     }
 
-    /// <summary>The least time between trains following each other through section <paramref name="index"/>.</summary>
-    public static StringlineProfile WithHeadway(this StringlineProfile profile, string id, int index, int seconds)
+    /// <summary>
+    /// The least time between trains following each other through section <paramref name="index"/>, set by hand; null
+    /// goes back to the WTT's headway or the default (<see cref="Section.ResolveHeadway"/>).
+    /// </summary>
+    public static StringlineProfile WithHeadway(this StringlineProfile profile, string id, int index, int? seconds)
     {
+        ArgumentNullException.ThrowIfNull(profile);
         if (seconds < 0)
         {
             throw new ProfileEditException("The headway cannot be negative.");
         }
 
-        return profile.EditSection(id, index, s => s with { DefaultHeadwaySeconds = seconds });
+        return profile.EditSection(id, index, s => seconds is { } h
+            ? s with { DefaultHeadwaySeconds = h, HeadwaySource = HeadwaySource.Hand }
+            : (s with { HeadwaySource = HeadwaySource.Default }).ResolveHeadway(profile.FallbackHeadwaySeconds));
+    }
+
+    /// <summary>
+    /// The profile's default headway, for sections with neither a hand-set nor a WTT headway; null uses the global one
+    /// (Tools ▸ Options). Every headway not set by hand is worked out again.
+    /// </summary>
+    public static StringlineProfile WithDefaultHeadway(this StringlineProfile profile, int? seconds)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        if (seconds < 0)
+        {
+            throw new ProfileEditException("The headway cannot be negative.");
+        }
+
+        return (profile with { DefaultHeadwaySeconds = seconds }).ResolveHeadways();
     }
 
     /// <summary>A category's style, replacing the profile's style for the same category or adding it.</summary>
@@ -322,7 +344,7 @@ public static class ProfileEdits
 
     /// <summary>
     /// The profile's corridors that differ from what the generator would give for this timetable now: a corridor
-    /// the user made, or one whose name, locations, distances, platforms, tracks, headways or axis were changed.
+    /// the user made, or one whose name, locations, distances, platforms, tracks or axis were changed, or with a headway set by hand.
     /// </summary>
     public static IReadOnlyList<Corridor> HandTuned(this StringlineProfile profile, WorkingTimetable timetable, CorridorGeneratorOptions? options = null) =>
         profile.HandTuned(CorridorGenerator.Generate(timetable, options).Select(c => c.Corridor).ToList(), timetable);
@@ -364,7 +386,7 @@ public static class ProfileEdits
             }
         }
 
-        return Checked(profile with { Corridors = corridors });
+        return Checked((profile with { Corridors = corridors }).ResolveHeadways());
     }
 
     /// <summary>The first rule the profile breaks, including the editor's own rules, or null.</summary>
@@ -398,14 +420,14 @@ public static class ProfileEdits
         {
             var locations = c.Locations.ToList();
             edit(locations);
-            return Measured(c with { Locations = locations }, timetable);
+            return Measured(c with { Locations = locations }, timetable, profile.FallbackHeadwaySeconds);
         });
 
     /// <summary>
     /// Sections rebuilt for the corridor's locations (kept where a pair stays neighbours), then the WTT-derived values
     /// measured, or without a timetable just the axis.
     /// </summary>
-    private static Corridor Measured(Corridor corridor, WorkingTimetable? timetable)
+    private static Corridor Measured(Corridor corridor, WorkingTimetable? timetable, int fallbackHeadwaySeconds)
     {
         var locations = corridor.Locations;
         var sections = new List<Section>(Math.Max(0, locations.Count - 1));
@@ -414,22 +436,31 @@ public static class ProfileEdits
             var (a, b) = (locations[i].Tiploc, locations[i + 1].Tiploc);
             var existing = corridor.Sections.FirstOrDefault(s => (s.From == a && s.To == b) || (s.From == b && s.To == a));
             sections.Add(existing is null
-                ? new Section(a, b, Section.DoubleLine, Section.StandardHeadwaySeconds, Section.DefaultMinRunSeconds)
+                ? new Section(a, b, Section.DoubleLine, fallbackHeadwaySeconds, Section.DefaultMinRunSeconds)
                 : existing with { From = a, To = b });
         }
 
         var rebuilt = corridor with { Sections = sections };
-        return timetable is null ? CorridorAxis.Apply(rebuilt) : CorridorBuilder.Refresh(rebuilt, timetable);
+        return timetable is null
+            ? CorridorAxis.Apply(CorridorBuilder.ResolveHeadways(rebuilt, fallbackHeadwaySeconds))
+            : CorridorBuilder.Refresh(rebuilt, timetable, fallbackHeadwaySeconds);
     }
 
-    /// <summary>True if the two corridors have the same user settings (ignoring what is measured from the WTT).</summary>
+    /// <summary>
+    /// True if the two corridors have the same user settings (ignoring what is measured from the WTT). Of the headways,
+    /// only those set by hand are settings.
+    /// </summary>
     private static bool SameSettings(Corridor a, Corridor b) =>
         string.Equals(a.Id, b.Id, StringComparison.OrdinalIgnoreCase)
         && a.Name == b.Name
         && a.Axis == b.Axis
         && a.Locations.Count == b.Locations.Count
         && a.Locations.Zip(b.Locations).All(p => p.First.Tiploc == p.Second.Tiploc && p.First.DistanceKm == p.Second.DistanceKm && p.First.Platforms == p.Second.Platforms)
-        && a.Sections.Zip(b.Sections).All(p => p.First.DefaultHeadwaySeconds == p.Second.DefaultHeadwaySeconds && p.First.Tracks.SequenceEqual(p.Second.Tracks));
+        && a.Sections.Zip(b.Sections).All(p => SameHandHeadway(p.First, p.Second) && p.First.Tracks.SequenceEqual(p.Second.Tracks));
+
+    private static bool SameHandHeadway(Section a, Section b) =>
+        (a.HeadwaySource == HeadwaySource.Hand) == (b.HeadwaySource == HeadwaySource.Hand)
+        && (a.HeadwaySource != HeadwaySource.Hand || a.DefaultHeadwaySeconds == b.DefaultHeadwaySeconds);
 
     private static (List<Corridor> List, int Index) Find(StringlineProfile profile, string id)
     {

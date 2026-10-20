@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using Stringline.Core;
 using Stringline.Core.Timetables;
 
@@ -10,8 +11,11 @@ namespace Stringline.Network.Profiles;
 /// </summary>
 public sealed record StringlineProfile
 {
-    /// <summary>The format version this build writes. Older versions are read; newer ones are refused.</summary>
-    public const int CurrentVersion = 1;
+    /// <summary>
+    /// The format version this build writes. Older versions are read; newer ones are refused. Version 2 (S27) added
+    /// each section's headway source; see <see cref="ProfileJson"/> for how a version 1 profile is read.
+    /// </summary>
+    public const int CurrentVersion = 2;
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -31,6 +35,23 @@ public sealed record StringlineProfile
     public IReadOnlyDictionary<Tiploc, string> LocationNames { get; init; } = ImmutableDictionary<Tiploc, string>.Empty;
 
     public IReadOnlyList<CategoryStyle> Categories { get; init; } = [];
+
+    /// <summary>
+    /// The headway for this sim's sections that have neither a hand-set nor a WTT headway; null (the default) uses
+    /// <see cref="GlobalHeadwaySeconds"/>.
+    /// </summary>
+    public int? DefaultHeadwaySeconds { get; init; }
+
+    /// <summary>
+    /// The global default headway from Tools ▸ Options, which the app sets after loading (<see cref="WithGlobalHeadway"/>).
+    /// Not saved with the profile.
+    /// </summary>
+    [JsonIgnore]
+    public int GlobalHeadwaySeconds { get; init; } = Section.StandardHeadwaySeconds;
+
+    /// <summary>The headway a section falls back to: the profile's default, else the global one.</summary>
+    [JsonIgnore]
+    public int FallbackHeadwaySeconds => DefaultHeadwaySeconds ?? GlobalHeadwaySeconds;
 
     public string DisplayName(Tiploc location) =>
         LocationNames.TryGetValue(location, out var name) && !string.IsNullOrWhiteSpace(name) ? name : location.Code;
@@ -63,7 +84,8 @@ public sealed record StringlineProfile
 
     /// <summary>
     /// The profile brought up to date with a (possibly re-imported) timetable: every corridor's derived values are
-    /// recomputed, and categories new to the timetable get default styles. User settings are kept.
+    /// recomputed, headways not set by hand are worked out again, and categories new to the timetable get default
+    /// styles. User settings are kept.
     /// </summary>
     public StringlineProfile Refresh(WorkingTimetable timetable)
     {
@@ -71,8 +93,18 @@ public sealed record StringlineProfile
         var known = Categories.Select(c => c.CategoryId).ToHashSet(StringComparer.Ordinal);
         return this with
         {
-            Corridors = Corridors.Select(c => CorridorBuilder.Refresh(c, timetable)).ToList(),
+            Corridors = Corridors.Select(c => CorridorBuilder.Refresh(c, timetable, FallbackHeadwaySeconds)).ToList(),
             Categories = [.. Categories, .. CategoryStyle.CreateDefaults(timetable).Where(c => !known.Contains(c.CategoryId))],
         };
+    }
+
+    /// <summary>The profile with this global default headway, and every headway not set by hand worked out again.</summary>
+    public StringlineProfile WithGlobalHeadway(int seconds) => (this with { GlobalHeadwaySeconds = Math.Max(0, seconds) }).ResolveHeadways();
+
+    /// <summary>Every section's headway not set by hand worked out again (<see cref="Section.ResolveHeadway"/>) against <see cref="FallbackHeadwaySeconds"/>.</summary>
+    public StringlineProfile ResolveHeadways()
+    {
+        var fallback = FallbackHeadwaySeconds;
+        return this with { Corridors = Corridors.Select(c => CorridorBuilder.ResolveHeadways(c, fallback)).ToList() };
     }
 }

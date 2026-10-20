@@ -57,6 +57,9 @@ internal sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial string MinConflict { get; set; } = string.Empty;
 
+    [ObservableProperty]
+    public partial string DefaultHeadway { get; set; } = string.Empty;
+
     // Suggestions.
     [ObservableProperty]
     public partial bool AllowCancellation { get; set; }
@@ -202,6 +205,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
         PossiblyStopped = ProfileEditorText.FormatDuration(p.PossiblyStoppedSeconds);
         PlatformMargin = ProfileEditorText.FormatDuration(p.PlatformMarginSeconds);
         MinConflict = ProfileEditorText.FormatDuration(p.MinConflictSeconds);
+        DefaultHeadway = ProfileEditorText.FormatDuration(p.DefaultHeadwaySeconds);
         AllowCancellation = s.SuggestCancellations;
         PlatformChangePenalty = Minutes(p.PlatformChangePenalty);
         LineChangePenalty = Minutes(p.LineChangePenalty);
@@ -228,6 +232,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
             PossiblyStoppedSeconds = Duration(PossiblyStopped, "time before a train may have stopped", 1, 60),
             PlatformMarginSeconds = Duration(PlatformMargin, "platform margin", 0, 10),
             MinConflictSeconds = Duration(MinConflict, "least conflict shown", 0, 10),
+            DefaultHeadwaySeconds = Duration(DefaultHeadway, "default headway", 0, 15),
             PlatformChangePenalty = Penalty(PlatformChangePenalty, "platform change penalty"),
             LineChangePenalty = Penalty(LineChangePenalty, "line change penalty"),
             TerminatePenalty = Penalty(TerminatePenalty, "terminate short penalty"),

@@ -1401,6 +1401,65 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
   - hold an arrow key down: each repeat is an edit, so the history fills quickly. Say if a held key should be one edit.
 - Grips on a train that leaves the corridor and comes back are on each visit's line. The handle is on the first stretch in view.
 
+## 2026-10-20 — S27: Sim-aware headways (#7)
+
+### Done
+- **The problem, measured.** Every section had 3 min unless set by hand. On Waterloo's 4× recording, the conflicts at the end included 16 headway conflicts. Waterloo's main line is booked tighter than 3 min (WLOO–INTJN 2:54 down to EARLSFD–WIMB 1:30). The WTT already exempts booked pairs, so the false ones are late trains held to 3 min where the timetable runs them closer.
+- **Headway per section** (`06-…md` §3; `Section.ResolveHeadway`), in this order:
+  1. set by hand;
+  2. the WTT's, if it is less than the default;
+  3. the profile's default, then the global one.
+  - **From the WTT** (`BookedHeadway.Derive`, Network). Booked windows through each section, each direction, go on tracks as the forecaster sees them: in entry order, on the track free longest, as many tracks as the WTT needs at once. A pair's spacing is the lesser of its spacing at the two ends. The figure is the 5th percentile, at least 1 min, from at least 10 pairs; pairs over 30 min apart are not counted. `CorridorMeasurement` measures it with the run times (`SectionStats.BookedHeadway`), and `CorridorBuilder` stores it on the section (`BookedHeadwaySeconds`, `BookedHeadwayPairs`) and resolves the headway.
+  - **Section** gained `HeadwaySource` (Default, Wtt, Hand). `DefaultHeadwaySeconds` keeps its name (it is in every saved profile) but is now always the headway used.
+  - **Profile:** `DefaultHeadwaySeconds` (profile-wide; null = global), `GlobalHeadwaySeconds` (from Options, not saved), `WithGlobalHeadway`, `ResolveHeadways`. `Refresh`, `RegenerateCorridors`, `AddCorridor` and location edits resolve against the profile's fallback. `WithHeadway(…, null)` goes back to automatic; `WithDefaultHeadway`.
+  - **Hand-tuned:** only a hand-set headway makes a corridor hand-tuned now. A WTT or default headway is not a setting.
+  - **Profile version 2.** In a version 1 profile, a headway other than 3:00 was set by hand and is marked Hand; a 3:00 one is taken as the default, so the WTT's can apply.
+- **Planning:** `ForecastSection.HeadwaySource`; `Conflict.HeadwaySeconds` and `HeadwaySource` on headway, overtake and single-line conflicts (the worst section's, when merged). `ForecastNetwork.TracksNeeded` now calls the Network one, so both count tracks the same way.
+- **Shown:**
+  - the conflict tooltip has a **Headway** row ("2 min 30 s (from the WTT)") between When and Resolve;
+  - the profile editor's sections have a **From** column (Hand, WTT or Default), whose tooltip says why and what the WTT books ("…5th percentile of 1610 pairs"). Clearing a headway goes back to automatic. General has the profile's **Default headway**, with the global one in its hint;
+  - Tools ▸ Options ▸ Forecast and conflicts has **Default headway** (3:00). Changing it re-resolves the loaded profile and rebuilds the forecast network;
+  - `stringline corridors` prints Headway and From columns.
+- **Observed spacing** (Fred: build it). `stringline corridors --headways` lists each section's headway, source, WTT figure and pairs. `--log x.sslog` (which implies `--headways`) plays the recording through `LiveState`, turns its trains into a timetable (`ObservedTimetable`, Timetable.Live) and measures it the same way: observed 5th percentile, pairs and closest. It is reported only, never applied. Waterloo 4×: the main line ran 1:26–2:01 apart at the 5th percentile, over 55–165 pairs.
+- **Results** (`ConflictFixtureTests.Wtt_headways_drop_false_conflicts_and_keep_the_real_ones`, at the end of each recording, against every section at 3:00):
+  - 4×: 16 → 12 headway conflicts, none new; 6L49/6G15 and 2C85/2S91 (180 s each) stay;
+  - failure: 3 → 2; the two clashes behind the failure (5S06/5O05, 2O05/2U07) stay, smaller (42 and 52 s);
+  - Waterloo's whole day on time: 3 → 1 headway conflict;
+  - Llangollen: too few trains follow each other, so every section stays Default 3:00 and its single line is unchanged.
+- **Corpus** (284 WTTs, 12 749 sections on their generated corridors): 10 821 sections have enough pairs, and about 1 100 (10%) are under 3 min. So the global default stays 3 min.
+- **Docs:** `06-…md` §3 (the rule and the results), `04-…md`, `05-…md` (the editor), the plan, README, `CLAUDE.md` (`corridors --headways --log`).
+- **Tests:**
+  - `HeadwayTests` (20, Network): the derivation on synthetic runs (two minutes apart; one tight pair; too few pairs; side by side on two tracks; the floor; an hour apart is not a pair; both directions), the resolution order, corridor create and refresh, clearing a hand-set headway, the profile and global defaults, hand-tuned and regenerating, the JSON round trip with the source, a version 1 profile, Waterloo's headways, and Llangollen unchanged;
+  - `ConflictScenarioTests`: the conflict names its headway, and a WTT headway shrinks the clash. `ConflictFixtureTests`: before and after on both recordings;
+  - `GraphConflictTests`: the tooltip's Headway row;
+  - `ObservedTimetableTests` (3);
+  - `CorridorsCommandTests`: the columns, `--headways`, `--log`, and a bad recording;
+  - `ProfileEditorTests`: the From column and its tooltip, hand then blank, the profile's default; the Options default re-resolving the loaded profile (not saved in it), the editor hint, and a timetable loaded afterwards.
+  - Existing tests changed to match: the profile version (now 2), a hand-set headway now needing its source, and Waterloo's first section now 2:54 (not 3:00).
+- Totals: 1 536 (Core 259, Architecture 10, Gateway 207, Timetable 166, Network 160, Planning 234, Persistence 12, Graph 259, Tools 67, App 162). Green on Windows (Debug), and on Linux (`sdk:10.0` container, portable filter, Release: 1 374).
+
+### Decisions
+- **Only tighten (Fred).** A WTT figure is used only where it is less than the default. The plan's 60–300 s range let the WTT raise a headway, and on Waterloo's Windsor lines that gave 18 headway conflicts in place of 16, with new ones at WANDS–PUTNEY (booked 5:00 apart). Trains booked far apart on a quiet line say nothing about the signalling.
+- **Tracks by "free longest".** A section with more tracks than the WTT needs one way puts its runs on the track free longest. First-fit would pack them onto one track at the 1 min side-by-side limit, giving 1 min on four-track lines.
+- **The global default is applied, not saved.** The profile file holds the sections' resolved headways and the profile's own default, but not the global one. The app applies the global default to every profile it loads or uses (`MainViewModel.WithGlobalHeadway`), so the file never goes stale.
+- **A blank headway cell means automatic.** There is no separate "reset" button.
+- **`DefaultHeadwaySeconds` keeps its name** in the JSON and in code, though it is now the headway used whatever its source.
+- **Merged conflicts** carry the headway of their worst section.
+
+### Next
+- S28: user guide, in-app help and wiki (#4). It can describe the headway sources.
+
+### Known issues
+- **Not tried by hand.** 👤 Fred:
+  - open Tools ▸ Edit profile… on a sim you play and look at the From column and its tooltips;
+  - change Tools ▸ Options ▸ Default headway and see the conflicts change;
+  - hover a headway conflict and check the Headway row.
+- **A hand-set 3:00 in an old profile** is read as the default, so the WTT's figure may replace it. Type it in again if you meant it.
+- **Observed spacing counts every train in the recording** on each corridor's sections, as the WTT's figure does. On shared sections (WLOO–VAUX) both corridors show the same figure.
+
+### Questions for Fred
+- 19. **Headways on your sims.** Run `stringline corridors your.wtt --headways` on the sims you play (and with `--log` for a recording if you have one). Do the WTT figures look like the signalling? Any section you know runs closer, or needs more room, can be set by hand.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

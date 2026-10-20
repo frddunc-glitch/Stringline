@@ -101,6 +101,22 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
         }
     }
 
+    /// <summary>The profile's default headway as m:ss; blank uses the global one (#7).</summary>
+    public string DefaultHeadway
+    {
+        get => Draft.DefaultHeadwaySeconds is { } h ? ProfileEditorText.FormatDuration(h) : string.Empty;
+        set
+        {
+            if (value?.Trim() != DefaultHeadway && !TryEdit(p => p.WithDefaultHeadway(string.IsNullOrWhiteSpace(value) ? null : ProfileEditorText.ParseDuration(value, "default headway"))))
+            {
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string DefaultHeadwayHint =>
+        $"For sections where the WTT books trains no closer. Blank uses the global default in Tools ▸ Options ({ProfileEditorText.FormatDuration(Draft.GlobalHeadwaySeconds)}). A headway set on a section wins.";
+
     public ObservableCollection<LocationNameRow> LocationNames { get; } = [];
 
     public ObservableCollection<CorridorRow> Corridors { get; } = [];
@@ -440,6 +456,7 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
     private void SetDraft(StringlineProfile next)
     {
         var titleChanged = next.Name != Draft.Name || next.AreaId != Draft.AreaId;
+        var headwayChanged = next.DefaultHeadwaySeconds != Draft.DefaultHeadwaySeconds;
         Draft = next;
         IsDirty = true;
         Sync();
@@ -447,6 +464,11 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(Title));
             OnPropertyChanged(nameof(SimName));
+        }
+
+        if (headwayChanged)
+        {
+            OnPropertyChanged(nameof(DefaultHeadway));
         }
     }
 

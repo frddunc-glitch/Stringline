@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Stringline.Core;
+using Stringline.Network;
 
 namespace Stringline.Planning;
 
@@ -58,6 +59,15 @@ public sealed record Conflict(string Id, ConflictKind Kind, TrainId A, TrainId? 
 
     /// <summary>The platform, for a platform conflict.</summary>
     public string? Platform { get; init; }
+
+    /// <summary>
+    /// The headway of the section where a headway, overtake or single-line conflict is found (the worst one, if it
+    /// runs through several); null for other kinds. A pair the WTT books closer than this may run as close as booked.
+    /// </summary>
+    public int? HeadwaySeconds { get; init; }
+
+    /// <summary>Where <see cref="HeadwaySeconds"/> comes from, when it is set.</summary>
+    public HeadwaySource? HeadwaySource { get; init; }
 
     /// <summary>The block's ID, for a disruption conflict.</summary>
     public string? DisruptionId { get; init; }

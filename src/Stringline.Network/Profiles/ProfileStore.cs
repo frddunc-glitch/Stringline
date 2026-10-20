@@ -10,6 +10,11 @@ public sealed class ProfileFormatException(string message, Exception? inner = nu
 /// <summary>
 /// Profile JSON: camelCase, indented with LF line ends on every platform, enums as names, colours as <c>#RRGGBB</c>,
 /// nulls left out. Reading allows comments and trailing commas (for hand edits) and ignores unknown properties.
+/// <para>
+/// A version 1 profile (before S27) has no headway sources. Its sections at the old standard 3 minutes are taken as
+/// defaults, so the WTT's headway can now apply; any other headway was set by hand and stays. It is then read as the
+/// current version.
+/// </para>
 /// </summary>
 public static class ProfileJson
 {
@@ -50,8 +55,17 @@ public static class ProfileJson
         }
 
         Validate(profile);
-        return profile;
+        return Upgraded(profile);
     }
+
+    private static StringlineProfile Upgraded(StringlineProfile profile) => profile.Version >= 2 ? profile : profile with
+    {
+        Version = StringlineProfile.CurrentVersion,
+        Corridors = profile.Corridors.Select(c => c with
+        {
+            Sections = c.Sections.Select(s => s.DefaultHeadwaySeconds == Section.StandardHeadwaySeconds ? s : s with { HeadwaySource = HeadwaySource.Hand }).ToList(),
+        }).ToList(),
+    };
 
     private static void Validate(StringlineProfile profile)
     {

@@ -107,6 +107,74 @@ public sealed class ProfileEditorTests
     }
 
     [Fact]
+    public async Task Headways_show_where_they_come_from_and_a_blank_one_goes_back_to_the_wtt()
+    {
+        await using var app = new TestApp();
+        await LoadWaterloo(app);
+
+        await Edit(app, e =>
+        {
+            var section = e.Sections[0];
+            (section.Label, section.Headway, section.HeadwaySource).Should().Be(("WLOO – INTJN", "2:54", "WTT"));
+            section.HeadwayTip.Should().Contain("From the WTT, being less than the global default, 3:00").And.Contain("5th percentile of 1610 pairs");
+            e.DefaultHeadway.Should().BeEmpty();
+            e.DefaultHeadwayHint.Should().Contain("(3:00)");
+
+            section.Headway = "2:00";
+            (section.Headway, section.HeadwaySource).Should().Be(("2:00", "Hand"));
+            section.HeadwayTip.Should().StartWith("Set by hand");
+            section.Headway = " ";
+            (section.Headway, section.HeadwaySource).Should().Be(("2:54", "WTT"), "a blank headway goes back to the WTT's");
+
+            e.SelectedCorridor = e.Corridors.Single(c => c.Id == "wloo-barnes");
+            var putney = e.Sections[7];
+            (putney.Label, putney.Headway, putney.HeadwaySource).Should().Be(("WANDS – PUTNEY", "3:00", "Default"));
+            putney.HeadwayTip.Should().Contain("the WTT books trains here no closer").And.Contain("5:00 apart");
+
+            // The profile's own default: tighter than the WTT's 2:54 at Waterloo, so it takes over there too.
+            e.DefaultHeadway = "2:30";
+            (putney.Headway, putney.HeadwaySource).Should().Be(("2:30", "Default"));
+            (e.Sections[0].Headway, e.Sections[0].HeadwaySource).Should().Be(("2:30", "Default"));
+            (e.Sections[2].Headway, e.Sections[2].HeadwaySource).Should().Be(("2:00", "WTT"));
+            putney.HeadwayTip.Should().StartWith("The profile's default, 2:30");
+            e.DefaultHeadway = "soon";
+            e.Error.Should().Contain("default headway");
+            e.DefaultHeadway.Should().Be("2:30");
+            e.OkCommand.Execute(null);
+        });
+
+        new ProfileStore(app.Paths.Profiles).Load("waterloo")!.DefaultHeadwaySeconds.Should().Be(150, "saved");
+    }
+
+    [Fact]
+    public async Task The_default_headway_in_options_applies_where_the_wtt_books_no_closer()
+    {
+        await using var app = new TestApp();
+        var vm = await LoadWaterloo(app);
+        app.Dialogs.Settings = s =>
+        {
+            s.DefaultHeadway.Should().Be("3:00");
+            s.DefaultHeadway = "4:00";
+            return true;
+        };
+
+        await app.Ui.Run(() => vm.ShowSettingsCommand.Execute(null));
+
+        var sections = await app.Ui.Run(() => vm.Profile!.FindCorridor("wloo-barnes")!.Sections);
+        sections[0].Should().Match<Section>(s => s.DefaultHeadwaySeconds == 174 && s.HeadwaySource == HeadwaySource.Wtt);
+        sections[7].Should().Match<Section>(s => s.DefaultHeadwaySeconds == 240 && s.HeadwaySource == HeadwaySource.Default, "booked 5:00 apart, so the new default");
+        app.Settings.Load().Planning.DefaultHeadwaySeconds.Should().Be(240);
+        new ProfileStore(app.Paths.Profiles).Load("waterloo")!.DefaultHeadwaySeconds.Should().BeNull("the global default is not saved in the profile");
+
+        // Opened again, the editor shows the new default.
+        await Edit(app, e => e.DefaultHeadwayHint.Should().Contain("(4:00)"));
+
+        // A timetable loaded afterwards gets it too.
+        await LoadWaterloo(app);
+        (await app.Ui.Run(() => vm.Profile!.FindCorridor("wloo-barnes")!.Sections[7].DefaultHeadwaySeconds)).Should().Be(240);
+    }
+
+    [Fact]
     public async Task Refused_edits_say_why_and_change_nothing()
     {
         await using var app = new TestApp();
@@ -118,7 +186,7 @@ public sealed class ProfileEditorTests
             var section = e.Sections[0];
             section.Headway = "soon";
             e.Error.Should().Contain("is not a headway");
-            section.Headway.Should().Be("3:00", "the cell shows the old value again");
+            section.Headway.Should().Be("2:54", "the cell shows the old value again");
             section.Tracks = "Up:Sideways";
             e.Error.Should().Contain("not a direction");
             e.Locations[0].Distance = "far";
@@ -330,9 +398,10 @@ public sealed class ProfileEditorTests
 
         app.Dialogs.Choices.Enqueue(0);
         await regenerate();
-        (await app.Ui.Run(Headway)).Should().Be(Section.StandardHeadwaySeconds, "replaced");
+        (await app.Ui.Run(Headway)).Should().Be(174, "replaced by the WTT's headway");
+        (await app.Ui.Run(() => vm.Profile!.FindCorridor("main")!.Sections[0].HeadwaySource)).Should().Be(HeadwaySource.Wtt);
         (await app.Ui.Run(() => vm.Corridors.Single(c => c.Id == "main").Name)).Should().NotBe("Main line");
-        new ProfileStore(app.Paths.Profiles).Load("waterloo")!.FindCorridor("main")!.Sections[0].DefaultHeadwaySeconds.Should().Be(Section.StandardHeadwaySeconds, "saved");
+        new ProfileStore(app.Paths.Profiles).Load("waterloo")!.FindCorridor("main")!.Sections[0].DefaultHeadwaySeconds.Should().Be(174, "saved");
     }
 
     [Fact]

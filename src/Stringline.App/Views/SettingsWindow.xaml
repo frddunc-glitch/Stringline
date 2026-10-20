@@ -69,6 +69,7 @@
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <Label Content="Default _dwell" Target="{Binding ElementName=Dwell}" />
             <TextBox x:Name="Dwell" Grid.Column="1" Text="{Binding DefaultDwell, UpdateSourceTrigger=PropertyChanged}" />
@@ -90,6 +91,10 @@
             <TextBox x:Name="Least" Grid.Row="4" Grid.Column="1" Text="{Binding MinConflict, UpdateSourceTrigger=PropertyChanged}" />
             <TextBlock Grid.Row="4" Grid.Column="2" Style="{StaticResource Hint}" Margin="8,0,0,0" VerticalAlignment="Center"
                        Text="smaller clashes are booking rounding (0:30)" />
+            <Label Grid.Row="5" Content="Default _headway" Target="{Binding ElementName=HeadwayBox}" />
+            <TextBox x:Name="HeadwayBox" Grid.Row="5" Grid.Column="1" Margin="0,4" Text="{Binding DefaultHeadway, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Grid.Row="5" Grid.Column="2" Style="{StaticResource Hint}" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                       Text="for a section the WTT books no closer, unless the profile sets one (3:00)" />
           </Grid>
         </StackPanel>
       </TabItem>

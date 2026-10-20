@@ -121,7 +121,14 @@ public sealed record CorridorLocation(
 /// </param>
 /// <param name="MinRunDownSeconds">Fastest booked time from <see cref="From"/> to <see cref="To"/>, if any train is timed that way.</param>
 /// <param name="MinRunUpSeconds">Fastest booked time from <see cref="To"/> to <see cref="From"/>, if any train is timed that way.</param>
+/// <param name="DefaultHeadwaySeconds">
+/// The headway used here: set by hand, from the WTT, or the default, as <see cref="HeadwaySource"/> says (see
+/// <see cref="ResolveHeadway"/>). The name is kept from profiles made before S27.
+/// </param>
 /// <param name="Samples">How many timed runs over the section the minimums come from.</param>
+/// <param name="BookedHeadwaySeconds">The headway the WTT books trains to here (<see cref="BookedHeadway"/>), if it gives one; measured.</param>
+/// <param name="BookedHeadwayPairs">How many booked pairs <see cref="BookedHeadwaySeconds"/> comes from; measured.</param>
+/// <param name="HeadwaySource">Where <see cref="DefaultHeadwaySeconds"/> comes from.</param>
 public sealed record Section(
     Tiploc From,
     Tiploc To,
@@ -130,9 +137,12 @@ public sealed record Section(
     int MinRunSeconds,
     int? MinRunDownSeconds = null,
     int? MinRunUpSeconds = null,
-    int Samples = 0)
+    int Samples = 0,
+    int? BookedHeadwaySeconds = null,
+    int BookedHeadwayPairs = 0,
+    HeadwaySource HeadwaySource = HeadwaySource.Default)
 {
-    /// <summary>Headway used when the user has not set one: 3 minutes.</summary>
+    /// <summary>The global default headway, unless changed in Tools ▸ Options: 3 minutes.</summary>
     public const int StandardHeadwaySeconds = 180;
 
     /// <summary>Minimum run time assumed for a section no train is timed over.</summary>
@@ -155,6 +165,16 @@ public sealed record Section(
         TrackDirection.Up => MinRunUpSeconds ?? MinRunSeconds,
         _ => MinRunSeconds,
     };
+
+    /// <summary>
+    /// The section with its headway worked out (<c>06-…md</c> §3), in order of preference: the one set by hand; the
+    /// WTT's, if it is less than <paramref name="fallbackSeconds"/>; else <paramref name="fallbackSeconds"/> (the
+    /// profile's default headway, or the global one).
+    /// </summary>
+    public Section ResolveHeadway(int fallbackSeconds) =>
+        HeadwaySource == HeadwaySource.Hand ? this
+        : BookedHeadwaySeconds is { } booked && booked < fallbackSeconds ? this with { DefaultHeadwaySeconds = booked, HeadwaySource = HeadwaySource.Wtt }
+        : this with { DefaultHeadwaySeconds = fallbackSeconds, HeadwaySource = HeadwaySource.Default };
 
     public override string ToString() => $"{From}–{To} {MinRunSeconds}s";
 }

@@ -65,6 +65,49 @@ public sealed class CorridorsCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Prints_each_sections_headway_and_where_it_comes_from()
+    {
+        var (_, lines, _) = await Run(Waterloo, "--top", "1");
+
+        lines.Should().Contain(l => l.StartsWith("#  Location  Axis ", StringComparison.Ordinal) && l.Contains("  Headway  From  Hint", StringComparison.Ordinal));
+        lines.Should().ContainMatch("1  WLOO      0.000  19 *  2:54     WTT*");
+        lines.Should().ContainMatch("7  EARLSFD *  1:30     WTT*");
+        lines.Should().NotContain(l => l.StartsWith("Headways", StringComparison.Ordinal), "only with --headways");
+    }
+
+    [Fact]
+    public async Task Lists_headways_with_the_wtt_spacing()
+    {
+        var (exit, lines, _) = await Run(Waterloo, "--top", "2", "--headways");
+
+        exit.Should().Be(0);
+        lines.Should().ContainMatch("Headways (WTT: 5th percentile of booked spacing on a track, at least 10 pairs, used if less than the default):");
+        lines.Should().Contain(l => l.StartsWith("Section ", StringComparison.Ordinal) && l.EndsWith("WTT   Pairs", StringComparison.Ordinal));
+        lines.Should().ContainMatch("WLOO–INTJN *2:54 *WTT *2:54 *1610");
+        lines.Should().ContainMatch("WANDS–PUTNEY *3:00 *Default *5:00 *424", "booked further apart than the default, so the default stands");
+    }
+
+    [Fact]
+    public async Task Lists_the_observed_spacing_from_a_recording()
+    {
+        var (exit, lines, error) = await Run(Waterloo, "--top", "1", "--log", Fixtures.Path(Fixtures.Waterloo4x));
+
+        exit.Should().Be(0, error);
+        lines.Should().Contain("Observed: 125 trains in waterloo-4x.sslog.");
+        lines.Should().Contain(l => l.StartsWith("Section ", StringComparison.Ordinal) && l.EndsWith("Observed  Pairs  Closest", StringComparison.Ordinal));
+        lines.Should().ContainMatch("WLOO–INTJN       2:54     WTT   2:54  1610   1:40      157    1:03");
+    }
+
+    [Fact]
+    public async Task Reports_an_unreadable_recording()
+    {
+        var (exit, _, error) = await Run(Llangollen, "--log", Path.Combine(_dir, "none.sslog"));
+
+        exit.Should().Be(2);
+        error.Should().StartWith("Cannot read ");
+    }
+
+    [Fact]
     public async Task Writes_a_profile()
     {
         var path = Path.Combine(_dir, "waterloo.json");

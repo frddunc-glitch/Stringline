@@ -656,6 +656,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             return;
         }
 
+        loaded = loaded with { Profile = WithGlobalHeadway(loaded.Profile) };
         _timetable = loaded;
         HasTimetable = true;
         _engine.SetTimetable(loaded.Timetable);

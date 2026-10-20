@@ -76,6 +76,10 @@
             <Label Grid.Row="1" Content="Sim _name" Target="{Binding ElementName=SimNameBox}" Padding="0" VerticalAlignment="Center" />
             <TextBox x:Name="SimNameBox" Grid.Row="1" Grid.Column="1" Text="{Binding SimName}" Padding="2" Margin="0,2" />
             <TextBlock Grid.Row="1" Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center" Style="{StaticResource Hint}" Text="Shown in the title bar and on exports." />
+            <Label Grid.Row="2" Content="Default _headway" Target="{Binding ElementName=DefaultHeadwayBox}" Padding="0" VerticalAlignment="Center" />
+            <TextBox x:Name="DefaultHeadwayBox" Grid.Row="2" Grid.Column="1" Text="{Binding DefaultHeadway}" Padding="2" Margin="0,2" />
+            <TextBlock Grid.Row="2" Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center" Style="{StaticResource Hint}" TextWrapping="Wrap"
+                       Text="{Binding DefaultHeadwayHint}" />
           </Grid>
           <DockPanel DockPanel.Dock="Top" Margin="0,12,0,4">
             <Button DockPanel.Dock="Right" Content="_Import names from CSV…" Margin="0" VerticalAlignment="Center" Command="{Binding ImportNamesCommand}" />
@@ -173,7 +177,7 @@
               <DockPanel Grid.Row="2">
                 <StackPanel DockPanel.Dock="Top" Margin="0,4,0,4">
                   <TextBlock Text="Sections" FontWeight="SemiBold" />
-                  <TextBlock Style="{StaticResource Hint}" Text="Pick a layout, or type tracks as Name:Direction, e.g. Up Fast:Up, Up Slow:Up, Down:Down, Relief:Bi. Headway as m:ss." />
+                  <TextBlock Style="{StaticResource Hint}" Text="Pick a layout, or type tracks as Name:Direction, e.g. Up Fast:Up, Up Slow:Up, Down:Down, Relief:Bi. Headway as m:ss: a headway you type is kept, and a blank one goes back to the WTT's or the default." />
                 </StackPanel>
                 <DataGrid ItemsSource="{Binding Sections}">
                   <DataGrid.Columns>
@@ -192,6 +196,13 @@
                     </DataGridComboBoxColumn>
                     <DataGridTextColumn Header="Tracks" Binding="{Binding Tracks}" Width="1.4*" />
                     <DataGridTextColumn Header="Headway" Binding="{Binding Headway}" Width="70" />
+                    <DataGridTextColumn Header="From" Binding="{Binding HeadwaySource, Mode=OneWay}" IsReadOnly="True" Width="65">
+                      <DataGridTextColumn.CellStyle>
+                        <Style TargetType="DataGridCell">
+                          <Setter Property="ToolTip" Value="{Binding HeadwayTip}" />
+                        </Style>
+                      </DataGridTextColumn.CellStyle>
+                    </DataGridTextColumn>
                     <DataGridTextColumn Header="Min run (WTT)" Binding="{Binding MinRun, Mode=OneWay}" IsReadOnly="True" Width="110" />
                   </DataGrid.Columns>
                 </DataGrid>
