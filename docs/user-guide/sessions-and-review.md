@@ -43,3 +43,15 @@ A recording holds the gateway's messages only: never your login. It is useful fo
 While it plays, a **transport bar** above the status bar has **Play/Pause**, the speed, the replay's time, and a seek bar. Drag the seek bar to jump to another time. Once a replay has finished, seeking plays it again from the time you pick, keeping your plan.
 
 Everything works in a replay as it does live: re-planning, conflicts, exports and the session.
+
+## Starting from the command line
+
+`Stringline.exe` can open a timetable, a replay or a saved session as it starts, for a shortcut or a script:
+
+```
+Stringline.exe [--wtt t.wtt] [--replay x.sslog [--speed 8|max] [--start 07:30]] [--resume s.stringline | --review s.stringline]
+```
+
+- `--wtt` loads a timetable.
+- `--replay` plays a recording, at `--speed` (or `max`, as fast as it can) and from `--start`.
+- `--resume` carries on a saved session; `--review` opens one to look at.

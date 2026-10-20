@@ -9,7 +9,7 @@
       STRINGLINE_SIGN_PASSWORD      its password (optional for a .pfx without one)
       STRINGLINE_SIGN_TIMESTAMP     RFC 3161 timestamp server (default http://timestamp.digicert.com)
     With no STRINGLINE_SIGN_PFX the files are left unsigned and the script succeeds. Windows then says
-    "Unknown publisher" (see the README).
+    "Unknown publisher" (see docs/developer.md).
 
 .EXAMPLE
     ./build/sign.ps1 artifacts/publish/Stringline/Stringline.exe

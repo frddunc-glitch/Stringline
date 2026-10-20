@@ -75,6 +75,51 @@ public sealed partial class GuideLinkTests
         broken.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// The README and the developer page (S35, #18) link into the repository freely, so their links need only exist
+    /// in it (headings too). The README is shown on GitHub and copied into the zip, so its picture must be there.
+    /// </summary>
+    [Theory]
+    [InlineData("README.md")]
+    [InlineData("CONTRIBUTING.md")]
+    [InlineData("docs/developer.md")]
+    public void Every_relative_link_in_the_readme_and_developer_pages_is_there(string file)
+    {
+        var root = LayeringTests.FindRepoRoot();
+        var page = Path.GetFullPath(Path.Combine(root, file));
+        var broken = new List<string>();
+        foreach (var (url, isImage) in LinksOn(page).Where(l => !IsWeb(l.Url)))
+        {
+            var (path, heading) = url.Split('#', 2) is [var p, var h] ? (p, h) : (url, null);
+            var target = path.Length == 0 ? page : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(page)!, path));
+            if (!target.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                broken.Add($"{url} is outside the repository");
+            }
+            else if (!File.Exists(target) && !(Directory.Exists(target) && !isImage))
+            {
+                broken.Add($"{url} does not exist");
+            }
+            else if (heading is not null && target.EndsWith(".md", StringComparison.Ordinal) && !HeadingIds(target).Contains(heading))
+            {
+                broken.Add($"{url} names a heading {Path.GetFileName(target)} does not have");
+            }
+        }
+
+        broken.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void The_readme_is_for_users_and_points_developers_on()
+    {
+        var readme = File.ReadAllText(Path.Combine(LayeringTests.FindRepoRoot(), "README.md"));
+        readme.Should().Contain("(docs/developer.md)", "the README links developers on under Contributing")
+            .And.Contain("](docs/user-guide/images/", "it shows the graph")
+            .And.Contain("Interface Gateway").And.Contain("SmartScreen").And.Contain("/wiki")
+            .And.Contain("GPL").And.Contain("/issues");
+        readme.Should().NotContain("dotnet ", "build and CLI commands are in docs/developer.md");
+    }
+
     [Fact]
     public void Every_page_is_in_the_contents_and_every_image_is_used()
     {

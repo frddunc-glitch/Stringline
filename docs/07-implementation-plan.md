@@ -405,6 +405,7 @@ Fred raised #16–#19 on 2026-10-20 after testing on more sims (#1 and #5 stay w
   - The README links to it under "Contributing". `CONTRIBUTING.md`, if added, is a short pointer to it.
 - **Check:** the links that tests or workflows rely on still work: `PrivacyTests` checks the README links the policy, the wiki script, and the guide link check. Extend the guide's link check to `README.md` and `docs/developer.md`.
 - Close #18 with `Fixes #18`.
+- *Built in S35:* the README is for players (picture, install, gateway, first graph, wiki links, privacy, licence); developer content is in `docs/developer.md`, with `CONTRIBUTING.md` pointing there. The app's command-line options moved into the guide (sessions page). `GuideLinkTests` checks the README, `CONTRIBUTING.md` and `docs/developer.md` links.
 
 ### S36 — Progress between booked points, from today's data (#17, part 1)
 - **Find out first:** on Waterloo's recordings and the corpus, how often trains report a timing location their WTT leaves out, and how long trains go between reports on corridor locations. A long gap is the problem #17 describes. Record a baseline (median and 95th percentile gap per sim) in `progress.md`, so S38 can show the gain.

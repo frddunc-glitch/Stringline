@@ -1937,6 +1937,29 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - 30. **`Started`.** SimSig writes `Started` -1 on every seeded train in a fresh WTT. Do you know what it means (a seeded train already moving, rather than standing)? Stringline keeps it but does not use it.
 - 31. **No tolerance.** Do you know of a sim that runs an unseeded train booked a few seconds before the start? Penrith did not, even 90 s before.
 
+## 2026-10-21 — S35: README for users (#18)
+
+### Done
+- **`README.md`** rewritten for someone who plays SimSig and has never seen Stringline: what it is (with the guide's `main-window.png`, made by `build/guide-shots.ps1` from Waterloo), download and install with the SmartScreen note, turning on the Interface Gateway, a five-step first graph, links to the wiki guide, privacy, reporting a problem, Contributing, and the licence and disclaimer. About one screen before the links; no build or CLI commands.
+- **`docs/developer.md`** has the developer content: build and test (Windows and the Linux `.slnf`), running the app, the stack, the project layout and its rules, the design documents (`00…08`, `progress.md`), a table of the `stringline` commands (with `CLAUDE.md` and `--help` named for every option, so there is one full list), the fixtures policy, benchmarks, publishing and releases, upgrade testing, code signing, the guide and wiki workflow, and the licence rule for dependencies.
+- **`CONTRIBUTING.md`**: a short pointer to `docs/developer.md`.
+- **Moved into the guide:** the app's command-line options (`--wtt`, `--replay`, `--speed`, `--start`, `--resume`, `--review`), which were only in the old README, are now in *Sessions, recordings and review* ▸ Starting from the command line. The README's old Options, file locations and troubleshooting sections were already in the guide (settings, installing, troubleshooting).
+- `build/sign.ps1` points to `docs/developer.md` for code signing.
+- **Tests:** Architecture +4 (`GuideLinkTests`: every relative link and heading in `README.md`, `CONTRIBUTING.md` and `docs/developer.md` exists in the repository; the README links developers on, shows the graph, covers the gateway, SmartScreen, the wiki, the licence and the issue tracker, and has no `dotnet` commands). `PrivacyTests` (README links `PRIVACY.md`), `WikiScriptTests` and the guide link check still pass.
+- Totals: 1 665 (Core 270, Architecture 18, Gateway 211, Timetable 167, Network 170, Planning 251, Persistence 12, Graph 276, Optimiser 22, Tools 71, App 197). Green on Windows (Debug). Linux not run.
+
+### Decisions
+- **The README's picture is `main-window.png`** (the whole window, graph and panels) rather than `graph.png`: it shows a newcomer what the app looks like. It is referenced from the guide's images, so it stays current with `guide-shots.ps1`.
+- **The README links the wiki** for the guide (and the troubleshooting page), since it is read on GitHub and in the zip; `docs/developer.md` links the guide's files in the repository.
+- **One full command list:** `CLAUDE.md` keeps every command with its options; `docs/developer.md` has a one-line-per-command table and points there.
+- Help ▸ Getting started (online) still opens the README on GitHub, which now is a getting-started page.
+
+### Next
+- S36 → S37 → S38 → S39, then S32 → S33.
+
+### Known issues
+- One Gateway test failed once under the full parallel `dotnet test` run and passed on a rerun (211/211); this session changed no Gateway code. Probably timing under load; worth finding if it recurs.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
