@@ -11,7 +11,9 @@ A `.wtt` is a **zip** of `TimetableHeader.xml` (header only) and `SavedTimetable
 - Booleans are `True`/`False` in older files and Delphi's `-1`/`0` in newer ones. The WTT reader accepts both (and `1`). This is separate from the gateway's lenient JSON booleans, which still reject `-1`.
 - **Allowances are in half minutes**: `EngAllowance` 3 means 1½ min. They are taken in the section **after** the point they are on. Checked across the corpus: pass-to-pass run times with allowance N are N × 30 s longer than the same section's usual run time, for N = 1…8, in thousands of sections. `PerfAllowance` never appears in the corpus but is read the same way.
 
-**Root `SimSigTimetable`**: attribute `ID` (= gateway `area_id`, e.g. `waterloo`) and `Version` (the SimSig that saved it). Children: `Name`, `Description`, `StartTime`, `FinishTime`, `VMajor`/`VMinor`/`VBuild`, `TrainDescriptionTemplate`, `TrainCategories`, `Timetables`, `TimetableRules`. Also present and ignored: `SeedGroups`, `SeedGroupSummary`, `ScenarioOptions`, `CautionSpeedSets`, `Decisions`, `TTClassOfServiceRules`.
+**Root `SimSigTimetable`**: attribute `ID` (= gateway `area_id`, e.g. `waterloo`) and `Version` (the SimSig that saved it). Children: `Name`, `Description`, `StartTime`, `FinishTime`, `VMajor`/`VMinor`/`VBuild`, `TrainDescriptionTemplate`, `TrainCategories`, `Timetables`, `TimetableRules`, `SeedGroups` (S34). Also present and ignored: `SeedGroupSummary` (the same groups as one string), `ScenarioOptions`, `CautionSpeedSets`, `Decisions`, `TTClassOfServiceRules`.
+
+**`SeedGroups/SeedGroup`** (S34): `ID` (a GUID in braces), `StartTime` (seconds), `Title` (what the Loader shows, e.g. `14:00`). A seed group is a start time other than the timetable's own, with its own seeded trains. Penrith 2017-11-01 has 04:00 and 14:00. Read into `SeedGroup(Id, StartTime, Title)` on `WorkingTimetable.SeedGroups`; an empty `<SeedGroup />` is skipped quietly, one with no ID or time with a Warning.
 
 **`TrainCategory ID="…"`**: `Description`, `IsFreight`, `MaxSpeed` (mph), `TrainLength` (m), `AccelBrakeIndex`, `SpeedClass`, `Electrification`, `DwellTimes/*` (seconds). Category IDs can repeat within a file (the first wins).
 
@@ -24,7 +26,8 @@ A `.wtt` is a **zip** of `TimetableHeader.xml` (header only) and `SavedTimetable
 | `Description` | Free text, or `$template` = the header's `TrainDescriptionTemplate` filled from `OriginTime`, `OriginName`, `DestinationName`, `DestinationTime`, `OperatorCode` and the category description (`$originTime $originName-$destName $operator ($stock)`) |
 | `Category` | Category ID; train-level `MaxSpeed`, `TrainLength`, `IsFreight` and dwell elements override it |
 | `EntryPoint`, `DepartTime` | Enters from off-area at that point, at that time. `DepartTime` is often absent (SimSig works it out) |
-| `SeedPoint` (+ `Started`) | In the sim at the start, at that signal/berth |
+| `SeedPoint` (+ `Started`) | In the sim at the start, at that signal/berth. `Started` is `-1` on every seeded train in a fresh WTT (kept as `Train.Started`) |
+| `SeedGroup` | The seed group (by ID) a seeded train is seeded in. None: seeded when the sim starts at the timetable's start. Kept as `Train.SeedGroup` (seeded trains only); a group the header does not define is an Info note, and the train is taken as seeded at any start |
 | neither | Starts at its first timing point: formed by another train's activity, or appears there |
 | `AsRequired`, `Notes`, `OriginName`/`Time`, `DestinationName`/`Time` | As named. Origin time may be the previous evening (Penrith freight) |
 | `Trips/Trip` | Ordered timing points |
@@ -54,6 +57,13 @@ A `.wtt` is a **zip** of `TimetableHeader.xml` (header only) and `SavedTimetable
 - An activity's associated train is resolved by UID, else by headcode (also when a UID field holds a headcode). When several trains match, it picks the one that starts at (for forming activities) or calls at that location, nearest in time. A forming activity (next, divide, detach, drop) sets the formed train's `FormedFrom`. Unresolved links are a Warning, except crew changes.
 - Rules resolve only when the name matches exactly one train. Otherwise they are kept with the raw name and an Info note.
 
+**Which trains SimSig runs from a later start (S34, #16; checked on Penrith's 14:00 recording, `local-fixtures/penrith-payware.sslog`).**
+- A WTT with seed groups books each service twice where the start falls mid-run: the original (entering, or formed from another) and a seeded twin (`UID` with an `S`, e.g. `286HS`), seeded part-way at the group's start. Started at 14:00, SimSig ran only the twins: all 7 seeded trains of the 14:00 group appeared within 11 s, and none of the originals did.
+- **No tolerance before the start:** no unseeded train booked to enter before 14:00 ran, the latest being W552 at 13:58:30 (its first timing point is 14:01, after the start: the entry time is what counts). AR85 (enters 14:09) and 104K (14:03:30) ran. So `StartingTrains` uses the entry time, else the first booked time, strictly before the start.
+- **Formations:** 186L (booked 14:13, formed from 186K, which enters at 13:35) did not run; its seeded twin did. 178J is formed by both 178H (not running) and its twin 178HS, so a train runs if any train forming it runs.
+- Seeded trains with no group (Penrith's W595TU and 3SP7) are seeded at the timetable's start (00:00) and did not appear at 14:00.
+- The recording is 14 minutes, so trains much later in the day are not checked; the rule only needs the start.
+
 Location display names are **not** in the WTT; they come from the profile (user-entered or imported CSV).
 
 ## 2. Domain model (Stringline.Core)
@@ -65,10 +75,11 @@ class WorkingTimetable(TimetableHeader Header, IReadOnlyList<TrainCategory> Cate
 record TimetableHeader(AreaId, SimSigVersion, Name, Description, TimetableVersion?, StartTime, FinishTime, TrainDescriptionTemplate?);
 record TrainCategory(Id, Description, IsFreight, MaxSpeedMph?, LengthMetres?, AccelBrakeIndex?, SpeedClass?, Electrification?, DwellTimes Dwell);
 record Train { TrainId Id; Headcode Headcode; string? Uid; string Description; string? CategoryId;
-               TrainStart Start; Tiploc? EntryPoint; SimTime? EntryTime; Tiploc? SeedPoint;
+               TrainStart Start; Tiploc? EntryPoint; SimTime? EntryTime; Tiploc? SeedPoint; string? SeedGroup; bool Started;
                int? MaxSpeedMph; int? LengthMetres; bool IsFreight; bool AsRequired; origin/destination names and times; OperatorCode; Notes;
                DwellTimes Dwell; IReadOnlyList<TimingPoint> Points; TrainId? FormedFrom;
-               /* derived */ Origin, Destination, FirstTime, LastTime, NextWorking }
+               /* derived */ Origin, Destination, FirstTime, LastTime, NextWorking, BookedStart /* entry time, else FirstTime */ }
+record SeedGroup(string Id, SimTime StartTime, string Title);   // WorkingTimetable.SeedGroups (init), FindSeedGroup(id)
 record TimingPoint { int Index; Tiploc Location; SimTime? Arrive; SimTime? Depart /* pass time when IsPass */; bool IsPass;
                      string? Platform, Line /*out*/, Path /*in*/; bool? DownDirection;
                      int EngineeringAllowanceSeconds, PathingAllowanceSeconds, PerformanceAllowanceSeconds /* section after this point */;

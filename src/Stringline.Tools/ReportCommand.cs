@@ -199,7 +199,8 @@ internal static class ReportCommand
             (saved is null ? string.Empty : $", {edits} edit{(edits == 1 ? string.Empty : "s")}") +
             $"; {late} late at some point" +
             (worst is null ? "." : $", worst {worst.Headcode} {worst.WorstDelaySeconds / SimTime.SecondsPerMinute} min at {worst.Worst!.Location}.") +
-            (report.UnmatchedLive > 0 ? $" {report.UnmatchedLive} live trains not matched to the timetable are left out." : string.Empty)).ConfigureAwait(false);
+            (report.UnmatchedLive > 0 ? $" {report.UnmatchedLive} live trains not matched to the timetable are left out." : string.Empty) +
+            (report.NotRunning > 0 ? $" {report.NotRunning} trains SimSig will not run this session are counted apart." : string.Empty)).ConfigureAwait(false);
         return 0;
     }
 }

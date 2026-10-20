@@ -137,7 +137,7 @@ public static class ConflictDetector
         var list = new List<Timeline>();
         foreach (var forecast in request.Forecast.Independent.Trains)
         {
-            if (forecast.Status == TrainForecastStatus.Unavailable || plan.Find(forecast.Train) is not { Cancelled: false } train ||
+            if (forecast.Status is TrainForecastStatus.Unavailable or TrainForecastStatus.NotRunning || plan.Find(forecast.Train) is not { Cancelled: false } train ||
                 forecast.Points.Count != train.RunningPoints.Count)
             {
                 continue;

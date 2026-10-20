@@ -386,6 +386,7 @@ Fred raised #16–#19 on 2026-10-20 after testing on more sims (#1 and #5 stay w
   - **Run anyway** (right-click, or the train detail) *is* a plan command (`ExpectToRun`), undoable and saved, for a sim where the rule is wrong.
 - **Tests:** seed group import (Penrith, local); the rule on synthetic timetables (each case above, the forming exception, a timetable with no groups, a start at 00:00 changes nothing); Penrith's 14:00 recording (no 04:00-group train forecast, and nothing that ran is marked); `ExpectToRun` round trip and undo; an App test of the train list group.
 - Close #16 with `Fixes #16`.
+- *Built in S34:* Penrith's 14:00 recording showed no tolerance (W552, entering at 13:58:30, did not run) and that a train formed from a not-running one does not run either (186L). Fred chose to carry "Not running" down formation chains (a train runs if any train forming it runs), and to apply the "booked before the start" rule only at a fresh start (within a minute of the timetable's or a seed group's start), so a late connection or saved game leaves out only other groups' seeded trains. Seeded trains with no group belong to the timetable's start. See `04-…md` §1 and `06-…md` §2.
 
 ### S35 — README for users (#18)
 - **README.md**, written for someone who plays SimSig and has never seen Stringline (Australian English, plain words):

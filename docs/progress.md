@@ -1901,6 +1901,42 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - 30. **Tagged name for a first save:** is `Sim YYYY-MM-DD Stringline.wtt` a good default tag for a new file made from a shipped timetable, or would you rather type one every time?
 - 31. **Ctrl+S** saves the draft in the editor window. Should the main window's Ctrl+S save the session too, or stay unbound?
 
+## 2026-10-21 — S34: Seed groups and trains that will not run (#16)
+
+### Done
+- **Fred's choices** (asked at the start): "Not running" carries down formation chains; the "booked before the start" rule applies only at a fresh start (the session starts within a minute of the timetable's or a seed group's start), so connecting to a sim already running, or a saved game, leaves out only other groups' seeded trains.
+- **Found on Penrith's 14:00 recording** (`local-fixtures`, 14 min; written into `04-…md` §1): the WTT books a seeded twin (`…S`) for each service part-way at 14:00, and only the twins ran. No unseeded train booked to enter before 14:00 ran, the latest W552 at 13:58:30 (its first point is after 14:00, so the entry time is what counts): **no tolerance**. 186L (14:13, formed from 186K, which enters 13:35) did not run; 178J is formed by both 178H and 178HS. The two seeded trains with no group (W595TU, 3SP7) belong to the timetable's start.
+- **Import:** `SeedGroup(Id, StartTime, Title)` on `WorkingTimetable.SeedGroups` (`FindSeedGroup`, ignoring case); `Train.SeedGroup` (seeded trains only), `Train.Started`, and `Train.BookedStart` (entry time, else first booked time). Warnings for a group with no ID or time and for a train naming an unknown group (taken as seeded at any start). `wtt-dump` prints the groups and their trains, and `--train` a seeded train's group.
+- **`StartingTrains`** (Planning, pure): the start group, fresh start, `NotRunning` (with a `NotRunningReason`: not seeded, seed group 04:00, seeded at 00:00, formed from 186K) and `IsNotSeen` (a start-group seeded train not seen 2 min after a fresh start). Trains matched live, and those run anyway, always run. Formation loops are cut.
+- **Forecaster:** `TrainForecastStatus.NotRunning` (no points, with the reason); `TrainForecast.NotSeen`; `Forecast.Starting`. The conflict detector, suggester, optimiser and regulation list already take only trains not started or running; the conflict detector says so outright now.
+- **`ExpectToRun(train, run = true)`**: a plan command kept as the plan's run-anyway set (like live links, not a change to the train's plan), undone and saved with the session.
+- **Graph:** a not-running train's WTT line at 40 % of its colour's alpha, or hidden (`GraphSceneRequest.ShowNotRunning`, View ▸ Show not-running trains); its re-plan is not drawn; dragging it is refused; the hover gives the reason and "not seen".
+- **App:** the train list's **Not running** group after the live trains (reason in Last at, booked start in Time; "Not matched only" leaves them out; the summary counts them); the detail's state, **Run anyway** / **Leave to start rules** button, Plan ▸ Run selected train anyway, and the graph's right-click menu; the Delays tab and `report` count them apart (`DelayReport.NotRunning`, CSV state "not running").
+- **Docs:** `04-…md` §1–2, `06-…md` §1–2, `05-…md` §1, §4, §8; the guide's timetables (new "Trains that will not run"), reading-the-graph, re-planning, troubleshooting and glossary pages.
+- **Tests:** Planning +13 (`StartingTrainsTests`: each case on a Penrith-like timetable, the forming exception and chains, a late connection, the timetable's start, no groups, no session start, not seen, a loop, the forecaster and run anyway, conflicts and the regulation list, the command's JSON and undo, and Penrith's 14:00 recording); Timetable +1 (seed groups read); Graph +1 (faint and hidden); App +1 (the train list group, the detail, Run anyway and its undo, live on a small WTT started at 14:00).
+- Totals: 1 661 (Core 270, Architecture 14, Gateway 211, Timetable 167, Network 170, Planning 251, Persistence 12, Graph 276, Optimiser 22, Tools 71, App 197). Green on Windows (Debug); the portable solution builds with `-warnaserror`. Linux not run.
+
+### Decisions
+- **A train formed by several runs if any of them does** (seeded twins form the same next working as their originals). Formers come from every forming activity, not only `FormedFrom` (which keeps the first).
+- **A seed group beats the timetable's start at the same time**, and seeded trains with no group then run too.
+- **A seed group the header does not define** lets its train run (nothing to go on).
+- **Trains over before the start are still left out altogether**, as before, so the "Not running" group holds only trains that straddle the start or are formed later.
+- **Losing the list's selection to an update does not deselect the train** (`TrainListViewModel.IsUpdating`), so Run anyway keeps it selected.
+- **The grouped train list does not virtualise its rows:** with `IsVirtualizingWhenGrouping` the WTT column was squeezed 2 px (the layout test caught it). A few hundred rows at most.
+- `replay-server --start` pre-rolls before the app connects, so the app sees a late connection there (as with SimSig itself); a file replay's `--start` plays from the first frame, so its start is the recording's.
+
+### Next
+- S35 (README for users, #18), then S36 → S37 → S38 → S39, then S32 → S33.
+
+### Known issues
+- Penrith's recording is only 14 minutes, so the rule is checked at the start, not through the day.
+- 👤 Fred: start Penrith at 14:00 (and at 04:00) with Stringline connected, and check the Not running group; then connect to a sim already running and see that only other groups' seeded trains are listed.
+
+### Questions for Fred
+- 29. (still open) Which sim showed #17?
+- 30. **`Started`.** SimSig writes `Started` -1 on every seeded train in a fresh WTT. Do you know what it means (a seeded train already moving, rather than standing)? Stringline keeps it but does not use it.
+- 31. **No tolerance.** Do you know of a sim that runs an unseeded train booked a few seconds before the start? Penrith did not, even 90 s before.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

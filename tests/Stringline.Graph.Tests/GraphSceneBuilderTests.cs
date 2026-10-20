@@ -227,6 +227,29 @@ public class GraphSceneBuilderTests
     }
 
     [Fact]
+    public void A_train_simsig_will_not_run_draws_faintly_on_the_wtt_layer_or_not_at_all()
+    {
+        // S34: 2B02 will not run this session; it has been re-planned too, which draws nothing more.
+        var (plan, _) = WorkingPlan.FromTimetable(TwoTrains()).Apply(new ShiftTrain(new TrainId("2B02"), 0, 300));
+        var notRunning = new TrainForecast(new TrainId("2B02"), new Headcode("2B02"), TrainForecastStatus.NotRunning, [])
+        {
+            NotRunning = new NotRunningReason(NotRunningKind.OtherSeedGroup, "seed group 04:00"),
+        };
+        var request = new GraphSceneRequest(Profile, TestCorridor) { Timetable = TwoTrains(), Plan = plan, Forecast = new Forecast(null, false, [notRunning]) };
+
+        var scene = GraphSceneBuilder.Build(request);
+
+        scene.Paths.Single(p => p.Key == "wtt:2B02").Colour.Should().Be(GraphSceneBuilder.NotRunningColour(Stopper));
+        GraphSceneBuilder.NotRunningColour(Stopper).A.Should().BeLessThan(Stopper.A);
+        scene.Paths.Single(p => p.Key == "wtt:1A01").Colour.Should().Be(Express, "a train that runs is drawn as before");
+        scene.InLayer(GraphLayer.Plan).Should().BeEmpty("a not-running train's re-plan is not drawn");
+
+        var hidden = GraphSceneBuilder.Build(request with { ShowNotRunning = false });
+        hidden.Paths.Should().NotContain(p => p.Train == new TrainId("2B02"));
+        hidden.Paths.Should().Contain(p => p.Key == "wtt:1A01");
+    }
+
+    [Fact]
     public void A_train_terminated_short_draws_to_its_new_end()
     {
         var (plan, _) = WorkingPlan.FromTimetable(TwoTrains()).ApplyAll([new TerminateAt(new TrainId("1A01"), 2)]);

@@ -112,6 +112,7 @@ public static class DelayReportCsv
         DelayTrainState.Running => "running",
         DelayTrainState.Finished => "finished",
         DelayTrainState.Cancelled => "cancelled",
+        DelayTrainState.NotRunning => "not running",
         _ => "no forecast",
     };
 

@@ -161,6 +161,16 @@ public static class GraphHover
             lines.Add(new HoverLine(Forecast, point.DelaySeconds is { } delay ? $"{times}  ({FormatDelay(delay).ToLowerInvariant()})" : times));
         }
 
+        if (forecast.NotRunning is { } reason)
+        {
+            lines.Add(new HoverLine(Note, $"Not running: {reason} (SimSig will not run it this session)"));
+        }
+
+        if (forecast.NotSeen)
+        {
+            lines.Add(new HoverLine(Note, "Not seen since the start: it may have been removed"));
+        }
+
         if (forecast.KnockOnSeconds >= SimTime.SecondsPerMinute)
         {
             lines.Add(new HoverLine(Note, $"{forecast.KnockOnSeconds / SimTime.SecondsPerMinute} min knock-on from other trains"));

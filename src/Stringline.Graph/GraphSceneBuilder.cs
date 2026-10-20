@@ -22,6 +22,12 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
 
     public bool ShowWtt { get; init; } = true;
 
+    /// <summary>
+    /// Draws the WTT lines of trains SimSig will not run (S34, <see cref="TrainForecastStatus.NotRunning"/> in
+    /// <see cref="Forecast"/>) faintly; false hides them.
+    /// </summary>
+    public bool ShowNotRunning { get; init; } = true;
+
     /// <summary>The working plan: trains whose plan differs from the WTT (and clones) draw on the plan layer, except cancelled ones.</summary>
     public WorkingPlan? Plan { get; init; }
 
@@ -84,6 +90,12 @@ public static class GraphSceneBuilder
     /// <summary>Colour of cancelled trains on the plan layer (<c>05-…md</c> §2).</summary>
     public static Colour CancelledColour { get; } = new(0x9E, 0x9E, 0x9E);
 
+    /// <summary>A not-running train's WTT line is drawn at this share of its category colour's alpha (on top of the WTT layer's own).</summary>
+    public const double NotRunningAlpha = 0.4;
+
+    /// <summary>The colour of a not-running train's WTT line: its category colour, fainter.</summary>
+    public static Colour NotRunningColour(Colour colour) => colour with { A = (byte)Math.Round(colour.A * NotRunningAlpha) };
+
     public static GraphScene Build(GraphSceneRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -100,7 +112,13 @@ public static class GraphSceneBuilder
             foreach (var train in timetable.Trains)
             {
                 var style = profile.StyleFor(train.CategoryId);
-                AddWtt(paths, corridor, train, style.Colour, style.Style);
+                var notRunning = request.Forecast?.Find(train.Id)?.Status == TrainForecastStatus.NotRunning;
+                if (notRunning && !request.ShowNotRunning)
+                {
+                    continue;
+                }
+
+                AddWtt(paths, corridor, train, notRunning ? NotRunningColour(style.Colour) : style.Colour, style.Style);
             }
         }
 
@@ -108,6 +126,11 @@ public static class GraphSceneBuilder
         {
             foreach (var train in plan.Modified)
             {
+                if (request.Forecast?.Find(train.Id)?.Status == TrainForecastStatus.NotRunning)
+                {
+                    continue; // re-planned, but SimSig will not run it: only its faint WTT line shows
+                }
+
                 var style = profile.StyleFor(train.CategoryId);
                 paths.AddRange(PlanPaths(corridor, train, train.Cancelled ? CancelledColour : style.Colour, style: train.Cancelled ? LineStyle.Solid : style.Style));
             }

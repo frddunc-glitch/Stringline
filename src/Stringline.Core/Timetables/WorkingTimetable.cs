@@ -48,6 +48,15 @@ public sealed class WorkingTimetable
 
     public IReadOnlyList<TimetableRule> Rules { get; }
 
+    /// <summary>
+    /// The WTT's seed groups (<c>SeedGroups</c>): the times other than the timetable's start that the sim can be started
+    /// at, each with its own seeded trains. Empty for most timetables.
+    /// </summary>
+    public IReadOnlyList<SeedGroup> SeedGroups { get; init; } = [];
+
+    /// <summary>The seed group with this ID, if the WTT defines it.</summary>
+    public SeedGroup? FindSeedGroup(string? id) => id is null ? null : SeedGroups.FirstOrDefault(g => string.Equals(g.Id, id, StringComparison.OrdinalIgnoreCase));
+
     public Train? Find(TrainId id) => _byId.GetValueOrDefault(id);
 
     public Train Get(TrainId id) => _byId.TryGetValue(id, out var train) ? train : throw new KeyNotFoundException($"No train {id} in the timetable.");
@@ -73,6 +82,19 @@ public sealed record TimetableHeader(
     SimTime StartTime,
     SimTime FinishTime,
     string? TrainDescriptionTemplate = null);
+
+/// <summary>
+/// A seed group from the WTT header: a time the sim can be started at, other than the timetable's own start. Seeded
+/// trains name the group they are seeded in (<see cref="Train.SeedGroup"/>); a seeded train with no group is seeded
+/// when the sim starts at the timetable's start.
+/// </summary>
+/// <param name="Id">The group's ID as the WTT writes it (a GUID in braces).</param>
+/// <param name="StartTime">When a sim started with this group begins.</param>
+/// <param name="Title">The name SimSig's Loader shows, e.g. <c>14:00</c>.</param>
+public sealed record SeedGroup(string Id, SimTime StartTime, string Title)
+{
+    public override string ToString() => Title.Length > 0 ? Title : StartTime.ToString();
+}
 
 /// <summary>
 /// A <c>TrainCategory</c> from the WTT header: performance and dwell defaults shared by trains. Display colour and

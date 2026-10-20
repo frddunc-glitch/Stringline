@@ -46,6 +46,7 @@ Right-click a train's line for its menu, at the timing point nearest the click. 
 | **Change platform…**, **Change line…** | Changes the platform or line at this point. |
 | **Terminate here** | Ends the train's run here (the rest is drawn grey in the detail panel). |
 | **Cancel train**, **Reinstate** | Cancels the train, or brings it back. |
+| **Run anyway**, **Leave to start rules** | For a train SimSig will [not run](timetables-and-profiles.md#trains-that-will-not-run) this session: forecast it anyway, or take that back. |
 | **Reset to WTT** | Throws away every change to this train. |
 | **Clone as ad-hoc…** | Copies the train as an extra train with a new headcode, a number of minutes later. The copy is selected so you can drag it into place. |
 | **Link to WTT train…**, **Match automatically** | For a live train: links it by hand to a WTT train (or to none), or goes back to automatic matching. |
@@ -55,7 +56,7 @@ Right-click the background for [disruptions and notes](disruptions-and-notes.md)
 
 ## The train detail panel
 
-The panel at the top right shows the selected train: its headcode, state (running and how late, not started, finished, cancelled, terminated short, re-planned), its route, and buttons for **Reset to WTT**, **Cancel train** (or **Reinstate**), **Clone…** and, for a live train, **Link…**.
+The panel at the top right shows the selected train: its headcode, state (running and how late, not started, finished, not running, cancelled, terminated short, re-planned), its route, and buttons for **Reset to WTT**, **Cancel train** (or **Reinstate**), **Run anyway** (for a train that will [not run](timetables-and-profiles.md#trains-that-will-not-run)), **Clone…** and, for a live train, **Link…**.
 
 Below is its schedule, one row per timing point:
 

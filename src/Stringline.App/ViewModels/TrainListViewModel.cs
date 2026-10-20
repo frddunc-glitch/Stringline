@@ -15,10 +15,20 @@ internal enum TrainSort
     LastSeen,
 }
 
-/// <summary>One live train in the list: its current working.</summary>
-internal sealed partial class TrainRowViewModel(string uid) : ObservableObject
+/// <summary>One live train in the list (its current working), or a WTT train SimSig will not run (S34).</summary>
+internal sealed partial class TrainRowViewModel(string uid, bool isLive = true) : ObservableObject
 {
+    /// <summary>The list's group of trains SimSig will not run this session.</summary>
+    public const string NotRunningGroup = "Not running";
+
+    /// <summary>The sim uid of a live train; for a not-running one, a key of its own (<see cref="IsLive"/> is false).</summary>
     public string Uid { get; } = uid;
+
+    /// <summary>False for a not-running WTT train, which has no live train behind it.</summary>
+    public bool IsLive { get; } = isLive;
+
+    /// <summary>The list group: empty for live trains (no header), <see cref="NotRunningGroup"/> for the rest.</summary>
+    public string Group => IsLive ? string.Empty : NotRunningGroup;
 
     [ObservableProperty]
     public partial string Headcode { get; set; } = string.Empty;
@@ -54,7 +64,7 @@ internal sealed partial class TrainRowViewModel(string uid) : ObservableObject
     [ObservableProperty]
     public partial string Colour { get; set; } = "#8A8A8A";
 
-    public bool IsUnmatched => Status == MatchStatus.Unmatched;
+    public bool IsUnmatched => IsLive && Status == MatchStatus.Unmatched;
 }
 
 /// <summary>
@@ -95,6 +105,17 @@ internal sealed partial class TrainListViewModel : ObservableObject
 
     public TrainRowViewModel? Find(string uid) => _rows.GetValueOrDefault(uid);
 
+    /// <summary>
+    /// True while a snapshot is being taken in: a selection lost because its row went (a not-running train run anyway,
+    /// S34) is not the user choosing nothing.
+    /// </summary>
+    public bool IsUpdating { get; private set; }
+
+    /// <summary>The row of a not-running WTT train, if listed.</summary>
+    public TrainRowViewModel? FindNotRunning(TrainId train) => _rows.GetValueOrDefault(NotRunningKey(train));
+
+    private static string NotRunningKey(TrainId train) => "not-running:" + train.Value;
+
     /// <summary>Whole minutes late as the list shows them: <c>+3</c>, <c>0</c>, <c>−1</c> (a true minus sign).</summary>
     public static string FormatDelay(int minutes) => minutes switch
     {
@@ -125,6 +146,19 @@ internal sealed partial class TrainListViewModel : ObservableObject
     public void Update(PlanSnapshot snapshot, StringlineProfile? profile)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        IsUpdating = true;
+        try
+        {
+            Take(snapshot, profile);
+        }
+        finally
+        {
+            IsUpdating = false;
+        }
+    }
+
+    private void Take(PlanSnapshot snapshot, StringlineProfile? profile)
+    {
         _snapshot = snapshot;
         _profile = profile;
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -138,6 +172,32 @@ internal sealed partial class TrainListViewModel : ObservableObject
             }
 
             Fill(row, live);
+        }
+
+        foreach (var forecast in snapshot.Forecast.Trains)
+        {
+            if (forecast.Status != TrainForecastStatus.NotRunning || snapshot.Timetable?.Find(forecast.Train) is not { } wtt)
+            {
+                continue;
+            }
+
+            var key = NotRunningKey(forecast.Train);
+            seen.Add(key);
+            if (!_rows.TryGetValue(key, out var row))
+            {
+                row = new TrainRowViewModel(key, isLive: false);
+                _rows.Add(key, row);
+            }
+
+            row.Headcode = wtt.Headcode.Value;
+            row.Train = wtt.Id;
+            row.StatusText = "Not running";
+            row.LastLocation = forecast.NotRunning?.Text ?? string.Empty;
+            row.LastSeen = wtt.BookedStart ?? SimTime.Zero;
+            row.LastSeenText = wtt.BookedStart?.ToString("T", CultureInfo.InvariantCulture) ?? string.Empty;
+            row.DelayMinutes = null;
+            row.DelayText = string.Empty;
+            row.Colour = Graph.GraphSceneBuilder.NotRunningColour(_profile?.StyleFor(wtt.CategoryId).Colour ?? CategoryStyle.Fallback.Colour).ToString();
         }
 
         foreach (var gone in _rows.Keys.Where(k => !seen.Contains(k)).ToList())
@@ -181,7 +241,7 @@ internal sealed partial class TrainListViewModel : ObservableObject
         IEnumerable<TrainRowViewModel> rows = _rows.Values;
         if (UnmatchedOnly)
         {
-            rows = rows.Where(r => r.Status != MatchStatus.Matched);
+            rows = rows.Where(r => r.IsLive && r.Status != MatchStatus.Matched);
         }
 
         if (filter.Length > 0)
@@ -199,12 +259,18 @@ internal sealed partial class TrainListViewModel : ObservableObject
             TrainSort.LastSeen => rows.OrderByDescending(r => r.LastSeen).ThenBy(r => r.Headcode, StringComparer.Ordinal),
             _ => rows.OrderByDescending(r => r.DelayMinutes ?? int.MinValue).ThenByDescending(r => r.LastSeen).ThenBy(r => r.Headcode, StringComparer.Ordinal),
         }).ToList();
+        // Not-running trains after the live ones, in booked order, whatever the sort: they are their own group.
+        ordered = [.. ordered.Where(r => r.IsLive), .. ordered.Where(r => !r.IsLive).OrderBy(r => r.LastSeen).ThenBy(r => r.Headcode, StringComparer.Ordinal)];
 
         Sync(ordered);
         var unmatched = _rows.Values.Count(r => r.IsUnmatched);
-        Summary = _rows.Count == 0 ? "No trains"
-            : (Rows.Count == _rows.Count ? $"{_rows.Count} trains" : $"{Rows.Count} of {_rows.Count} trains")
-              + (unmatched > 0 ? $", {unmatched} unmatched" : string.Empty);
+        var live = _rows.Values.Count(r => r.IsLive);
+        var shown = Rows.Count(r => r.IsLive);
+        var notRunning = _rows.Count - live;
+        Summary = (live == 0 ? "No trains"
+            : (shown == live ? $"{live} trains" : $"{shown} of {live} trains")
+              + (unmatched > 0 ? $", {unmatched} unmatched" : string.Empty))
+            + (notRunning > 0 ? $", {notRunning} not running" : string.Empty);
     }
 
     /// <summary>Make <see cref="Rows"/> equal <paramref name="wanted"/> with the fewest moves, keeping row objects.</summary>

@@ -77,6 +77,7 @@ internal sealed partial class DelayTrainRowViewModel(TrainId train) : Observable
             DelayTrainState.Running => "Running",
             DelayTrainState.Finished => "Finished",
             DelayTrainState.Cancelled => "Cancelled",
+            DelayTrainState.NotRunning => "Not running",
             _ => "—",
         };
         Latest = t.Latest is { } l ? $"{Name(l.Location, profile)} {PlanInput.Format(l.DepartBasis == DelayBasis.Actual ? l.Depart : l.Arrive)}" : string.Empty;
@@ -269,6 +270,11 @@ internal sealed partial class DelaysViewModel : ObservableObject
         if (report.UnmatchedLive > 0)
         {
             text += string.Create(CultureInfo.InvariantCulture, $" · {report.UnmatchedLive} not matched (not listed)");
+        }
+
+        if (report.NotRunning > 0)
+        {
+            text += string.Create(CultureInfo.InvariantCulture, $" · {report.NotRunning} not running");
         }
 
         return text;

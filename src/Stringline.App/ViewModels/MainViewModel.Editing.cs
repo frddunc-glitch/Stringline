@@ -95,6 +95,8 @@ internal sealed partial class MainViewModel : IGraphEditor
 
     private bool CanResetSelected => Detail.CanReset;
 
+    private bool CanRunAnywaySelected => Detail.IsNotRunning || Detail.RunsAnyway;
+
     private bool CanLinkSelected => Selection?.LiveUid is { } uid && Snapshot.FindByUid(uid) is not null && Snapshot.Timetable is not null;
 
     /// <summary>Send a plan command to the engine, and show what happened: an error or clamping warnings in the info bar.</summary>
@@ -167,6 +169,15 @@ internal sealed partial class MainViewModel : IGraphEditor
     private Task CancelSelectedAsync() => Detail.Schedule is { } s
         ? ExecuteAsync(s.Plan.Cancelled ? new ReinstateTrain(s.Plan.Id) : new CancelTrain(s.Plan.Id))
         : Task.CompletedTask;
+
+    /// <summary>Run the selected not-running train anyway (S34), or take that back.</summary>
+    [RelayCommand(CanExecute = nameof(CanRunAnywaySelected))]
+    private Task RunAnywaySelectedAsync() => Detail.Schedule is { } s
+        ? ExecuteAsync(new ExpectToRun(s.Plan.Id, !Detail.RunsAnyway))
+        : Task.CompletedTask;
+
+    /// <summary>The detail panel's run-anyway button: "Run anyway" or "Leave to start rules".</summary>
+    public string RunAnywaySelectedText => Detail.RunsAnyway ? "Leave to start rules" : "Run anyway";
 
     [RelayCommand(CanExecute = nameof(HasSelectedPlan))]
     private Task CloneSelectedAsync() => Detail.Schedule is { } s ? CloneAsync(s.Plan.Id) : Task.CompletedTask;
@@ -476,6 +487,15 @@ internal sealed partial class MainViewModel : IGraphEditor
         }
 
         items.Add(PlanMenuItem.Separator);
+        if (Snapshot.Forecast.Find(id)?.Status == TrainForecastStatus.NotRunning)
+        {
+            items.Add(new PlanMenuItem("R_un anyway", new AsyncRelayCommand(() => ExecuteAsync(new ExpectToRun(id)))));
+        }
+        else if (Snapshot.Plan.RunsAnyway(id))
+        {
+            items.Add(new PlanMenuItem("Lea_ve to start rules", new AsyncRelayCommand(() => ExecuteAsync(new ExpectToRun(id, Run: false)))));
+        }
+
         if (plan.Cancelled || plan.TerminatesAt is not null)
         {
             items.Add(new PlanMenuItem(plan.Cancelled ? "_Reinstate" : "_Reinstate to run in full", new AsyncRelayCommand(() => ExecuteAsync(new ReinstateTrain(id)))));
@@ -742,6 +762,7 @@ internal sealed partial class MainViewModel : IGraphEditor
         RedoCommand.NotifyCanExecuteChanged();
         ResetSelectedCommand.NotifyCanExecuteChanged();
         CancelSelectedCommand.NotifyCanExecuteChanged();
+        RunAnywaySelectedCommand.NotifyCanExecuteChanged();
         CloneSelectedCommand.NotifyCanExecuteChanged();
         LinkSelectedCommand.NotifyCanExecuteChanged();
         UpdateReplanCommand();
@@ -750,6 +771,7 @@ internal sealed partial class MainViewModel : IGraphEditor
         OnPropertyChanged(nameof(UndoTip));
         OnPropertyChanged(nameof(RedoTip));
         OnPropertyChanged(nameof(CancelSelectedText));
+        OnPropertyChanged(nameof(RunAnywaySelectedText));
     }
 
     /// <summary>The detail panel's cancel button: "Cancel train" or "Reinstate".</summary>

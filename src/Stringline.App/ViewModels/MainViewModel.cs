@@ -114,7 +114,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         engine.SetForecast(options: _settings.Planning.ToForecastOptions(knockOn), conflicts: _settings.Planning.ToConflictOptions());
         Trains.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(TrainListViewModel.Selected))
+            if (e.PropertyName == nameof(TrainListViewModel.Selected) && !Trains.IsUpdating)
             {
                 OnTrainRowSelected(Trains.Selected);
             }
@@ -161,6 +161,10 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     [ObservableProperty]
     public partial bool ShowActual { get; set; } = true;
+
+    /// <summary>Draw trains SimSig will not run (S34) faintly on the WTT layer, rather than hide them. Not remembered.</summary>
+    [ObservableProperty]
+    public partial bool ShowNotRunning { get; set; } = true;
 
     /// <summary>Show the forecast layer (dash-dot lines on from each running train). Not remembered, like the other layers.</summary>
     [ObservableProperty]
@@ -286,6 +290,8 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     partial void OnShowWttChanged(bool value) => RequestScene();
 
     partial void OnShowActualChanged(bool value) => RequestScene();
+
+    partial void OnShowNotRunningChanged(bool value) => RequestScene();
 
     partial void OnShowForecastChanged(bool value) => RequestScene();
 
@@ -985,6 +991,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         {
             Timetable = _timetable?.Timetable,
             ShowWtt = ShowWtt,
+            ShowNotRunning = ShowNotRunning,
             ShowActual = ShowActual,
             ShowForecast = ShowForecast,
             ShowDisruptions = ShowDisruptions,
@@ -1000,7 +1007,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             return;
         }
 
-        SetSelection(row?.Train, row?.Uid);
+        SetSelection(row?.Train, row is { IsLive: true } ? row.Uid : null);
     }
 
     /// <param name="conflictId">A conflict picked with the train (S14), drawn stronger; null clears the conflicts list's selection.</param>
@@ -1016,7 +1023,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _syncingSelection = true;
         try
         {
-            Trains.Selected = uid is null ? null : Trains.Find(uid);
+            Trains.Selected = uid is not null ? Trains.Find(uid) : train is { } t ? Trains.FindNotRunning(t) : null;
             Delays.Selected = train is { } id ? Delays.Find(id) : null;
         }
         finally

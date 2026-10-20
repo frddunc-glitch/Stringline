@@ -29,6 +29,10 @@ The bar offers the timetables in SimSig's Timetables folder whose sim matches. I
 
 A grey train is one Stringline could not match to the timetable: a train added in the sim, a different timetable from the one loaded, or a train far off its booked path. Check the timetable is the one the sim is running (the status bar names it), or [link the train by hand](re-planning.md#the-right-click-menu).
 
+### A train is "Not running" but SimSig runs it (or the other way round)
+
+Stringline [works out](timetables-and-profiles.md#trains-that-will-not-run) which trains SimSig will run from the time the sim started. A train seen in the sim always runs. For one Stringline has wrong, select it and press **Run anyway**. Please [report it](#reporting-a-problem) with the timetable and the start time, so the rule can be put right.
+
 ### A corridor looks wrong
 
 Corridors are worked out from the timetable. Change them in the [profile editor](timetables-and-profiles.md#the-profile-editor), or **Tools ▸ Regenerate corridors…** to start again.

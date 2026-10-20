@@ -12,6 +12,7 @@
   - `AddDisruption(d)` / `RemoveDisruption(id)` / `EditDisruption(...)`
   - `AddNote(n)` / `EditNote(n)` / `RemoveNote(id)` (S13)
   - `LinkLiveTrain(simUid, trainId)` (session-level, not a plan change)
+  - `ExpectToRun(train, run = true)` (S34): run a train the start rules (§2) say SimSig will not; like a link, not a change to the train's plan, but undone and saved like one
   - `AcceptSuggestion(suggestionId, commands[])` — a composite
 - Validation on apply: times monotonic; run time between points ≥ min run time (× disruption factor); depart ≥ arrive. Violations clamp and return a warning shown to the user.
 
@@ -53,6 +54,12 @@ Performance target: 500 trains × 40 points = 20k events → well under 50 ms in
 - **Tracks side by side.** The profile gives one track each way on a double line, but Waterloo's main line is four tracks. A section is therefore given at least as many tracks each way as the WTT uses at once. Booked runs are put on tracks in entry order: a run entering or leaving within a minute of the last on a track, or overtaking it, takes another track. A following train takes whichever track lets it go soonest.
 - **Holding.** A held train waits at its departure point: a pass there becomes a stop. A train already on its way (its departure is actual) is not held, but still occupies the sections.
 - **Left out:** cancelled trains, and trains not seen whose plan ended before the session started. A train whose forecast throws is `Unavailable` (logged) and the rest carry on.
+- **Not running** (S34, #16; `StartingTrains`, worked out afresh on every forecast from the WTT, `LiveState.SessionStart`, the trains matched live and the plan's run-anyway set, so resume and review agree; it is not a plan command):
+  - **Start group:** the seed group (or the timetable's start, for seeded trains with no group) whose start time is the session start, or the latest before it; a group beats the timetable's start at the same time. A session start within 60 s of it is a **fresh start**; anything else is a connection to a sim already running, or a saved game (Fred, S34).
+  - **Will not run:** a seeded train of another group (any start); at a fresh start only, an unseeded train booked to come in before the start (its entry time, else its first booked time; no tolerance, from Penrith's 14:00 recording, `04-…md` §1); and a train formed (next working, divide, detach, drop) only from trains that will not run, whatever its own time (Fred, S34). A train formed from one that runs, runs. A train matched live, or run anyway, always runs.
+  - Such a train is `TrainForecastStatus.NotRunning` with a `NotRunningReason` ("not seeded", "seed group 04:00", "seeded at 00:00", "formed from 186K") and no points. So it is left out of the forecast layer, conflicts, suggestions, the optimiser and the regulation list, which all take only trains not started or running. The graph draws its WTT line faintly (View ▸ Show not-running trains, or hidden); the train list puts it in a "Not running" group; the delay table counts it apart.
+  - **Not seen:** at a fresh start, a seeded train of the start group not seen 2 min after the start is flagged `NotSeen` (it may have been removed). It is still forecast.
+  - A replay's `--start` seek plays every earlier frame, so the session start is the recording's first clock. `replay-server --start` pre-rolls before the client connects, so the app sees a later first clock: a late connection, as with SimSig itself.
 - **Drawn** (Fred): the forecast layer shows running trains, from their latest actual, and trains not started whose forecast is a minute or more off the plan. On-time future trains show only their plan. Under a minute is on time, as railway delay minutes go: the shortest dwells often differ from the WTT's half-minute bookings by seconds.
 - **Measured** (`benchmarks/ --quick`, Release, Waterloo 1 768 trains / 7 834 points half way through the 4× recording): 10 ms independent, 23 ms with the interaction pass (both passes run).
 

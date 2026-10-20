@@ -27,6 +27,7 @@ The location names are on the left, bold for stations with platforms. A long nam
 | Heavy solid line | The **actual** running, as the sim reported it. |
 | Dash-dot line (– · – ·) | The **forecast**: where a running train is expected to go from here, and a train not yet started if it is expected a minute or more off its plan. |
 | Thin grey line with crosses at the ends | A **cancelled** train. |
+| Very faint line | A train SimSig will **not run** this session (see [Trains that will not run](timetables-and-profiles.md#trains-that-will-not-run)). **View ▸ Show not-running trains** hides them. |
 | Grey heavy line | A live train not matched to the timetable. |
 | Thick line with a halo | The **selected** train. Other trains are dimmed. |
 | Red vertical line | **Now**. The past is lightly shaded. |
@@ -95,6 +96,7 @@ The list on the left has one row for each train seen in the sim: its colour, hea
 - **Filter** by typing part of a headcode, location or train.
 - **Not matched only** lists the trains not matched to the timetable (in grey italics).
 - Click a row to select the train on the graph; double-click to centre the graph on its last report.
+- Under **Not running**, after the trains in the sim, are the timetable's trains that SimSig will not run this session, with the reason in **Last at** and their booked start in **Time**. See [Trains that will not run](timetables-and-profiles.md#trains-that-will-not-run).
 
 ## The status bar and sim clock
 

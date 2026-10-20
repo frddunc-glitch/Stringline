@@ -24,7 +24,7 @@ public sealed class WttReaderTests
         h.FinishTime.Should().Be(new SimTime(90000));
         h.TrainDescriptionTemplate.Should().Be("$operator");
         result.Warnings.Should().BeEmpty();
-        result.UnknownElements.Should().BeEmpty("SeedGroups is known and ignored");
+        result.UnknownElements.Should().BeEmpty("SeedGroups is read, and an empty group is skipped");
     }
 
     [Fact]
@@ -446,5 +446,40 @@ public sealed class WttReaderTests
         var read = () => new WttReader().Read(new MemoryStream(bytes));
 
         read.Should().Throw<WttFormatException>().WithInnerException<InvalidDataException>();
+    }
+
+    [Fact]
+    public void Reads_seed_groups_and_each_seeded_trains_group()
+    {
+        const string groups = """
+            <SeedGroupSummary>{G1},&quot;04:00 04:00&quot;,{G2},&quot;14:00 14:00&quot;</SeedGroupSummary>
+            <SeedGroups>
+              <SeedGroup><ID>{G1}</ID><StartTime>14400</StartTime><Title>04:00</Title></SeedGroup>
+              <SeedGroup><ID>{G2}</ID><StartTime>50400</StartTime><Title>14:00</Title></SeedGroup>
+              <SeedGroup><Title>no ID</Title></SeedGroup>
+            </SeedGroups>
+            """;
+        var trains =
+            Wtt.Train("1A01", Wtt.Trip("AAA", dep: 50460) + Wtt.Trip("BBB", arr: 50700), "<SeedPoint>S1</SeedPoint><SeedGroup>{G2}</SeedGroup><Started>-1</Started>") +
+            Wtt.Train("1A02", Wtt.Trip("AAA", dep: 18060) + Wtt.Trip("BBB", arr: 18300), "<SeedPoint>S2</SeedPoint><Started>-1</Started>") +
+            Wtt.Train("1A03", Wtt.Trip("AAA", dep: 18060) + Wtt.Trip("BBB", arr: 18300), "<SeedPoint>S3</SeedPoint><SeedGroup>{G9}</SeedGroup>") +
+            Wtt.Train("2B01", Wtt.Trip("AAA", dep: 50000) + Wtt.Trip("BBB", arr: 50300), "<EntryPoint>EAAA</EntryPoint><DepartTime>49900</DepartTime><SeedGroup>{G1}</SeedGroup>");
+
+        var result = Wtt.Read(Wtt.Document(trains, header: groups));
+        var tt = result.Timetable;
+
+        tt.SeedGroups.Should().Equal(new SeedGroup("{G1}", SimTime.FromClock(4, 0), "04:00"), new SeedGroup("{G2}", SimTime.FromClock(14, 0), "14:00"));
+        tt.FindSeedGroup("{g2}")!.Title.Should().Be("14:00", "IDs are GUIDs, so case does not matter");
+        tt.Get(new TrainId("1A01")).SeedGroup.Should().Be("{G2}");
+        tt.Get(new TrainId("1A01")).Started.Should().BeTrue();
+        tt.Get(new TrainId("1A02")).SeedGroup.Should().BeNull("seeded at the timetable's start");
+        tt.Get(new TrainId("2B01")).SeedGroup.Should().BeNull("only seeded trains have a group");
+        tt.Get(new TrainId("2B01")).Started.Should().BeFalse();
+        tt.Get(new TrainId("2B01")).BookedStart.Should().Be(new SimTime(49900), "an entering train comes in at its entry time");
+        tt.Get(new TrainId("1A01")).BookedStart.Should().Be(new SimTime(50460));
+        result.UnknownElements.Should().BeEmpty();
+        result.Warnings.Select(w => w.Message).Should().BeEquivalentTo(
+            "Seed group 'no ID' has no ID or start time and was skipped.",
+            "Is seeded in group {G9}, which is not in the timetable header; it is taken as seeded at any start.");
     }
 }

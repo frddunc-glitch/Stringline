@@ -51,6 +51,13 @@ public enum TrainForecastStatus
 
     /// <summary>The forecast failed for this train (logged); it has no points.</summary>
     Unavailable,
+
+    /// <summary>
+    /// SimSig will not run it this session (S34, #16): not seeded and booked before the start, seeded in another group,
+    /// or formed from such a train (see <see cref="TrainForecast.NotRunning"/>). It has no points, and is left out of
+    /// conflicts, suggestions, the optimiser and the regulation list.
+    /// </summary>
+    NotRunning,
 }
 
 /// <summary>One train's forecast along its working plan.</summary>
@@ -78,6 +85,15 @@ public sealed record TrainForecast(
     /// train already on its way is not held, so it has none for that run.
     /// </summary>
     public IReadOnlyList<BlockHold> BlockHolds { get; init; } = [];
+
+    /// <summary>Why the train is <see cref="TrainForecastStatus.NotRunning"/>; null otherwise.</summary>
+    public NotRunningReason? NotRunning { get; init; }
+
+    /// <summary>
+    /// A seeded train of the start group not seen soon after the sim started (S34): it may have been removed. It is
+    /// still forecast.
+    /// </summary>
+    public bool NotSeen { get; init; }
 
     /// <summary>The index in <see cref="Points"/> of the first point with a forecast time, or -1 if none.</summary>
     public int FirstForecast
@@ -149,6 +165,9 @@ public sealed record ForecastOptions
 /// </param>
 public sealed class Forecast(SimTime? Now, bool Interaction, IReadOnlyList<TrainForecast> Trains, Forecast? Independent = null)
 {
+    /// <summary>Which trains SimSig will run, from the session's start (S34).</summary>
+    public StartingTrains Starting { get; init; } = StartingTrains.Unknown;
+
     private readonly Forecast? _independent = Independent;
     private Dictionary<TrainId, TrainForecast>? _byTrain;
 

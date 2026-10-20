@@ -20,6 +20,7 @@ public sealed class WorkingPlanBuilder
     private ImmutableList<Disruption> _disruptions;
     private ImmutableList<PlanNote> _notes;
     private ImmutableList<LiveLink> _links;
+    private ImmutableSortedSet<TrainId> _runAnyway;
     private List<PlanWarning> _warnings = [];
 
     internal WorkingPlanBuilder(WorkingPlan plan)
@@ -30,6 +31,7 @@ public sealed class WorkingPlanBuilder
         _disruptions = plan.DisruptionList;
         _notes = plan.NoteList;
         _links = plan.LinkList;
+        _runAnyway = plan.RunAnywaySet;
     }
 
     public WorkingTimetable Timetable => _start.Timetable;
@@ -220,6 +222,23 @@ public sealed class WorkingPlanBuilder
         return null;
     }
 
+    /// <summary>Marks a WTT train to run anyway (or not), whatever the start rules say.</summary>
+    public string? SetRunAnyway(TrainId train, bool run)
+    {
+        if (Timetable.Find(train) is null)
+        {
+            return $"Only WTT trains can be expected to run; {train} is not in the timetable.";
+        }
+
+        if (_runAnyway.Contains(train) == run)
+        {
+            return run ? $"{train} is already expected to run." : $"{train} was not marked to run anyway.";
+        }
+
+        _runAnyway = run ? _runAnyway.Add(train) : _runAnyway.Remove(train);
+        return null;
+    }
+
     public string? RemoveLink(string simUid, Headcode headcode)
     {
         var index = _links.FindIndex(l => l.SimUid == simUid && l.Headcode == headcode);
@@ -239,7 +258,7 @@ public sealed class WorkingPlanBuilder
         _warnings.Add(warning);
     }
 
-    public WorkingPlan Build() => new(_start.Timetable, _start.MinRuns, _trains, _order, _disruptions, _notes, _links);
+    public WorkingPlan Build() => new(_start.Timetable, _start.MinRuns, _trains, _order, _disruptions, _notes, _links, _runAnyway);
 
     /// <summary>
     /// Runs a command: on success its warnings are returned with it; on failure (an error, or an exception from a
@@ -247,7 +266,7 @@ public sealed class WorkingPlanBuilder
     /// </summary>
     internal PlanCommandResult Run(IPlanCommand command)
     {
-        var saved = (_trains, _order, _disruptions, _notes, _links, _warnings);
+        var saved = (_trains, _order, _disruptions, _notes, _links, _runAnyway, _warnings);
         _warnings = [];
         PlanCommandResult result;
         try
@@ -256,13 +275,13 @@ public sealed class WorkingPlanBuilder
         }
         catch
         {
-            (_trains, _order, _disruptions, _notes, _links, _warnings) = saved;
+            (_trains, _order, _disruptions, _notes, _links, _runAnyway, _warnings) = saved;
             throw;
         }
 
         if (!result.Applied)
         {
-            (_trains, _order, _disruptions, _notes, _links, _warnings) = saved;
+            (_trains, _order, _disruptions, _notes, _links, _runAnyway, _warnings) = saved;
             return result;
         }
 

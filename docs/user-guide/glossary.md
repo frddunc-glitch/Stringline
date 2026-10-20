@@ -24,6 +24,7 @@ Railway words are used as SimSig uses them.
 | **Interface Gateway** | SimSig's feed of train movements, the clock and signalling, which Stringline reads. See [the gateway](gateway.md). |
 | **Interpose** | Putting a description into a TD berth by hand. |
 | **Knock-on** | Delay a late train passes on to the trains behind it. |
+| **Not running** | A timetable train SimSig will not run this session, because the sim started after it was due or it is seeded for another start time. Drawn very faintly. See [Trains that will not run](timetables-and-profiles.md#trains-that-will-not-run). |
 | **Now line** | The red line at the current sim time. |
 | **Pass** | A timing point a train runs through without stopping. Shown in italics. |
 | **Plan** (working plan) | The WTT with your changes. |
@@ -31,6 +32,7 @@ Railway words are used as SimSig uses them.
 | **Profile** | Stringline's settings for one sim: corridors, location names, distances, sections, headways and categories. |
 | **Regulation** | Deciding the order trains take through a junction or section. See [the regulation list](regulation.md). |
 | **Route request** | Asking SimSig to set a route, as clicking its entrance and exit signals does. |
+| **Seed group** | A start time a timetable offers besides its own (for example 14:00), with its own **seeded** trains: trains already in the sim, part-way through their run, when it starts then. |
 | **Section** | The stretch of line between two neighbouring locations on a corridor. |
 | **Session** | One connection or replay, saved as you go with your edits. See [Sessions](sessions-and-review.md). |
 | **Single line** | A section with one track used in both directions. |

@@ -212,6 +212,14 @@ internal sealed partial class TrainDetailViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsClone { get; private set; }
 
+    /// <summary>SimSig will not run the train this session (S34): it can be run anyway.</summary>
+    [ObservableProperty]
+    public partial bool IsNotRunning { get; private set; }
+
+    /// <summary>The user said to run the train anyway (S34, <see cref="ExpectToRun"/>): that can be taken back.</summary>
+    [ObservableProperty]
+    public partial bool RunsAnyway { get; private set; }
+
     public void Update(PlanSnapshot snapshot, GraphSelection? selection, StringlineProfile? profile)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -225,6 +233,8 @@ internal sealed partial class TrainDetailViewModel : ObservableObject
             CanReset = false;
             IsCancelled = false;
             IsClone = false;
+            IsNotRunning = false;
+            RunsAnyway = false;
             var live = selection?.LiveUid is { } uid ? snapshot.FindByUid(uid) : null;
             IsLiveOnly = live is not null;
             Heading = live?.Headcode.ToString() ?? string.Empty;
@@ -254,11 +264,13 @@ internal sealed partial class TrainDetailViewModel : ObservableObject
         IsLiveOnly = false;
         IsCancelled = plan.Cancelled;
         IsClone = plan.Origin == PlanOrigin.Clone;
+        IsNotRunning = schedule.Forecast?.Status == TrainForecastStatus.NotRunning;
+        RunsAnyway = snapshot.Plan.RunsAnyway(plan.Id);
         CanReset = plan.IsModified && !IsClone;
         Heading = plan.Headcode.ToString();
         Colour = (plan.Cancelled ? GraphSceneBuilder.CancelledColour : profile?.StyleFor(plan.CategoryId).Colour ?? CategoryStyle.Fallback.Colour).ToString();
         Description = DescribeTrain(schedule, profile);
-        StatusText = DescribeState(schedule, profile);
+        StatusText = DescribeState(schedule, profile, RunsAnyway);
     }
 
     private static string DescribeTrain(TrainSchedule schedule, StringlineProfile? profile)
@@ -272,7 +284,7 @@ internal sealed partial class TrainDetailViewModel : ObservableObject
         return string.Join(" · ", new[] { route, what }.Where(s => s.Length > 0));
     }
 
-    private static string DescribeState(TrainSchedule schedule, StringlineProfile? profile)
+    private static string DescribeState(TrainSchedule schedule, StringlineProfile? profile, bool runsAnyway)
     {
         var plan = schedule.Plan;
         var parts = new List<string>();
@@ -293,8 +305,14 @@ internal sealed partial class TrainDetailViewModel : ObservableObject
                 TrainForecastStatus.Running => delay is { } d ? $"Running, {GraphHover.FormatDelay(d)}" : "Running",
                 TrainForecastStatus.Finished => "Finished",
                 TrainForecastStatus.NotStarted => "Not started",
+                TrainForecastStatus.NotRunning => $"Not running: {f.NotRunning} (SimSig will not run it this session)",
                 _ => "No forecast",
             });
+            if (f.NotSeen)
+            {
+                parts.Add("not seen since the start (it may have been removed)");
+            }
+
             if (f.FinalDelaySeconds is { } final && f.Status != TrainForecastStatus.Finished)
             {
                 parts.Add($"forecast {GraphHover.FormatDelay(final)} at the end");
@@ -314,6 +332,11 @@ internal sealed partial class TrainDetailViewModel : ObservableObject
         if (plan.IsModified && plan.Origin == PlanOrigin.Wtt)
         {
             parts.Add("re-planned");
+        }
+
+        if (runsAnyway)
+        {
+            parts.Add("run anyway");
         }
 
         return string.Join(", ", parts);

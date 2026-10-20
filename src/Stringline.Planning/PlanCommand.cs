@@ -29,6 +29,7 @@ namespace Stringline.Planning;
 [JsonDerivedType(typeof(LinkLiveTrain), "linkLiveTrain")]
 [JsonDerivedType(typeof(UnlinkLiveTrain), "unlinkLiveTrain")]
 [JsonDerivedType(typeof(AcceptSuggestion), "acceptSuggestion")]
+[JsonDerivedType(typeof(ExpectToRun), "expectToRun")]
 public interface IPlanCommand
 {
     /// <summary>Applies the command. An error result must leave nothing changed (the builder rolls back for it).</summary>
@@ -448,6 +449,22 @@ public sealed record UnlinkLiveTrain(string SimUid, Headcode Headcode) : IPlanCo
     }
 
     public string Describe(WorkingPlan plan) => $"Match live {Headcode} automatically";
+}
+
+/// <summary>
+/// Expects a WTT train to run although the start rules (<see cref="StartingTrains"/>) say SimSig will not, for a sim
+/// where they are wrong; with <see cref="Run"/> false, takes that back. Like a live link, it changes no train's plan,
+/// but is kept in the history so it can be undone and is saved with the session (S34).
+/// </summary>
+public sealed record ExpectToRun(TrainId Train, bool Run = true) : IPlanCommand
+{
+    public PlanCommandResult Apply(WorkingPlanBuilder b)
+    {
+        ArgumentNullException.ThrowIfNull(b);
+        return PlanCommandResult.From(b.SetRunAnyway(Train, Run));
+    }
+
+    public string Describe(WorkingPlan plan) => Run ? $"Run {Checks.Name(plan, Train)} anyway" : $"Leave {Checks.Name(plan, Train)} to the start rules";
 }
 
 /// <summary>A suggestion's commands applied as one step: all of them, or (if any fails) none.</summary>

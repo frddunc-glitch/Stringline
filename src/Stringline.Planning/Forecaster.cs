@@ -72,13 +72,18 @@ public static class Forecaster
     public static Forecast Run(ForecastRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var independent = new Pass(request, interaction: false).Run();
+        var starting = StartingTrains.Work(
+            request.Plan.Timetable,
+            request.SessionStart,
+            new HashSet<TrainId>([.. StartingTrains.Matched(request.LiveTrains), .. request.Plan.RunAnyway]),
+            request.Now);
+        var independent = new Pass(request, starting, interaction: false).Run();
         if (!request.Options.Interaction || request.Network.Sections.Count == 0)
         {
-            return new Forecast(request.Now, false, independent);
+            return new Forecast(request.Now, false, independent) { Starting = starting };
         }
 
-        var interacted = new Pass(request, interaction: true).Run();
+        var interacted = new Pass(request, starting, interaction: true).Run();
         var result = new TrainForecast[interacted.Count];
         for (var i = 0; i < result.Length; i++)
         {
@@ -89,7 +94,7 @@ public static class Forecaster
             result[i] = knockOn == 0 ? with : with with { KnockOnSeconds = knockOn };
         }
 
-        return new Forecast(request.Now, true, result, new Forecast(request.Now, false, independent));
+        return new Forecast(request.Now, true, result, new Forecast(request.Now, false, independent) { Starting = starting }) { Starting = starting };
     }
 
     /// <summary>The live train and working matched to each WTT train.</summary>
@@ -114,6 +119,7 @@ public static class Forecaster
     private sealed class Pass
     {
         private readonly ForecastRequest _request;
+        private readonly StartingTrains _starting;
         private readonly bool _interaction;
         private readonly WorkingPlan _plan;
         private readonly ForecastOptions _options;
@@ -123,9 +129,10 @@ public static class Forecaster
         private readonly Dictionary<int, SectionOccupancy<Runner>> _occupancy = [];
         private readonly Dictionary<Headcode, Runner> _firstNotStarted = [];
 
-        public Pass(ForecastRequest request, bool interaction)
+        public Pass(ForecastRequest request, StartingTrains starting, bool interaction)
         {
             _request = request;
+            _starting = starting;
             _interaction = interaction;
             _plan = request.Plan;
             _options = request.Options;
@@ -153,6 +160,15 @@ public static class Forecaster
                 else if (_request.SessionStart is { } start && _now is not null && train.RunningPoints.LastOrDefault(p => p.LastTime is not null)?.LastTime < start)
                 {
                     continue; // over before the sim started
+                }
+                else if (train.Origin == PlanOrigin.Wtt && _starting.ReasonFor(train.Source) is { } reason)
+                {
+                    runner.Status = TrainForecastStatus.NotRunning;
+                    runner.NotRunning = reason;
+                }
+                else if (train.Origin == PlanOrigin.Wtt && _starting.IsNotSeen(train.Source))
+                {
+                    runner.NotSeen = true;
                 }
 
                 _runners.Add(runner);
@@ -692,6 +708,10 @@ public static class Forecaster
 
         public bool PossiblyStopped { get; set; }
 
+        public NotRunningReason? NotRunning { get; set; }
+
+        public bool NotSeen { get; set; }
+
         public bool Failed { get; set; }
 
         public bool Done { get; set; }
@@ -743,6 +763,11 @@ public static class Forecaster
                 return new TrainForecast(Train.Id, Train.Headcode, TrainForecastStatus.Unavailable, [], LiveUid);
             }
 
+            if (Status == TrainForecastStatus.NotRunning)
+            {
+                return new TrainForecast(Train.Id, Train.Headcode, Status, []) { NotRunning = NotRunning };
+            }
+
             var points = new ForecastPoint[Points.Count];
             for (var k = 0; k < points.Length; k++)
             {
@@ -750,7 +775,11 @@ public static class Forecaster
                 points[k] = Result[k] ?? new ForecastPoint(k, p.Location, null, null, p.IsPass, ForecastBasis.None, null);
             }
 
-            return new TrainForecast(Train.Id, Train.Headcode, Status, points, LiveUid, PossiblyStopped) { BlockHolds = BlockHolds.Count == 0 ? [] : [.. BlockHolds] };
+            return new TrainForecast(Train.Id, Train.Headcode, Status, points, LiveUid, PossiblyStopped)
+            {
+                BlockHolds = BlockHolds.Count == 0 ? [] : [.. BlockHolds],
+                NotSeen = NotSeen && Status == TrainForecastStatus.NotStarted,
+            };
         }
 
         private static SimTime? ToTime(int? seconds) => seconds is { } s ? new SimTime(s) : null;

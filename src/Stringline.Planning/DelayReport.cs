@@ -23,6 +23,9 @@ public enum DelayTrainState
     Finished,
     Cancelled,
 
+    /// <summary>SimSig will not run it this session (S34): see <see cref="TrainForecast.NotRunning"/>.</summary>
+    NotRunning,
+
     /// <summary>No forecast: the train ran wholly before the session started, or its forecast failed.</summary>
     NoForecast,
 }
@@ -119,6 +122,9 @@ public sealed record DelayReportTrain(
 /// <param name="UnmatchedLive">Live trains whose current working is not matched to the plan, so are not listed.</param>
 public sealed record DelayReport(SimTime? Now, SimTime? SessionStart, IReadOnlyList<DelayReportTrain> Trains, int UnmatchedLive)
 {
+    /// <summary>Trains SimSig will not run this session (S34), counted apart: none of them is late.</summary>
+    public int NotRunning { get; init; }
+
     public static DelayReport Empty { get; } = new(null, null, [], 0);
 
     public static DelayReport For(PlanSnapshot snapshot, DelayReportFilter filter = DelayReportFilter.Seen)
@@ -147,7 +153,8 @@ public sealed record DelayReport(SimTime? Now, SimTime? SessionStart, IReadOnlyL
 
         var unmatched = snapshot.Trains.Count(t => !t.Current.IsMatched);
         var now = snapshot.Forecast.Now ?? (snapshot.Clock.HasTime ? snapshot.Clock.LastReported : null);
-        return new DelayReport(now, snapshot.SessionStart, trains, unmatched);
+        var notRunning = snapshot.Forecast.Trains.Count(t => t.Status == TrainForecastStatus.NotRunning);
+        return new DelayReport(now, snapshot.SessionStart, trains, unmatched) { NotRunning = notRunning };
     }
 
     /// <summary>One train's report from its schedule.</summary>
@@ -179,6 +186,7 @@ public sealed record DelayReport(SimTime? Now, SimTime? SessionStart, IReadOnlyL
             TrainForecastStatus.NotStarted => DelayTrainState.NotStarted,
             TrainForecastStatus.Running => DelayTrainState.Running,
             TrainForecastStatus.Finished => DelayTrainState.Finished,
+            TrainForecastStatus.NotRunning => DelayTrainState.NotRunning,
             _ => DelayTrainState.NoForecast,
         };
         var running = plan.RunningPoints.Where(p => p.IsTimed).ToList();

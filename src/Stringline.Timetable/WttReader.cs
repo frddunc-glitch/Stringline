@@ -130,6 +130,7 @@ public sealed partial class WttReader
         private readonly List<TrainCategory> _categories = [];
         private readonly List<Train> _trains = [];
         private readonly List<RawRule> _rules = [];
+        private readonly List<SeedGroup> _seedGroups = [];
         private readonly Dictionary<Train, string> _rawDescriptions = new(ReferenceEqualityComparer.Instance);
         private string _areaId = string.Empty;
         private string _simSigVersion = string.Empty;
@@ -210,6 +211,7 @@ public sealed partial class WttReader
                 case "TrainDescriptionTemplate": _template = ReadText(reader); break;
                 case "TrainCategories": ReadCategories((XElement)XNode.ReadFrom(reader)); break;
                 case "TimetableRules": ReadRules((XElement)XNode.ReadFrom(reader)); break;
+                case "SeedGroups": ReadSeedGroups((XElement)XNode.ReadFrom(reader)); break;
                 case "Timetables": ReadTimetables(reader); break;
                 default:
                     if (!Known.IgnoredHeader.Contains(reader.LocalName))
@@ -308,6 +310,40 @@ public sealed partial class WttReader
             ParseInt(Text(e, "Divide"), "Divide", context),
             ParseInt(Text(e, "CrewChange"), "CrewChange", context));
 
+        private void ReadSeedGroups(XElement element)
+        {
+            foreach (var child in element.Elements())
+            {
+                if (child.Name.LocalName != "SeedGroup")
+                {
+                    CountUnknown("SeedGroups/" + child.Name.LocalName);
+                    continue;
+                }
+
+                if (!child.HasElements)
+                {
+                    continue; // an empty placeholder: nothing to read
+                }
+
+                CheckElements(child, "SeedGroup", Known.SeedGroup);
+                var id = Text(child, "ID");
+                var title = Text(child, "Title") ?? string.Empty;
+                if (id is null || ParseTime(Text(child, "StartTime"), "StartTime", "seed group " + title) is not { } start)
+                {
+                    Warn(ImportSeverity.Warning, $"Seed group '{title}' has no ID or start time and was skipped.");
+                    continue;
+                }
+
+                if (_seedGroups.Any(g => string.Equals(g.Id, id, StringComparison.OrdinalIgnoreCase)))
+                {
+                    Warn(ImportSeverity.Info, $"Seed group {id} is defined twice; the first definition is used.");
+                    continue;
+                }
+
+                _seedGroups.Add(new SeedGroup(id, start, title));
+            }
+        }
+
         private void ReadRules(XElement element)
         {
             foreach (var child in element.Elements())
@@ -386,6 +422,8 @@ public sealed partial class WttReader
                 EntryPoint = entryPoint,
                 EntryTime = ParseTime(Text(e, "DepartTime"), "DepartTime", name),
                 SeedPoint = seedPoint,
+                SeedGroup = seedPoint is null ? null : Text(e, "SeedGroup"),
+                Started = ParseBool(Text(e, "Started"), "Started", name) ?? false,
                 MaxSpeedMph = ParseInt(Text(e, "MaxSpeed"), "MaxSpeed", name),
                 LengthMetres = ParseInt(Text(e, "TrainLength"), "TrainLength", name),
                 IsFreight = ParseBool(Text(e, "IsFreight"), "IsFreight", name) ?? false,
@@ -503,7 +541,12 @@ public sealed partial class WttReader
             var trains = _trains.Select(t => Complete(t, categories)).ToList();
             var linked = TrainLinker.Link(trains, Warn);
             var rules = TrainLinker.ResolveRules(_rules, linked, Warn);
-            var timetable = new WorkingTimetable(header, _categories, linked, rules);
+            foreach (var train in linked.Where(t => t.SeedGroup is { } g && !_seedGroups.Any(s => string.Equals(s.Id, g, StringComparison.OrdinalIgnoreCase))))
+            {
+                Warn(ImportSeverity.Info, $"Is seeded in group {train.SeedGroup}, which is not in the timetable header; it is taken as seeded at any start.", train.Id.Value);
+            }
+
+            var timetable = new WorkingTimetable(header, _categories, linked, rules) { SeedGroups = [.. _seedGroups] };
             return new WttImportResult(timetable, _warnings, _unknown, _skipped);
         }
 
@@ -628,9 +671,9 @@ public sealed partial class WttReader
     /// <summary>Element names the reader reads, or knows and deliberately ignores (anything else is reported as unknown).</summary>
     private static class Known
     {
-        /// <summary>Root children with no bearing on the plan: seeding groups, scenario options, caution speeds, decisions, class-of-service rules.</summary>
+        /// <summary>Root children with no bearing on the plan: the seed group summary (the groups are read from <c>SeedGroups</c>), scenario options, caution speeds, decisions, class-of-service rules.</summary>
         public static readonly HashSet<string> IgnoredHeader =
-            ["SeedGroupSummary", "SeedGroups", "ScenarioOptions", "CautionSpeedSets", "Decisions", "TTClassOfServiceRules"];
+            ["SeedGroupSummary", "ScenarioOptions", "CautionSpeedSets", "Decisions", "TTClassOfServiceRules"];
 
         public static readonly HashSet<string> Category =
             ["Description", "IsFreight", "MaxSpeed", "TrainLength", "AccelBrakeIndex", "SpeedClass", "Electrification", "DwellTimes",
@@ -659,6 +702,8 @@ public sealed partial class WttReader
 
         public static readonly HashSet<string> Activity =
             ["Activity", "AssociatedTrain", "AssociatedUID", "ActivityDuration", "Choice", "CrewChangeManualTime", "Decision"];
+
+        public static readonly HashSet<string> SeedGroup = ["ID", "StartTime", "Title"];
 
         public static readonly HashSet<string> Rule =
             ["Rule", "Train", "Train2", "TrainUID", "Train2UID", "Time", "Location", "Achieved", "TimeElapsed", "XOREntered"];

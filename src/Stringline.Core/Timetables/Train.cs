@@ -41,6 +41,15 @@ public sealed record Train
     /// <summary>Seed signal or berth, when <see cref="Start"/> is <see cref="TrainStart.Seeded"/>.</summary>
     public Tiploc? SeedPoint { get; init; }
 
+    /// <summary>
+    /// The ID of the <see cref="SeedGroup"/> a seeded train is seeded in, or null for none (seeded at the timetable's
+    /// start). Only seeded trains have one.
+    /// </summary>
+    public string? SeedGroup { get; init; }
+
+    /// <summary>The WTT's <c>Started</c> flag: SimSig sets it on seeded trains, which are already under way when the sim starts.</summary>
+    public bool Started { get; init; }
+
     public int? MaxSpeedMph { get; init; }
 
     public int? LengthMetres { get; init; }
@@ -78,6 +87,12 @@ public sealed record Train
 
     /// <summary>The first booked time at any point, or the entry time if no point is timed.</summary>
     public SimTime? FirstTime => Points.Select(p => p.FirstTime).FirstOrDefault(t => t is not null) ?? EntryTime;
+
+    /// <summary>
+    /// When the train is booked to come into the sim: its entry time if it enters, else its first booked time (see
+    /// <see cref="FirstTime"/>). Seeded trains are in the sim from the start.
+    /// </summary>
+    public SimTime? BookedStart => Start == TrainStart.EntryPoint && EntryTime is { } entry ? entry : FirstTime;
 
     /// <summary>The last booked time at any point.</summary>
     public SimTime? LastTime => Points.Select(p => p.LastTime).LastOrDefault(t => t is not null);

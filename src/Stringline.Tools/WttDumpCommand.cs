@@ -115,6 +115,13 @@ internal static class WttDumpCommand
             w.WriteLine($"Activities: {string.Join(", ", kinds)}{(lost > 0 ? $" ({lost} name a train that is not in the timetable)" : "")}.");
         }
 
+        if (tt.SeedGroups.Count > 0)
+        {
+            var groups = tt.SeedGroups.Select(g => $"{g.Title} (starts {g.StartTime}, {tt.Trains.Count(t => string.Equals(t.SeedGroup, g.Id, StringComparison.OrdinalIgnoreCase))} trains)");
+            var ungrouped = tt.Trains.Count(t => t.Start == TrainStart.Seeded && t.SeedGroup is null);
+            w.WriteLine($"Seed groups: {string.Join(", ", groups)}{(ungrouped > 0 ? $"; {ungrouped} seeded at the timetable's start" : "")}.");
+        }
+
         if (tt.Rules.Count > 0)
         {
             var kinds = tt.Rules.GroupBy(r => r.Kind).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} {g.Count()}");
@@ -167,6 +174,12 @@ internal static class WttDumpCommand
         WriteTable(w, header, rows);
     }
 
+    /// <summary>"seed group 14:00 (14:00:00)", or the timetable's start for a seeded train with no group.</summary>
+    internal static string SeedGroupName(WorkingTimetable tt, Train t) =>
+        t.SeedGroup is null ? $"no seed group (the timetable's start, {tt.Header.StartTime})"
+        : tt.FindSeedGroup(t.SeedGroup) is { } g ? $"seed group {g.Title} ({g.StartTime})"
+        : $"seed group {t.SeedGroup} (not in the header)";
+
     internal static void WriteTrain(TextWriter w, WorkingTimetable tt, Train t)
     {
         w.WriteLine($"{t.Headcode} ({t.Id}) {t.Description}");
@@ -179,7 +192,7 @@ internal static class WttDumpCommand
         details.Add(t.Start switch
         {
             TrainStart.EntryPoint => $"enters at {t.EntryPoint} {t.EntryTime?.ToString() ?? "(no time)"}",
-            TrainStart.Seeded => $"seeded at {t.SeedPoint}",
+            TrainStart.Seeded => tt.SeedGroups.Count == 0 && t.SeedGroup is null ? $"seeded at {t.SeedPoint}" : $"seeded at {t.SeedPoint} in {SeedGroupName(tt, t)}",
             _ => t.FormedFrom is { } from ? $"formed from {from}" : "starts in the sim",
         });
         if (tt.FindCategory(t.CategoryId) is { } category)

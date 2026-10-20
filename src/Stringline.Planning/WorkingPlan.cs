@@ -7,6 +7,14 @@ namespace Stringline.Planning;
 /// <summary>A manual link of a live working (sim uid and headcode) to a WTT train; null <see cref="Train"/> means "do not match".</summary>
 public sealed record LiveLink(string SimUid, Headcode Headcode, TrainId? Train);
 
+/// <summary>Orders train IDs by their text, so a plan's run-anyway set is the same however it was built.</summary>
+internal sealed class TrainIdOrder : IComparer<TrainId>
+{
+    public static TrainIdOrder Instance { get; } = new();
+
+    public int Compare(TrainId x, TrainId y) => string.CompareOrdinal(x.Value, y.Value);
+}
+
 /// <summary>
 /// What control intends (<c>06-…md</c> §1): the WTT with every re-plan command applied, in order. Immutable and
 /// deterministic, so the same timetable and commands always give an equal plan, and undo is "drop the last command and
@@ -27,7 +35,8 @@ public sealed class WorkingPlan
         ImmutableList<TrainId> order,
         ImmutableList<Disruption> disruptions,
         ImmutableList<PlanNote> notes,
-        ImmutableList<LiveLink> links)
+        ImmutableList<LiveLink> links,
+        ImmutableSortedSet<TrainId> runAnyway)
     {
         Timetable = timetable;
         MinRuns = minRuns;
@@ -36,6 +45,7 @@ public sealed class WorkingPlan
         DisruptionList = disruptions;
         NoteList = notes;
         LinkList = links;
+        RunAnywaySet = runAnyway;
     }
 
     /// <summary>A plan with no timetable and no trains.</summary>
@@ -72,6 +82,16 @@ public sealed class WorkingPlan
 
     internal ImmutableList<LiveLink> LinkList { get; }
 
+    internal ImmutableSortedSet<TrainId> RunAnywaySet { get; }
+
+    /// <summary>
+    /// WTT trains the user expects to run although the start rules say SimSig will not (S34, <see cref="ExpectToRun"/>).
+    /// Not a change to the train's plan, but kept in the history so it can be undone.
+    /// </summary>
+    public IReadOnlyCollection<TrainId> RunAnyway => RunAnywaySet;
+
+    public bool RunsAnyway(TrainId train) => RunAnywaySet.Contains(train);
+
     /// <summary>The plan of the timetable as booked, with no re-plans.</summary>
     public static WorkingPlan FromTimetable(WorkingTimetable timetable, MinRunTable? minRuns = null)
     {
@@ -89,7 +109,8 @@ public sealed class WorkingPlan
             timetable.Trains.Select(t => t.Id).ToImmutableList(),
             [],
             [],
-            []);
+            [],
+            ImmutableSortedSet.Create<TrainId>(TrainIdOrder.Instance));
     }
 
     public TrainPlan? Find(TrainId id) => _trains.GetValueOrDefault(id);

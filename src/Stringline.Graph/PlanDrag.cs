@@ -164,6 +164,12 @@ public sealed class PlanDrag
             return null;
         }
 
+        if (forecast?.Status == TrainForecastStatus.NotRunning)
+        {
+            refusal = $"{name} is not running ({forecast.NotRunning}); choose Run anyway to retime it.";
+            return null;
+        }
+
         // The first point not yet reached, and the latest report.
         var next = 0;
         SimTime? latest = null;

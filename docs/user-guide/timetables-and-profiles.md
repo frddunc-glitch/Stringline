@@ -18,6 +18,22 @@ A timetable for a different sim gets a warning, with suggestions for the right o
 
 Each train in the sim is matched to its train in the WTT by its headcode and where and when it runs. A train that cannot be matched (an extra train added in the sim, say) is drawn in grey and shown in italics in the train list. To match it by hand, select it and choose **Plan ▸ Link selected live train to WTT train…** (or **Link…** in the train detail panel). See [Re-planning](re-planning.md#the-right-click-menu).
 
+### Trains that will not run
+
+When you start a sim at a time other than the timetable's start (14:00 on Penrith, say), SimSig does not run every train in the timetable. It leaves out:
+
+- trains that are not seeded and were booked to come in before the start: SimSig starts their **seeded** copies instead, already part-way through their run;
+- trains seeded for another start time (another *seed group* in SimSig's Loader);
+- trains formed from one of those (the next working of a train that never came in).
+
+Stringline works these out from the timetable and the time the sim started, and shows them as **Not running**: faint on the graph, in their own group at the foot of the train list, and counted apart in the Delays tab. They are not forecast, and make no conflicts or suggestions. The train detail says why ("seed group 04:00", "not seeded", "formed from 186K"). This is not an edit, so you do not need to cancel them.
+
+If you connect to a sim that has been running for a while (or load a saved game), Stringline cannot tell when it started, so it leaves out only trains seeded for another start time.
+
+If Stringline is wrong about a train, select it and press **Run anyway** in the train detail panel (or right-click it on the graph, or **Plan ▸ Run selected train anyway**). That is an edit: it can be undone, and it is saved with the session. A train that turns up in the sim always runs, whatever Stringline thought.
+
+A seeded train that has not been seen two minutes after the start is marked "not seen since the start" in its detail and hover. It may have been removed in the sim. It is still forecast.
+
 ## Profiles and corridors
 
 The first time you load a sim's timetable, Stringline works out its **corridors**: the routes through the sim that each make one graph, with their locations in order along them. Each corridor is a tab above the graph. The profile also holds:

@@ -27,6 +27,8 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         DataContext = viewModel;
         Graph.Attach(viewModel.MainBoard);
+        System.Windows.Data.CollectionViewSource.GetDefaultView(viewModel.Trains.Rows).GroupDescriptions.Add(
+            new System.Windows.Data.PropertyGroupDescription(nameof(TrainRowViewModel.Group)));
         viewModel.History.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(EditHistoryViewModel.Latest) && viewModel.History.Latest is { } latest)
