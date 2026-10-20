@@ -1778,6 +1778,47 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Next
 - S30 (or S31), then S32 and S33. S29 when the multiplayer recording exists.
 
+## 2026-10-20 — S30: Privacy policy and stored data (#14)
+
+### Done
+- **Fred's choices** (asked at the start): Forget saved password in **both** the Connect dialog and a new Options ▸ Connection tab; the uninstaller also removes the unpacked files in `%TEMP%\.net\Stringline` when asked to remove data.
+- **Audit** (written into the policy):
+  - roaming `%APPDATA%\Stringline`: `settings.json` (host, port, user name, the password only when remembered, DPAPI for the current user) and `profiles`;
+  - local `%LOCALAPPDATA%\Stringline`: `logs` and `help`; the single-file exe unpacks native libraries to `%TEMP%\.net\Stringline`;
+  - `Documents\Stringline`: sessions, recordings, exports;
+  - network: only `GatewayClient`'s `TcpClient` (and the developer `replay-server`'s listener). No telemetry, no update check; links open only when clicked;
+  - the passcode goes only in the STOMP CONNECT frame. The connection's log line has the user name and `passcode=***`. `.sslog` headers hold host, port and topics; sessions hold host and port.
+- **`PRIVACY.md`** at the root, copied to `docs/user-guide/privacy.md` (so the wiki gets it from the contents); linked from the README (new Privacy section), the guide's contents, connecting, settings and installing pages.
+- **App:**
+  - `AppSettingsStore.HasPassword`, `WithoutPassword` and `ForgetSavedPassword` (load, clear, save; writes nothing if there is nothing to forget);
+  - `MainViewModel.ForgetSavedPassword`, used by `ConnectViewModel.ForgetPasswordCommand` (clears the box too) and `SettingsViewModel.ForgetPasswordCommand` (OK afterwards does not bring it back);
+  - Connect dialog: the Remember tooltip says how it is stored, a Forget button and a Privacy link; Options ▸ Connection tab; About: a privacy line and link; Help ▸ Privacy (`OpenGuideCommand`, so it does not show F1);
+  - `HelpTopics.Privacy`; `Help.TopicFor` opens a topic the command names;
+  - `Stringline.exe --forget-password` on its own removes a saved password and exits, with no window or log.
+- **Installer:** `[UninstallRun]` runs `--forget-password` before the files go; after them, `/REMOVEUSERDATA` (or Yes to the question, default No) removes `%APPDATA%\Stringline`, `%LOCALAPPDATA%\Stringline` and `%TEMP%\.net\Stringline`. Documents is never touched. Compiled with ISCC here.
+- **`build/test-upgrade.ps1`:** after the upgrade checks, copies the user's data aside, uninstalls silently (settings kept, password gone, profiles and logs kept), reinstalls, uninstalls with `/REMOVEUSERDATA` (all gone, Documents untouched), and puts the data back in `finally`.
+- **Docs:** `02-…md` §5, `05-…md` (credentials, command line), the plan, `CLAUDE.md`, README, guide.
+- **Tests:** `PrivacyTests` (8, App): a connected, recorded session with Debug logging leaves the password in no file (UTF-8, UTF-16 or base64) and only in the CONNECT frame; unticking Remember and connecting forgets it; Forget in the Connect dialog (cancelled) and in Options (OK and Cancel); the uninstaller's forget; the policy is the guide's copy, embedded, in the contents and the README; the Help, About, Connect and Options links open `privacy.html`.
+- Totals: 1 624 (Core 263, Architecture 14, Gateway 211, Timetable 166, Network 161, Planning 238, Persistence 12, Graph 271, Optimiser 22, Tools 71, App 195). Green on Windows (Debug). Linux not run; nothing portable changed.
+
+### Decisions
+- **Forget acts at once**, not on OK: the plan asked for that, and it means Cancel cannot leave the password behind.
+- **The uninstaller asks the app to forget** (`--forget-password`) rather than editing the JSON in Pascal, so the tested C# code does it.
+- **The guide's page is an exact copy** of `PRIVACY.md`, with only absolute links, and a test keeps them equal.
+- **The user name is logged** with each connection, as before; the policy says so.
+
+### Next
+- S31 (forecast dash-dot, Q17 sim names), then S32 and S33.
+- Perhaps: `guide-shots.ps1` again for the Options picture (it now has a Connection tab).
+
+### Known issues
+- **`test-upgrade.ps1` was not run here**: Fred's all-users 0.3.0 install was in place, and Fred chose to leave it, so the Release workflow is its first run. The `.iss` compiles and the script parses.
+- 👤 Fred: try Forget in both places, Help ▸ Privacy, and an uninstall answering Yes and No.
+- The guide's Options picture does not show the new Connection tab yet.
+
+### Questions for Fred
+- 27. **Privacy wording.** Is `PRIVACY.md` what you want people to read? In particular the note that a multiplayer login crosses the network unencrypted (SimSig's gateway has no TLS).
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
@@ -1813,4 +1854,4 @@ New from S18:
 13. ~~**Code signing:** unsigned downloads get a SmartScreen warning. Is that acceptable for now, or should releases be signed (a certificate costs money; SignPath offers free signing for open-source projects)?~~ Signtool + PFX built in S22; SignPath once downloads grow (Fred, #1).
 14. ~~Does the README's "Turn on the Interface Gateway" step match what SimSig's Loader calls it now?~~ Matches (Fred, 2026-10-20).
 
-Since S22 the questions are numbered in each session's notes (15–26); see "Open-question review" above for which are still open.
+Since S22 the questions are numbered in each session's notes (15–27); see "Open-question review" above for which are still open.

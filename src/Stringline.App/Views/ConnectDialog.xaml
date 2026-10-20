@@ -49,9 +49,20 @@
     <Label Grid.Row="4" Content="Pass_word" Target="{Binding ElementName=PasswordBox}" />
     <PasswordBox Grid.Row="4" Grid.Column="1" x:Name="PasswordBox" Margin="0,3" Padding="2" PasswordChanged="OnPasswordChanged" />
 
-    <CheckBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" IsChecked="{Binding RememberPassword}">
-      <TextBlock Text="Remember the password (encrypted for your Windows account)" TextWrapping="Wrap" />
-    </CheckBox>
+    <!-- S30 (#14): how the password is kept, Forget, and the privacy policy -->
+    <StackPanel Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4">
+      <CheckBox x:Name="RememberBox" IsChecked="{Binding RememberPassword}"
+                ToolTip="Saved in settings.json in %APPDATA%\Stringline, encrypted with Windows (DPAPI) so that only your Windows account on this PC can read it. Untick this and connect, or press Forget saved password, to remove it.">
+        <TextBlock Text="Remember the password (encrypted for your Windows account)" TextWrapping="Wrap" />
+      </CheckBox>
+      <StackPanel Orientation="Horizontal" Margin="18,4,0,0">
+        <Button x:Name="ForgetButton" Content="_Forget saved password" Padding="8,1" Command="{Binding ForgetPasswordCommand}"
+                ToolTip="Remove the saved password from this PC now, even if you then cancel." />
+        <TextBlock Margin="10,0,0,0" VerticalAlignment="Center">
+          <Hyperlink x:Name="PrivacyLink" Command="ApplicationCommands.Help" CommandParameter="{x:Static services:HelpTopics.Privacy}">Privacy</Hyperlink>
+        </TextBlock>
+      </StackPanel>
+    </StackPanel>
     <CheckBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" IsChecked="{Binding SubscribeTd}">
       <TextBlock Text="Also subscribe to train describer and signalling messages" TextWrapping="Wrap" />
     </CheckBox>

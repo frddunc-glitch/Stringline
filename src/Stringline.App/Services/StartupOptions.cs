@@ -11,6 +11,12 @@ internal sealed record StartupOptions(string? Timetable, string? Replay, double 
 {
     public static StartupOptions None { get; } = new(null, null, 8, null);
 
+    /// <summary>
+    /// <c>Stringline.exe --forget-password</c>, on its own: remove a saved SimSig password and exit at once, without
+    /// showing a window (S30). The uninstaller runs it.
+    /// </summary>
+    public const string ForgetPassword = "--forget-password";
+
     /// <returns>The options, or an error message for the user.</returns>
     public static (StartupOptions Options, string? Error) Parse(IReadOnlyList<string> args)
     {

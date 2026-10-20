@@ -300,6 +300,7 @@ Fred went through the open questions on 2026-10-20 (answers in `progress.md`, "O
 - **Uninstall.** The installer asks whether to remove settings, profiles and logs (default: keep), and always removes the saved password. Sessions in Documents are never removed. `build/test-upgrade.ps1` checks both answers silently (`/REMOVEUSERDATA` or a similar switch).
 - **Tests:** settings round trip and Forget; no password in logs, sessions or recordings; the guide's privacy page is embedded and linked; the installer's uninstall paths (`test-upgrade.ps1`).
 - Close #14 with `Fixes #14`.
+- *Built in S30:* Fred chose Forget in both the Connect dialog and a new Options ▸ Connection tab, and the uninstaller removes the unpacked files in `%TEMP%\.net\Stringline` too when asked. `test-upgrade.ps1` checks both uninstall answers (copying the user's real data aside first); it was not run locally because Fred's all-users 0.3.0 install was there, so the Release workflow is its first run.
 
 ### S31 — Small fixes from the review (Q10, Q17)
 - **Q10: forecast dash-dot (Fred).** The forecast layer (`GraphTheme.Forecast`, the renderer's 6–4 dash) becomes **dash-dot** at its current weight, so it is never mistaken for a category's dashed (12–7) or dotted style.

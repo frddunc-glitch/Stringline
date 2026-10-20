@@ -21,6 +21,8 @@ Enter your **SimSig forum username** and **password**: SimSig checks them online
 - The username is always remembered.
 - Tick **Remember the password (encrypted for your Windows account)** to keep the password too. It is encrypted so that only your Windows account can read it.
 - Stringline never writes your password to its logs, recordings or sessions.
+- **Forget saved password**, under the box, removes a saved password straight away, even if you then press Cancel. Tools ▸ Options ▸ Connection has the same button. Unticking the box and connecting removes it too.
+- **Privacy**, beside it, opens [what Stringline stores and sends](privacy.md).
 
 If SimSig does not accept the login, the status bar says **SimSig refused the connection**, and Stringline does not try again, so that the forum login is not hammered. Correct the details and connect again.
 

@@ -239,7 +239,8 @@ internal sealed class TestApp : IAsyncDisposable
     /// <param name="root">Another app's folder, to start the app again over its files (S16: resume); that app cleans it up.</param>
     /// <param name="logging">The app's log level control, as the app passes it; none by default.</param>
     /// <param name="wpf">Run the UI thread as a WPF dispatcher, to show the main window (#2, #9).</param>
-    public TestApp(Func<AppSettings, AppSettings>? settings = null, string? root = null, AppLogging? logging = null, bool wpf = false)
+    /// <param name="loggerFactory">Where the app's log lines go (S30: a real log, to search); nowhere by default.</param>
+    public TestApp(Func<AppSettings, AppSettings>? settings = null, string? root = null, AppLogging? logging = null, bool wpf = false, Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
     {
         Ui = new TestUiThread(wpf);
         _ownsRoot = root is null;
@@ -264,7 +265,7 @@ internal sealed class TestApp : IAsyncDisposable
             Ui,
             Paths,
             TimeProvider.System,
-            NullLoggerFactory.Instance,
+            loggerFactory ?? NullLoggerFactory.Instance,
             logging)).GetAwaiter().GetResult();
     }
 

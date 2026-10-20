@@ -20,7 +20,7 @@ The downloads are not yet code-signed, so Windows shows "Unknown publisher" and 
 
 To update, run the new version's installer. It updates Stringline where it is installed, closing it first if it is running (from 0.1.1 Stringline saves its session as it closes), and keeps your settings, profiles and sessions.
 
-Uninstalling leaves your settings, profiles, sessions and logs in place (see [Where your files are kept](#where-your-files-are-kept)). Delete those folders by hand if you want them gone too.
+Uninstalling always removes a saved SimSig password, and asks whether to remove your settings, profiles and logs too (No unless you choose Yes; a silent uninstall needs `/REMOVEUSERDATA`). Sessions, recordings and exports in Documents are never removed (see [Where your files are kept](#where-your-files-are-kept)).
 
 ## Getting started
 
@@ -49,7 +49,7 @@ The **[user guide](docs/user-guide/README.md)** covers everything below in more 
 
 ## Options
 
-**Tools ▸ Options…** (Ctrl+,) has five tabs:
+**Tools ▸ Options…** (Ctrl+,) has six tabs:
 
 - **Forecast and conflicts:**
   - knock-on delay from other trains;
@@ -60,6 +60,7 @@ The **[user guide](docs/user-guide/README.md)** covers everything below in more 
 - **Suggestions:** whether suggestions may terminate short or cancel a train, what each kind of re-plan costs when suggestions are ranked, and how Plan ▸ Re-plan works (the optimiser or the suggestion rules, platform changes, how far ahead, how long it may think).
 - **Folders:** where to look for timetables, and where sessions, recordings and exports go.
 - **Logging and housekeeping:** detailed (Debug) logging, how many days of logs to keep, and deleting saved sessions after a number of days (off unless you turn it on; the newest is always kept).
+- **Connection:** whether a SimSig password is saved, and **Forget saved password**.
 - **Display:** the size of the sim clock at the top right (Normal, Large or Huge).
 
 Connection details are in the Connect dialog. The graph's colours, layers and orientation are in the View menu, and the corridor shown in the Corridor menu. Stringline remembers all of them.
@@ -76,6 +77,10 @@ Connection details are in the Connect dialog. The graph's colours, layers and or
 | Exports | `Documents\Stringline\exports` |
 
 The last three can be moved in Tools ▸ Options ▸ Folders.
+
+## Privacy
+
+Stringline sends nothing anywhere except to the SimSig gateway you connect to: no telemetry, no update check. Your SimSig password is stored only if you tick **Remember the password**, encrypted with Windows (DPAPI) for your account, and never written to logs, sessions or recordings. [`PRIVACY.md`](PRIVACY.md) says what is stored, where, and how to remove it all (also **Help ▸ Privacy** in the app).
 
 ## Troubleshooting
 

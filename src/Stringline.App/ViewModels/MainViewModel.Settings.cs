@@ -24,12 +24,29 @@ internal sealed partial class MainViewModel
     [RelayCommand]
     private void ShowSettings()
     {
-        var dialog = new SettingsViewModel(CurrentSettings, _defaultPaths, _dialogs);
+        var dialog = new SettingsViewModel(CurrentSettings, _defaultPaths, _dialogs) { ForgetSavedPassword = ForgetSavedPassword };
         if (_dialogs.ShowSettings(dialog) && dialog.Result is { } result)
         {
             ApplySettings(result);
         }
     }
+
+    /// <summary>True while a SimSig password is saved in the settings.</summary>
+    public bool HasSavedPassword => AppSettingsStore.HasPassword(_settings);
+
+    /// <summary>
+    /// Forget saved password (S30; the Connect dialog and Tools ▸ Options ▸ Connection): the saved password goes from
+    /// the settings file at once and Remember is unticked. The connection in use, if any, carries on.
+    /// </summary>
+    public void ForgetSavedPassword()
+    {
+        _settings = AppSettingsStore.WithoutPassword(_settings);
+        _settingsStore.Save(_settings);
+        LogPasswordForgotten();
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Saved SimSig password forgotten")]
+    private partial void LogPasswordForgotten();
 
     /// <summary>The setup guide: the README on GitHub.</summary>
     [RelayCommand]

@@ -14,6 +14,7 @@ public partial class ConnectDialog : Window
         _viewModel = viewModel;
         DataContext = viewModel;
         PasswordBox.Password = viewModel.Password;
+        viewModel.PasswordForgotten += (_, _) => PasswordBox.Clear();
     }
 
     private void OnPasswordChanged(object sender, RoutedEventArgs e) => _viewModel.Password = PasswordBox.Password;

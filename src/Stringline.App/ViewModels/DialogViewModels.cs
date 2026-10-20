@@ -40,6 +40,17 @@ internal sealed partial class ConnectViewModel(IDialogService dialogs) : Observa
     [ObservableProperty]
     public partial bool RememberPassword { get; set; }
 
+    /// <summary>True while a password is saved in the settings, so Forget saved password has something to do.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ForgetPasswordCommand))]
+    public partial bool HasSavedPassword { get; set; }
+
+    /// <summary>Removes the saved password from the settings at once (S30); set by the main view model.</summary>
+    public Action? ForgetSavedPassword { get; init; }
+
+    /// <summary>Raised when the password is forgotten, so the dialog empties its password box.</summary>
+    public event EventHandler? PasswordForgotten;
+
     [ObservableProperty]
     public partial bool SubscribeTd { get; set; }
 
@@ -76,6 +87,20 @@ internal sealed partial class ConnectViewModel(IDialogService dialogs) : Observa
         Passcode = string.IsNullOrEmpty(Password) ? null : Password,
         Topics = SubscribeTd ? GatewayTopics.WithTrainDescriber : GatewayTopics.Default,
     };
+
+    /// <summary>
+    /// Forget saved password (S30): the settings lose the password straight away, whether the dialog is then used to
+    /// connect or cancelled, and Remember is unticked.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasSavedPassword))]
+    private void ForgetPassword()
+    {
+        ForgetSavedPassword?.Invoke();
+        Password = string.Empty;
+        RememberPassword = false;
+        HasSavedPassword = false;
+        PasswordForgotten?.Invoke(this, EventArgs.Empty);
+    }
 
     [RelayCommand]
     private void BrowseTimetable()

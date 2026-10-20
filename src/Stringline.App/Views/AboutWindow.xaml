@@ -1,6 +1,7 @@
 <Window x:Class="Stringline.App.Views.AboutWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:services="clr-namespace:Stringline.App.Services"
         Title="About Stringline" Width="560" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False" UseLayoutRounding="True">
   <Window.Resources>
@@ -39,6 +40,10 @@
       <TextBlock Margin="0,4,0,0">
         <Run Text="Source code:" />
         <Hyperlink x:Name="SourceLink" RequestNavigate="OnNavigate"><Run x:Name="SourceText" /></Hyperlink>
+      </TextBlock>
+      <TextBlock Margin="0,4,0,0">
+        <Run Text="Privacy: Stringline sends nothing anywhere except to the SimSig gateway you connect to." />
+        <Hyperlink x:Name="PrivacyLink" Command="ApplicationCommands.Help" CommandParameter="{x:Static services:HelpTopics.Privacy}"><Run Text="What it stores" /></Hyperlink>
       </TextBlock>
 
       <TextBlock Text="Built with" FontWeight="SemiBold" Margin="0,14,0,4" />

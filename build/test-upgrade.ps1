@@ -8,11 +8,14 @@
       - the upgrade closes the running app, which stops and saves its session first (apps from 0.1.1 on);
       - the files, the version in the Apps list and the install folder are the new ones, with one uninstall entry;
       - a silent older setup refuses to downgrade unless given /ALLOWDOWNGRADE (setups from 0.1.1 on);
-      - the uninstaller removes the program and its entry.
+      - the uninstaller removes the program and its entry;
+      - a silent uninstall keeps the settings, profiles and logs but removes a saved password (S30), and one given
+        /REMOVEUSERDATA removes them, but never Documents\Stringline.
 
     It installs for the current user, so it refuses to run where Stringline is already installed (unless -Force,
-    which replaces that install and then uninstalls it). Your settings, profiles and logs are left alone, but the
-    replay adds a session to your sessions folder. The Release workflow runs it on each release.
+    which replaces that install and then uninstalls it). Your settings, profiles and logs are copied aside before the
+    uninstall checks and put back afterwards, but the replay adds a session to your sessions folder. The Release
+    workflow runs it on each release.
 
 .EXAMPLE
     ./build/test-upgrade.ps1                                   # builds 0.0.1 and 0.0.2 setups, then tests them
@@ -38,6 +41,12 @@ $key = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6E0B7C2A-5F1D-4C8E-
 $userKey = "HKCU:\$key"
 $machineKey = "HKLM:\$key"
 $appLog = Join-Path $env:LOCALAPPDATA 'Stringline\logs'
+$roaming = Join-Path $env:APPDATA 'Stringline'
+$local = Join-Path $env:LOCALAPPDATA 'Stringline'
+$unpacked = Join-Path $env:TEMP '.net\Stringline'
+$documents = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Stringline'
+$backup = Join-Path $out 'userdata-backup'
+$backedUp = $false
 $failures = [Collections.Generic.List[string]]::new()
 
 function Check([bool] $ok, [string] $what) {
@@ -58,6 +67,45 @@ function ExeVersion([string] $folder) {
 }
 
 function SetupVersion([string] $exe) { ((Get-Item $exe).VersionInfo.ProductVersion -split '\+')[0].Trim() }
+
+# Uninstalls silently and waits for it to finish: the uninstaller hands over to a copy of itself in %TEMP% and returns
+# at once, and that copy removes the user's data (when asked) after the program and its entry.
+function Uninstall([string[]] $more = @(), [scriptblock] $done = { $true }) {
+    $uninstaller = (Installed).UninstallString.Trim('"')
+    Start-Process $uninstaller -ArgumentList (@('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') + $more) -Wait
+    $deadline = (Get-Date).AddSeconds(60)
+    while (((Installed) -or (Test-Path (Join-Path $folder 'Stringline.exe')) -or -not (& $done)) -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 500
+    }
+}
+
+# The settings as a hashtable, or null.
+function SavedSettings {
+    $file = Join-Path $roaming 'settings.json'
+    if (Test-Path $file) { Get-Content -Raw $file | ConvertFrom-Json -AsHashtable }
+}
+
+# Copies the user's real settings, profiles and logs aside, for Restore-UserData to put back.
+function Backup-UserData {
+    if (Test-Path $backup) { Remove-Item -Recurse -Force $backup }
+    New-Item -ItemType Directory -Force $backup | Out-Null
+    foreach ($pair in @(@{ From = $roaming; To = 'roaming' }, @{ From = $local; To = 'local' })) {
+        if (Test-Path $pair.From) { Copy-Item -Recurse $pair.From (Join-Path $backup $pair.To) }
+    }
+    $script:backedUp = $true
+}
+
+function Restore-UserData {
+    if (-not $script:backedUp) { return }
+    foreach ($pair in @(@{ To = $roaming; From = 'roaming' }, @{ To = $local; From = 'local' })) {
+        if (Test-Path $pair.To) { Remove-Item -Recurse -Force $pair.To }
+        $saved = Join-Path $backup $pair.From
+        if (Test-Path $saved) { Copy-Item -Recurse $saved $pair.To }
+    }
+    Remove-Item -Recurse -Force $backup
+    $script:backedUp = $false
+    Write-Host 'Your settings, profiles and logs are back as they were.'
+}
 
 # The app's log lines since a time.
 function AppLogSince([datetime] $since) {
@@ -141,17 +189,35 @@ try {
         Check ((Setup $New 'upgrade-again') -eq 0) "and updates to $newVersion again"
     }
 
-    Write-Host 'Uninstall'
-    $uninstaller = (Installed).UninstallString.Trim('"')
-    Start-Process $uninstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
-    # The uninstaller hands over to a copy of itself in %TEMP% and returns at once.
-    $deadline = (Get-Date).AddSeconds(60)
-    while (((Installed) -or (Test-Path (Join-Path $folder 'Stringline.exe'))) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    Write-Host 'Uninstall silently, keeping the settings (S30)'
+    Backup-UserData
+    # Settings with a saved password, a profile and a log, to see which the uninstaller keeps.
+    New-Item -ItemType Directory -Force (Join-Path $roaming 'profiles'), $appLog | Out-Null
+    @{ host = 'upgrade-test'; port = 51515; userName = 'tester'; rememberPassword = $true; protectedPassword = 'bm90IGEgcmVhbCBwYXNzd29yZA==' } |
+        ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $roaming 'settings.json')
+    Set-Content (Join-Path $roaming 'profiles\upgrade-test.json') '{}'
+    $documentsBefore = Test-Path $documents
+    Uninstall
     Check (-not (Installed)) 'the uninstall entry is gone'
     Check (-not (Test-Path (Join-Path $folder 'Stringline.exe'))) 'Stringline.exe is gone'
+    $kept = SavedSettings
+    Check ($kept -and $kept.host -eq 'upgrade-test' -and $kept.userName -eq 'tester') 'the settings are kept'
+    Check ($kept -and -not $kept.protectedPassword -and -not $kept.rememberPassword) 'the saved password is removed'
+    Check (Test-Path (Join-Path $roaming 'profiles\upgrade-test.json')) 'the profiles are kept'
     Check (Test-Path $appLog) 'the logs are kept'
+
+    Write-Host 'Install again, and uninstall with /REMOVEUSERDATA'
+    Check ((Setup $New 'reinstall') -eq 0) 'setup succeeds'
+    $folder = (Installed).InstallLocation
+    Uninstall @('/REMOVEUSERDATA') { -not (Test-Path $roaming) -and -not (Test-Path $local) }
+    Check (-not (Installed)) 'the uninstall entry is gone'
+    Check (-not (Test-Path $roaming)) 'the settings and profiles are removed'
+    Check (-not (Test-Path $local)) 'the logs and help pages are removed'
+    Check (-not (Test-Path $unpacked)) 'the unpacked files are removed'
+    Check ((Test-Path $documents) -eq $documentsBefore) 'Documents\Stringline is left alone'
 }
 finally {
+    Restore-UserData
     Get-Process Stringline -ErrorAction SilentlyContinue | Where-Object { $folder -and $_.Path -like "$folder*" } | Stop-Process -Force
     Pop-Location
 }

@@ -411,6 +411,8 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             UserName = _settings.UserName ?? string.Empty,
             Password = _settingsStore.PasswordOf(_settings) ?? string.Empty,
             RememberPassword = _settings.RememberPassword,
+            HasSavedPassword = AppSettingsStore.HasPassword(_settings),
+            ForgetSavedPassword = ForgetSavedPassword,
             SubscribeTd = _settings.SubscribeTd,
             TimetablePath = _timetable?.Path ?? _settings.LastTimetablePath ?? string.Empty,
         };

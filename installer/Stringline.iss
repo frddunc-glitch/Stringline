@@ -2,7 +2,13 @@
 ;   ISCC /DAppVersion=0.1.0 /DAppNumericVersion=0.1.0 /DSourceDir=<publish folder> /DOutputDir=<folder> installer/Stringline.iss
 ; With a certificate it also passes /DSign and /Sstringline=... so the installer and uninstaller are signed.
 ; It installs the single-file Stringline.exe with its licence and notices, for the current user by default (no admin
-; prompt) or for all users. Uninstalling leaves settings, profiles, sessions and logs in place.
+; prompt) or for all users.
+;
+; Uninstalling (S30, #14) always removes a saved SimSig password (Stringline.exe --forget-password), then asks whether to
+; remove the settings, profiles, logs, help pages and unpacked files too (default No). A silent uninstall keeps them
+; unless given /REMOVEUSERDATA:
+;   unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /REMOVEUSERDATA
+; Sessions, recordings and exports in Documents\Stringline are the user's own files and are never removed.
 ;
 ; Updating: running a newer setup over an installed Stringline upgrades it in place. Setup finds the install by AppId,
 ; keeps its folder and per-user or all-users mode, closes a running Stringline through the Restart Manager (the app
@@ -89,6 +95,10 @@ Name: "{autodesktop}\Stringline"; Filename: "{app}\Stringline.exe"; Tasks: deskt
 [Run]
 Filename: "{app}\Stringline.exe"; Description: "{cm:LaunchProgram,Stringline}"; Flags: nowait postinstall skipifsilent
 
+[UninstallRun]
+; Before the files go: the app removes a saved password from its settings, leaving the rest (PRIVACY.md).
+Filename: "{app}\Stringline.exe"; Parameters: "--forget-password"; Flags: runhidden waituntilterminated; RunOnceId: "ForgetPassword"
+
 [Code]
 const
   UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{{#AppId}}_is1';
@@ -173,4 +183,35 @@ begin
     mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES;
   if not Result then
     Log('Not installing the older version.');
+end;
+
+// The user's own data that the uninstaller may remove (PRIVACY.md); never Documents\Stringline.
+procedure RemoveUserData();
+begin
+  Log('Removing Stringline''s settings, profiles, logs, help pages and unpacked files.');
+  DelTree(ExpandConstant('{userappdata}\Stringline'), True, True, True);
+  DelTree(ExpandConstant('{localappdata}\Stringline'), True, True, True);
+  DelTree(ExpandConstant('{%TEMP}\.net\Stringline'), True, True, True);
+end;
+
+// After the program has gone: remove the user's data if asked (/REMOVEUSERDATA, or Yes to the question).
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Remove: Boolean;
+begin
+  if CurUninstallStep <> usPostUninstall then
+    Exit;
+  if HasSwitch('/REMOVEUSERDATA') then
+    Remove := True
+  else if UninstallSilent then
+    Remove := False
+  else
+    Remove := MsgBox('Also remove your Stringline settings, sim profiles and logs?'#13#10#13#10 +
+      'Your saved SimSig password has been removed already. Choose No to keep the rest for when you install ' +
+      'Stringline again. Your sessions, recordings and exports in Documents\Stringline are kept either way.',
+      mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
+  if Remove then
+    RemoveUserData()
+  else
+    Log('Keeping Stringline''s settings, profiles and logs.');
 end;

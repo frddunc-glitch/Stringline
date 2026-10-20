@@ -32,7 +32,7 @@ For the portable version, close Stringline and unzip the new version in place of
 
 ## Uninstalling
 
-Use **Settings ▸ Apps** in Windows (or delete the portable folder). Uninstalling leaves your own files in place:
+Use **Settings ▸ Apps** in Windows (or delete the portable folder). The uninstaller always removes a saved SimSig password. It then asks whether to remove your settings, profiles, logs and the guide's pages too; the answer is **No** unless you choose Yes. A silent uninstall (`/VERYSILENT`) keeps them unless it is also given `/REMOVEUSERDATA`. Your sessions, recordings and exports in Documents are never removed.
 
 | What | Where |
 |---|---|
@@ -44,6 +44,6 @@ Use **Settings ▸ Apps** in Windows (or delete the portable folder). Uninstalli
 | Recordings | `Documents\Stringline\recordings` |
 | Exports | `Documents\Stringline\exports` |
 
-Delete those folders by hand if you want them gone too. The last three can be moved in [Tools ▸ Options ▸ Folders](settings.md#folders).
+Delete those folders by hand if you want them gone too ([Privacy](privacy.md#how-to-remove-everything) lists them all). The last three can be moved in [Tools ▸ Options ▸ Folders](settings.md#folders).
 
 Next: [turn on the Interface Gateway](gateway.md).

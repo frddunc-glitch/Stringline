@@ -218,6 +218,24 @@
         </StackPanel>
       </TabItem>
 
+      <!-- Connection (S30, #14): only the saved password; the rest is in the Connect dialog -->
+      <TabItem Header="Connection">
+        <StackPanel Margin="10">
+          <TextBlock Style="{StaticResource Intro}"
+                     Text="Where SimSig is, and your login for payware sims, are set in Session ▸ Connect to SimSig." />
+          <TextBlock x:Name="SavedPassword" Text="{Binding SavedPasswordText}" TextWrapping="Wrap" />
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button x:Name="ForgetButton" Content="_Forget saved password" Command="{Binding ForgetPasswordCommand}"
+                    ToolTip="Remove the saved password from this PC now, even if you then cancel." />
+          </StackPanel>
+          <TextBlock Style="{StaticResource Hint}" Text="{Binding Defaults.Settings, StringFormat='Kept in {0}'}" Margin="0,6,0,6" />
+          <TextBlock>
+            <Run Text="Stringline sends nothing anywhere except to the SimSig gateway you connect to." />
+            <Hyperlink x:Name="PrivacyLink" Command="ApplicationCommands.Help" CommandParameter="{x:Static services:HelpTopics.Privacy}">Privacy</Hyperlink>
+          </TextBlock>
+        </StackPanel>
+      </TabItem>
+
       <!-- Display (#13) -->
       <TabItem Header="Display">
         <StackPanel Margin="10">

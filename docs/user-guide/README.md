@@ -36,6 +36,7 @@ In the app, **Help ▸ User guide** opens this guide, and **F1** opens the page 
 15. [Glossary](glossary.md)
 16. [Keyboard and mouse](keyboard-and-mouse.md)
 17. [Further reading](further-reading.md)
+18. [Privacy](privacy.md): what Stringline stores, what it sends, and how to remove it
 
 ## Five-minute start
 

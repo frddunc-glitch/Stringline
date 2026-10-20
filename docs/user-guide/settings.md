@@ -1,6 +1,6 @@
 # Settings
 
-**Tools ▸ Options…** (Ctrl+,) has Stringline's settings, in five tabs. Durations can be typed as `m:ss` (`2:30`), minutes (`2.5`) or seconds (`90s`). **OK** checks them all and keeps the window open, with the reason, until they pass; **Cancel** changes nothing; **Restore defaults** puts every box back as it came.
+**Tools ▸ Options…** (Ctrl+,) has Stringline's settings, in six tabs. Durations can be typed as `m:ss` (`2:30`), minutes (`2.5`) or seconds (`90s`). **OK** checks them all and keeps the window open, with the reason, until they pass; **Cancel** changes nothing; **Restore defaults** puts every box back as it came.
 
 ![The Options window](images/options.png)
 
@@ -39,6 +39,10 @@ Where Stringline looks for timetables (SimSig's Timetables folder unless you cha
 - **Keep logs for** a number of days (14 unless you change it), from the next start.
 - **Open log folder**.
 - **Delete saved sessions last saved more than** a number of days ago: off unless you turn it on. Old sessions are deleted when Stringline starts, but never the newest one, so it can still be resumed. Turning it on asks before deleting any.
+
+## Connection
+
+Whether a SimSig password is saved, and **Forget saved password**, which removes it at once (OK or Cancel afterwards makes no difference). The host, port and login are in the [Connect dialog](connecting.md). **Privacy** opens [what Stringline stores and sends](privacy.md).
 
 ## Display
 

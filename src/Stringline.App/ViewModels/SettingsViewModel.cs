@@ -12,11 +12,11 @@ namespace Stringline.App.ViewModels;
 /// The settings window (S18): forecast and conflicts, suggestions, folders, logging and housekeeping, and display. The values
 /// are edited as text and checked together when OK is pressed (<see cref="TryAccept"/>); the window stays open showing
 /// what is wrong until they pass, and then <see cref="Result"/> holds the new settings. Connection details stay in the
-/// Connect dialog, and the view options in the View menu.
+/// Connect dialog (the Connection tab only forgets a saved password, S30), and the view options in the View menu.
 /// </summary>
 internal sealed partial class SettingsViewModel : ObservableObject
 {
-    private readonly AppSettings _original;
+    private AppSettings _original;
     private readonly IDialogService _dialogs;
 
     /// <param name="settings">The settings now, with the view's own values (knock-on, cancellations) up to date.</param>
@@ -28,8 +28,22 @@ internal sealed partial class SettingsViewModel : ObservableObject
         _original = settings;
         _dialogs = dialogs;
         Defaults = defaults;
+        HasSavedPassword = AppSettingsStore.HasPassword(settings);
         Show(settings);
     }
+
+    /// <summary>Removes the saved password from the settings at once (S30); set by the main view model.</summary>
+    public Action? ForgetSavedPassword { get; init; }
+
+    // Connection (S30).
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ForgetPasswordCommand))]
+    [NotifyPropertyChangedFor(nameof(SavedPasswordText))]
+    public partial bool HasSavedPassword { get; private set; }
+
+    public string SavedPasswordText => HasSavedPassword
+        ? "A SimSig password is saved, encrypted with Windows (DPAPI) so that only your Windows account on this PC can read it."
+        : "No SimSig password is saved. Tick \"Remember the password\" when you connect to save one.";
 
     /// <summary>The folders used when a box is left blank, shown as hints.</summary>
     public AppPaths Defaults { get; }
@@ -198,6 +212,18 @@ internal sealed partial class SettingsViewModel : ObservableObject
                 ExportsFolder = folder;
                 break;
         }
+    }
+
+    /// <summary>
+    /// Forget saved password (S30): the settings lose it straight away, whether the window then closes with OK or
+    /// Cancel, and OK does not bring it back.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasSavedPassword))]
+    private void ForgetPassword()
+    {
+        ForgetSavedPassword?.Invoke();
+        _original = AppSettingsStore.WithoutPassword(_original);
+        HasSavedPassword = false;
     }
 
     /// <summary>Opens the log folder in Explorer.</summary>

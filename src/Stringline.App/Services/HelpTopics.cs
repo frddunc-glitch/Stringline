@@ -35,7 +35,10 @@ internal static class HelpTopics
 
     public const string Disruptions = "disruptions-and-notes.md";
 
+    /// <summary>The privacy policy (S30, #14), a copy of <c>PRIVACY.md</c>; Help ▸ Privacy, About and the Connect dialog link to it.</summary>
+    public const string Privacy = "privacy.md";
+
     /// <summary>Every topic, for the test that each page and heading is there.</summary>
     public static IReadOnlyList<string> All { get; } =
-        [Contents, Graph, TrainList, Boards, TrainDetail, Conflicts, Regulation, Delays, History, Replay, Connect, Options, ProfileEditor, Disruptions];
+        [Contents, Graph, TrainList, Boards, TrainDetail, Conflicts, Regulation, Delays, History, Replay, Connect, Options, ProfileEditor, Disruptions, Privacy];
 }

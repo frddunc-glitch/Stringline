@@ -207,6 +207,8 @@
           <MenuItem Header="_User guide" InputGestureText="F1" Command="ApplicationCommands.Help" CommandParameter="contents" />
           <MenuItem Header="_Getting started (online)" Command="{Binding OpenHelpCommand}" />
           <MenuItem Header="Open _log folder" Command="{Binding OpenLogFolderCommand}" />
+          <!-- The privacy policy (S30, #14): the guide's copy of PRIVACY.md -->
+          <MenuItem Header="_Privacy" Command="{Binding OpenGuideCommand}" CommandParameter="{x:Static services:HelpTopics.Privacy}" />
           <Separator />
           <MenuItem Header="_About Stringline" Command="{x:Static local:MainWindow.AboutCommand}" />
         </MenuItem>
