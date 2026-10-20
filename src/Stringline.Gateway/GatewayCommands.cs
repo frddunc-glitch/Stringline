@@ -72,11 +72,18 @@ public static class GatewayCommands
         return new GatewayCommand(topic, buffer.WrittenMemory.ToArray());
     }
 
+    /// <summary>
+    /// True if <paramref name="value"/> can be sent as a SimSig object ID or description: a short code of up to
+    /// 32 characters, with no whitespace or control characters. The builders refuse anything else.
+    /// </summary>
+    public static bool IsValidId([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] string? value) =>
+        !string.IsNullOrEmpty(value) && value.Length <= 32 && !value.Any(c => char.IsWhiteSpace(c) || char.IsControl(c));
+
     /// <summary>SimSig object IDs and descriptions are short codes: no whitespace, no control characters.</summary>
     private static string Id(string value, [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(value))] string? name = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, name);
-        if (value.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)) || value.Length > 32)
+        if (!IsValidId(value))
         {
             throw new ArgumentException($"\"{value}\" is not a valid SimSig identifier.", name);
         }

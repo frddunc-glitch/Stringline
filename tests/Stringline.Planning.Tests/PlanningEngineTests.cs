@@ -141,11 +141,41 @@ public sealed class PlanningEngineTests
         await RunUntil(engine, s => s.Trains.Count == 1, () =>
         {
             engine.Post(new UnknownEvent(T0, "/topic/x", "odd", "{}", "test"));
-            engine.Post(new SignallingStateEvent(T0, "test", SignallingObjectType.Signal, "signal", "S1", null, new Dictionary<string, string>()));
+            engine.Post(new SignallingStateEvent(T0, "test", SignallingObjectType.Track, "track", "T1", null, new Dictionary<string, string>()));
             engine.Post(Departures[1]);
         });
 
         published.Should().Be(1, "only the movement changed anything");
+    }
+
+    [Fact]
+    public async Task Publishes_the_signalling_names_seen_and_keeps_them_through_a_rewind()
+    {
+        var engine = Engine();
+        var named = await RunUntil(engine, s => s.Signalling.Berths.Count == 1, () =>
+        {
+            engine.Post(Signalling(SignallingObjectType.Route, "RWL1A"));
+            engine.Post(Signalling(SignallingObjectType.Signal, "SWL1"));
+            engine.Post(new TdStepEvent(T0, TdStepKind.Interpose, "test", string.Empty, "0123", "1A01", null));
+        });
+
+        named.Signalling.Routes.Should().Equal("RWL1A");
+        named.Signalling.Signals.Should().Equal("SWL1");
+        named.Signalling.Descriptions.Should().Contain("0123", "1A01");
+        named.Trains.Should().BeEmpty("a name alone is no train");
+
+        var rewound = await RunUntil(engine, s => s.Trains.Count == 1, () =>
+        {
+            engine.Post(new ReplayRewoundEvent(T0, SimTime.Parse("06:00")));
+            engine.Post(Departures[1]);
+        });
+        rewound.Signalling.Should().BeSameAs(named.Signalling, "names are not state");
+
+        var cleared = await RunUntil(engine, s => s.Trains.Count == 0, engine.Clear);
+        cleared.Signalling.IsEmpty.Should().BeTrue();
+
+        static SignallingStateEvent Signalling(SignallingObjectType type, string id) =>
+            new(T0, "test", type, type.ToString().ToLowerInvariant(), id, null, new Dictionary<string, string>());
     }
 
     [Fact]

@@ -103,6 +103,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _paths = paths.WithFolders(_settings);
         InitSuggestions();
         InitReports();
+        InitAssist();
         Snapshot = engine.Current;
         // Read them all first: setting any saves the view settings, which would overwrite the others.
         var (byDelay, vertical, knockOn) = (_settings.ColourByDelay, _settings.VerticalGraph, _settings.ForecastKnockOn);
@@ -225,7 +226,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public partial string TrainsText { get; private set; } = string.Empty;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ToggleRecordingCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleRecordingCommand), nameof(ToggleAssistCommand))]
     public partial bool IsLive { get; private set; }
 
     [ObservableProperty]
@@ -735,6 +736,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     private void StartSession(SimSession session)
     {
+        EndAssist();
         _session = session;
         _frozenNow = null;
         _suggestedFor = _timetable?.Timetable.AreaId is { Length: > 0 } area ? area : null;

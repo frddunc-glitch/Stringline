@@ -1,6 +1,6 @@
 # Stringline user guide
 
-Stringline draws a live train graph (time against distance) for a running [SimSig](https://www.simsig.co.uk/) simulation, and helps you re-plan late services around delays and disruptions, in the style of an Electronic Train Graph. It reads the sim through SimSig's Interface Gateway. It only reads: it never sets routes or moves trains in the sim.
+Stringline draws a live train graph (time against distance) for a running [SimSig](https://www.simsig.co.uk/) simulation, and helps you re-plan late services around delays and disruptions, in the style of an Electronic Train Graph. It reads the sim through SimSig's Interface Gateway. It only reads, unless you turn on [assist](assist.md) to send a route request or interpose a description, one confirmed command at a time.
 
 ![Stringline showing Waterloo, with a train selected and a conflict picked](images/main-window.png)
 
@@ -22,19 +22,20 @@ In the app, **Help ▸ User guide** opens this guide, and **F1** opens the page 
 7. [Disruptions and notes](disruptions-and-notes.md)
 8. [Conflicts and suggestions](conflicts-and-suggestions.md)
 9. [The regulation list](regulation.md)
+10. [Assist](assist.md): route requests and interposing, off unless you turn it on
 
 **Keeping your work**
 
-10. [Sessions, recordings and review](sessions-and-review.md)
-11. [Exports and reports](exports-and-reports.md)
+11. [Sessions, recordings and review](sessions-and-review.md)
+12. [Exports and reports](exports-and-reports.md)
 
 **Reference**
 
-12. [Settings](settings.md)
-13. [Troubleshooting and logs](troubleshooting.md)
-14. [Glossary](glossary.md)
-15. [Keyboard and mouse](keyboard-and-mouse.md)
-16. [Further reading](further-reading.md)
+13. [Settings](settings.md)
+14. [Troubleshooting and logs](troubleshooting.md)
+15. [Glossary](glossary.md)
+16. [Keyboard and mouse](keyboard-and-mouse.md)
+17. [Further reading](further-reading.md)
 
 ## Five-minute start
 

@@ -24,7 +24,7 @@ If SimSig says it cannot **open a TCP port for hosting the information gateway**
 
 Stringline subscribes to train movements and the clock. Ticking **Also subscribe to train describer and signalling messages** in the Connect dialog adds the train describer and signalling feed: it is much busier, and Stringline does not need it to draw the graph.
 
-Stringline only reads from the gateway. It never sends commands that change the sim.
+Stringline only reads from the gateway, unless you turn on [assist](assist.md). Then it sends a route request or a TD interpose when you ask for one and confirm it, and nothing else.
 
 SimSig's own description of the gateway, for the technically minded, is on the [SimSig wiki](https://www.simsig.co.uk/Wiki/Show?page=usertrack:interface_gateway). See [Further reading](further-reading.md).
 

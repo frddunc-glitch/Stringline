@@ -53,6 +53,22 @@ public sealed record StringlineProfile
     [JsonIgnore]
     public int FallbackHeadwaySeconds => DefaultHeadwaySeconds ?? GlobalHeadwaySeconds;
 
+    /// <summary>
+    /// Routes asked of SimSig by assist (S19), one per move, most recent last. Profiles from before S19 have none; an
+    /// older Stringline ignores them.
+    /// </summary>
+    public IReadOnlyList<AssistRoute> AssistRoutes { get; init; } = [];
+
+    /// <summary>The route last asked for this exact move, if any.</summary>
+    public AssistRoute? FindAssistRoute(AssistMove move) => AssistRoutes.LastOrDefault(r => r.Move == move && r.IsComplete);
+
+    /// <summary>The profile remembering <paramref name="route"/> for its move, in place of any earlier one for the same move.</summary>
+    public StringlineProfile WithAssistRoute(AssistRoute route)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        return this with { AssistRoutes = [.. AssistRoutes.Where(r => r.Move != route.Move), route] };
+    }
+
     public string DisplayName(Tiploc location) =>
         LocationNames.TryGetValue(location, out var name) && !string.IsNullOrWhiteSpace(name) ? name : location.Code;
 

@@ -513,6 +513,7 @@ internal sealed partial class MainViewModel : IGraphEditor
         }
 
         items.Add(new PlanMenuItem("Cl_one as ad-hoc…", new AsyncRelayCommand(() => CloneAsync(id))));
+        items.AddRange(AssistMenuItems(id, plan.Headcode, runs && point is not null ? index : null));
         if (live is not null && working is { } lw)
         {
             items.Add(PlanMenuItem.Separator);

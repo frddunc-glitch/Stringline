@@ -276,6 +276,7 @@ Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fi
 
 ## Phase 5 — Optional extensions
 - **S19** Opt-in assist: route-request / TD-interpose for the selected regulation step, with explicit confirmation and per-session enable.
+  - *Built in S19:* Fred chose to ask for the route and remember it per move in the profile, to interpose the picked train's description into a chosen berth, a Session menu switch that is off at each new session, and live connections only (`replay-server` counts; file replays never send). The warning names multiplayer, as S29 asked. See `05-…md` §14.
 - **S20** Optimiser (`IReplanner` using OR-Tools CP-SAT) for a rolling horizon.
 - **S21** Split-view multiple corridors / multi-board layout; vertical TCD print plotting.
 

@@ -163,6 +163,22 @@ public sealed class ProfileTests : IDisposable
     }
 
     [Fact]
+    public void Json_round_trips_assist_routes()
+    {
+        var a = new Tiploc("A");
+        var profile = Sample()
+            .WithAssistRoute(new AssistRoute(AssistMove.Of(a, "1", null, null, new Tiploc("B")), "RA1A"))
+            .WithAssistRoute(new AssistRoute(AssistMove.Of(a, null, "UF", new Tiploc("B"), null), FromSignal: "SA2", ToSignal: "SA4"));
+
+        var json = ProfileJson.Serialize(profile);
+        var back = ProfileJson.Deserialize(json);
+
+        json.Should().Contain("\"assistRoutes\": [").And.Contain("\"route\": \"RA1A\"").And.Contain("\"towards\": \"B\"");
+        back.AssistRoutes.Should().Equal(profile.AssistRoutes);
+        back.FindAssistRoute(AssistMove.Of(a, null, "uf", new Tiploc("B"), null))!.FromSignal.Should().Be("SA2");
+    }
+
+    [Fact]
     public void Json_is_readable()
     {
         var json = ProfileJson.Serialize(Sample());

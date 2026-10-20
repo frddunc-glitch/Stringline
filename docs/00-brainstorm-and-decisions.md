@@ -98,7 +98,7 @@ Headcodes repeat across a day and change at next-working associations. Matcher: 
 1. **Which sims first?** Ideally one busy two-track main line and one with single-line sections and crossing loops. [One free sim for committed test data plus one payware sim you own, recordings kept local.] **Done for S3:** Waterloo (free, two-track main line, in `tests/fixtures/`) and Penrith (payware, `local-fixtures/`). A single-line sim with crossing loops was added in S4: Llangollen (free, `tests/fixtures/`).
 2. **Multiplayer:** connect to another player's host? [Host/port configurable; default localhost.]
 3. **Distance axis:** derived by default OK? [Yes.] **S6:** derived by default; configured km override per location. **Decided 2026-10-19 (Fred):** corridors run Up end first (Down trains ascend), and an auto-generated branch follows its trains through onto the main line, so corridors may overlap (`04-…md` §4).
-4. **Assist writes** (route requests / TD interposes): keep on roadmap? [Yes, final optional session.]
+4. **Assist writes** (route requests / TD interposes): keep on roadmap? [Yes, final optional session.] **Built in S19 (Fred):** off by default, on for one live session after a warning that names multiplayer, every command confirmed; the route for a move is asked for, then remembered in the profile (`05-…md` §14).
 5. **Priorities:** source? [Headcode first digit by default, overridable per WTT category.]
 6. **Distribution:** personal or community release? **Decided 2026-10-18: open source, public on GitHub, GPL-3.0-or-later.** Recordings from payware sims are not redistributed.
 

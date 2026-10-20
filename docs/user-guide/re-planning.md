@@ -1,6 +1,6 @@
 # Re-planning
 
-Stringline keeps a **working plan**: the WTT, with the changes you make to it. You re-plan a train to see where it will run and what it will clash with: holding it, retiming it, changing its platform, cancelling it and so on. The plan is yours alone. Stringline does not send it to SimSig; you signal the trains to it yourself.
+Stringline keeps a **working plan**: the WTT, with the changes you make to it. You re-plan a train to see where it will run and what it will clash with: holding it, retiming it, changing its platform, cancelling it and so on. The plan is yours alone. Stringline does not send it to SimSig; you signal the trains to it yourself (or, with [assist](assist.md) on, ask SimSig for a route from the train's menu).
 
 Every change is one **edit**, which can be undone, and every edit is kept in the [session](sessions-and-review.md).
 

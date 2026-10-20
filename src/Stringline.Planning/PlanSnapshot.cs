@@ -24,6 +24,7 @@ namespace Stringline.Planning;
 /// The sections and settings the forecast and conflicts were made with (S15), so a reader can make more of the same
 /// (suggestions).
 /// </param>
+/// <param name="Signalling">The route, signal and berth IDs seen from the sim (S19), for the assist dialogs.</param>
 public sealed class PlanSnapshot(
     long Sequence,
     WorkingTimetable? Timetable,
@@ -38,7 +39,8 @@ public sealed class PlanSnapshot(
     IReadOnlyDictionary<Headcode, int>? EntryDelays = null,
     Forecast? Forecast = null,
     ConflictSet? Conflicts = null,
-    ForecastSettings? Settings = null)
+    ForecastSettings? Settings = null,
+    SignallingIndex? Signalling = null)
 {
     private Dictionary<TrainId, (LiveTrain Train, int Working)>? _byTrain;
     private Dictionary<string, LiveTrain>? _byUid;
@@ -70,6 +72,8 @@ public sealed class PlanSnapshot(
     public ConflictSet Conflicts { get; } = Conflicts ?? ConflictSet.Empty;
 
     public ForecastSettings Settings { get; } = Settings ?? ForecastSettings.Default;
+
+    public SignallingIndex Signalling { get; } = Signalling ?? SignallingIndex.Empty;
 
     /// <summary>Before anything has happened.</summary>
     public static PlanSnapshot Empty { get; } = new(0, null, [], SimClockReading.None, new MatchSummary(0, 0, 0, 0, 0, new Dictionary<MatchMethod, int>()), 0, null);

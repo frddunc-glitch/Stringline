@@ -89,6 +89,8 @@ IDs are referenced from the implementation plan. Priority: **M** = MVP, **S** = 
 | AS-1 | Send route request for next regulation step after confirmation | C |
 | AS-2 | TD interpose for ad-hoc trains after confirmation | C |
 
+Both built in S19 (`05-…md` §14): off by default, turned on for one live session.
+
 ## Non-functional
 - Windows 10/11 x64, single-file self-contained publish.
 - Core logic platform-neutral and unit-tested; ≥ 80% coverage on Gateway, Timetable, Planning.

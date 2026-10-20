@@ -30,6 +30,12 @@ internal sealed partial class PromptViewModel(string title, string heading, para
 
     public string Heading { get; } = heading;
 
+    /// <summary>Text under the heading, e.g. a warning about what OK does; null for none.</summary>
+    public string? Note { get; init; }
+
+    /// <summary>The OK button's text, e.g. "Send to SimSig".</summary>
+    public string AcceptText { get; init; } = "OK";
+
     public ObservableCollection<PromptField> Fields { get; } = [.. fields];
 
     /// <summary>Returns what is wrong with the values, or null if they can be used.</summary>

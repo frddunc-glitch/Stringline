@@ -54,6 +54,7 @@ SimSig ──STOMP──► GatewayClient ──► MessageParser ──► IGat
 - **Single-writer model:** one background `PlanningEngine` loop consumes the event channel and user commands, and publishes immutable `PlanSnapshot`s. The UI thread only reads snapshots — no locks on the hot path.
 - Recomputation is debounced (e.g. coalesce events within 100 ms wall time) and incremental where cheap.
 - `ISimEventSource` has two implementations: `LiveGatewaySource` and `ReplaySource`. Everything downstream is identical.
+- **CommandSender** is `SimSession.SendAsync` over `GatewayClient.SendAsync` (live sessions only). Apart from `idrequest` when recording starts, only assist (S19, `05-…md` §14) sends, with bodies from `GatewayCommands`. The engine also publishes the route, signal and berth IDs seen (`SignallingIndex`) in each `PlanSnapshot` for its dialogs.
 
 ## 3. Key abstractions
 

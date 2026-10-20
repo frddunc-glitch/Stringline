@@ -43,7 +43,7 @@ What is known so far:
 - Stringline connects to **one** gateway: the host name (or IP address) and port of a computer whose SimSig is running the sim with the Interface Gateway turned on. In a multiplayer game that is most likely the **host's** computer; whether a client's SimSig runs a gateway of its own is not yet known.
 - To connect from another computer, enter the host computer's name or IP address in **Host**, and make sure its firewall lets port 51515 through ([Firewalls](gateway.md#firewalls)).
 - It is not yet known whether a player sees the whole sim's trains through the gateway, or only those on their own panel. Trains running on another player's area may not report to you.
-- Stringline only reads. It cannot interfere with the other players' game.
+- Stringline only reads, so it cannot interfere with the other players' game, unless you turn on [assist](assist.md). Its route requests and interposes act on the shared sim.
 
 If you try multiplayer, please say how it went on the [issue tracker](https://github.com/frddunc-glitch/Stringline/issues).
 

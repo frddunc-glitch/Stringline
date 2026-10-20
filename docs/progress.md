@@ -1580,6 +1580,63 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Questions for Fred
 - 20. **The guide's gateway steps.** Do "tick **Interface Gateway** in the options for starting the sim" and the payware login match what you see in SimSig's Loader? This is question 14 again; the guide repeats the README.
 
+## 2026-10-20 — S19: Opt-in assist (AS-1, AS-2)
+
+### Done
+- **Fred's choices** (asked at the start):
+  - the route for a step is **asked for, then remembered** in the profile per move;
+  - interpose acts on the **picked train**, into a berth the user chooses;
+  - a **Session menu switch**, off again at each new session;
+  - **live connections only** (`replay-server` counts; file replays never send).
+- **Core:** `SignallingIndex` (Core.Live) holds every route, signal and TD berth ID seen, and what each berth holds now. It is immutable and returns the same instance when an event adds nothing. The engine keeps it outside `LiveState` (names, not state: kept through a rewind or a timetable rebuild, dropped on Clear) and publishes it as `PlanSnapshot.Signalling`. A new name triggers a publish; repeats do not.
+- **Gateway:** `GatewayCommands.IsValidId`, the check the builders already made, now public for the dialogs. `SimSession.SendAsync` returns whether the frame went.
+- **Profile:** `AssistMove` (location, platform, line, from, towards; tidied by `Of`) and `AssistRoute` (a route ID or two signals). `StringlineProfile.AssistRoutes` (JSON `assistRoutes`), `FindAssistRoute`, `WithAssistRoute` (one per move). The format version stays 2: an older Stringline ignores the new property.
+- **Planning:** `AssistMoves.Of(plan, index)`: the move at a plan point, with the nearest other locations before and after it on the running path.
+- **App** (`MainViewModel.Assist`, `05-…md` §14):
+  - **Session ▸ Assist: send commands to SimSig…**, enabled only while live. Turning it on warns (what it does; **in multiplayer it acts on the shared sim**; until the session ends) with **Allow for this session** / Cancel. Choosing it again turns it off. It turns off when the session stops, fails or is replaced.
+  - With assist on, the graph's train menu adds Re**q**uest route in SimSig… and Interpose **d**escription in SimSig…. The regulation list now has a selection and a right-click menu with both (enabled only while assist is on).
+  - **Request route:** the heading describes the move ("2S01 calls at Bletchley (platform 2) at 08:06, from … towards …"). The user gives a route ID or both signals. The lists offer what is remembered at the location, then SimSig's IDs from the snapshot. "Last time: …" is shown, and the remembered route filled in.
+  - **Interpose:** a berth from those seen, the headcode as description, and which berth SimSig shows the train in now, if any.
+  - Every dialog has a note (sent at once; SimSig does not say whether it did it, so check the panel; multiplayer) and a **Send to SimSig** button (`PromptViewModel.Note`, `AcceptText`). Each command, and assist turning on and off, is logged.
+- **Docs:** new guide page `assist.md` (and contents, glossary, keyboard and mouse, regulation, re-planning, gateway and connecting pages, which said Stringline only reads); `05-…md` §1 and new §14; `03-…md` §4; `01-…md`; `02-…md`; `00-…md` §5 question 4; the plan.
+- **Tests:**
+  - `SignallingIndexTests` (4, Core);
+  - `GatewayCommandsTests`: `IsValidId`;
+  - `PlanningEngineTests`: the names are published, kept through a rewind and dropped on Clear;
+  - `AssistMovesTests` (3, Planning), including the profile keeping one route per move;
+  - `ProfileTests`: the JSON round trip of `assistRoutes`;
+  - `AssistTests` (6, App, against `FakeStompServer`):
+    - off by default, with nothing asked or sent without a live session;
+    - the warning names multiplayer, Cancel leaves it off, it turns off on disconnect and stays off on reconnecting;
+    - a route request's dialog, its validation, the exact body sent, the route remembered in the saved profile and offered again, and the signal-pair form;
+    - an interpose's berths, body, the berth SimSig shows the train in, and a failed validation sending nothing;
+    - the regulation and graph menus only while it is on;
+    - a replay cannot turn it on;
+  - `WindowTests`: the assist dialog shows its note and Send button with no binding errors.
+- Totals: 1 569 (Core 263, Architecture 13, Gateway 211, Timetable 166, Network 161, Planning 238, Persistence 12, Graph 259, Tools 67, App 179). Green on Windows (Debug), and on Linux (`sdk:10.0` container, portable filter, Release: 1 390).
+
+### Decisions
+- **Nothing is guessed.** The WTT and profile name no signals, so the user gives the route the first time. Inferring it from the signals trains passed (`train_location` at signals) was offered and not chosen.
+- **The move is the key**: location, platform, line, and where the train comes from and heads for. A different platform or direction is a different route, and the user is asked again.
+- **The signalling names are not state.** A rewind or a timetable change keeps them; they would only come back with the next snapshot, which SimSig sends only on connect.
+- **The graph shows the assist items only while assist is on**, so its menu is unchanged for everyone else. The regulation list shows them disabled, with a tooltip saying how to turn assist on.
+- **Only route requests and interposes.** TD step and cancel and signal replacement have builders but are not offered.
+
+### Next
+- S29: the multiplayer investigation (#5), when Fred's recording is ready. It should check what assist does there, if Fred wants to try it.
+- S20 (optimiser) and S21 (multi-corridor views) remain optional.
+
+### Known issues
+- **Never tried against a real SimSig.** 👤 Fred: connect with the TD topic ticked, turn on assist, and on a quiet part of the panel:
+  - request a route by its ID, and by its two signals, and check SimSig sets it;
+  - request one that cannot be set (against a set route) and see what SimSig does: whether it queues it, refuses quietly or shows anything;
+  - interpose a headcode into an empty berth.
+- SimSig does not answer a command, so Stringline cannot say whether it worked; the dialogs and the guide say to check the panel.
+- Without the TD topic the lists are empty: the user must type IDs as SimSig names them. The dialogs say so.
+
+### Questions for Fred
+- 22. **Assist on a real sim.** Do route requests and interposes work as above? Is the route ID or the signal pair easier to find in SimSig (the panel's hover, or the F2 route list)? If signals are easier, the dialog could put them first.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

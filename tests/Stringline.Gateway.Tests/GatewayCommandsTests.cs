@@ -50,9 +50,24 @@ public class GatewayCommandsTests
     {
         FluentActions.Invoking(() => GatewayCommands.RouteRequest(id)).Should().Throw<ArgumentException>().WithParameterName("routeId");
         FluentActions.Invoking(() => GatewayCommands.TdStep("A", id, "1A01")).Should().Throw<ArgumentException>().WithParameterName("toBerth");
+        GatewayCommands.IsValidId(id).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("RHJ1AM")]
+    [InlineData("SVC92")]
+    [InlineData("1A23")]
+    [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345")]
+    public void Accepts_short_codes(string id)
+    {
+        GatewayCommands.IsValidId(id).Should().BeTrue();
+        FluentActions.Invoking(() => GatewayCommands.RouteRequest(id)).Should().NotThrow();
     }
 
     [Fact]
-    public void Rejects_null_identifiers() =>
+    public void Rejects_null_identifiers()
+    {
         FluentActions.Invoking(() => GatewayCommands.ReplaceSignal(null!)).Should().Throw<ArgumentNullException>();
+        GatewayCommands.IsValidId(null).Should().BeFalse();
+    }
 }

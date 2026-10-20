@@ -26,3 +26,5 @@ Cancelled trains, and trains that have already made the movement, are not listed
 ## Using it
 
 Re-plan on the graph (hold a train, swap two trains' order with the [grips](re-planning.md#grips), apply a [suggestion](conflicts-and-suggestions.md#suggestions)), and the list follows. Then signal the trains in the order it gives.
+
+With [assist](assist.md) on, right-click a row to **Request route in SimSig…** for that movement, or **Interpose description in SimSig…** for its train. Each is confirmed before it is sent.

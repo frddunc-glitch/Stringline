@@ -33,7 +33,27 @@ public sealed class WindowTests
     [Fact]
     public void The_about_window_loads() => OnUiThread(() => Show(new Views.AboutWindow(), "about"));
 
-    private static void Show(Window window, string name)
+    [Fact]
+    public void An_assist_prompt_shows_its_note_and_send_button() => OnUiThread(() =>
+    {
+        var prompt = new PromptViewModel(
+            "Request a route in SimSig",
+            "2S01 calls at Bletchley (platform 2) at 08:06, from Denbigh Hall towards Milton Keynes.",
+            new PromptField("Route ID", "RBY2A", ["RBY2A", "RBY2B"], "As SimSig names it, e.g. RWL123A. Or leave it empty and give the signals."),
+            new PromptField("From signal", string.Empty, ["SBY2"]),
+            new PromptField("To signal", string.Empty, ["SBY4"]))
+        {
+            Note = MainViewModel.AssistNote,
+            AcceptText = "Send to SimSig",
+        };
+        Show(new Views.PromptDialog(prompt), "assist-route", window =>
+        {
+            FindChildren<Button>(window).Select(b => b.Content).Should().Contain("Send to SimSig");
+            FindChildren<TextBlock>(window).Select(t => t.Text).Should().Contain(MainViewModel.AssistNote);
+        });
+    });
+
+    private static void Show(Window window, string name, Action<Window>? check = null)
     {
         window.ShowActivated = false;
         window.WindowStartupLocation = WindowStartupLocation.Manual;
@@ -48,6 +68,7 @@ public sealed class WindowTests
                 window.UpdateLayout();
                 System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
                 window.ActualHeight.Should().BeGreaterThan(100);
+                check?.Invoke(window);
                 Save(window, $"{name}-{i + 1}.png");
             }
         }
@@ -103,6 +124,24 @@ public sealed class WindowTests
         thread.Join(TimeSpan.FromSeconds(60)).Should().BeTrue();
         failure.Should().BeNull();
         errors.Should().BeEmpty();
+    }
+
+    private static IEnumerable<T> FindChildren<T>(DependencyObject parent)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T found)
+            {
+                yield return found;
+            }
+
+            foreach (var deeper in FindChildren<T>(child))
+            {
+                yield return deeper;
+            }
+        }
     }
 
     private static T? FindChild<T>(DependencyObject parent)

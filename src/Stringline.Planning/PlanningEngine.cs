@@ -68,6 +68,8 @@ public sealed partial class PlanningEngine
     private PlanSnapshot _current = PlanSnapshot.Empty;
     private long _sequence;
     private long _publishedVersion;
+    private SignallingIndex _signalling = SignallingIndex.Empty;
+    private SignallingIndex _publishedSignalling = SignallingIndex.Empty;
     private DateTimeOffset _lastPublish = DateTimeOffset.MinValue;
     private int _running;
     private ForecastNetwork _network = ForecastNetwork.Empty;
@@ -179,7 +181,7 @@ public sealed partial class PlanningEngine
             while (await reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 var forced = Drain(reader);
-                if (!forced && _state.Version == _publishedVersion)
+                if (!forced && _state.Version == _publishedVersion && ReferenceEquals(_signalling, _publishedSignalling))
                 {
                     continue;
                 }
@@ -229,6 +231,7 @@ public sealed partial class PlanningEngine
                     break;
                 case InputKind.Clear:
                     _history.Clear();
+                    _signalling = SignallingIndex.Empty;
                     ResetPlan();
                     _state = CreateState(_timetable);
                     RaiseStep(new PlanStep(PlanStepKind.Reset));
@@ -263,6 +266,8 @@ public sealed partial class PlanningEngine
 
     private void Apply(GatewayEvent e)
     {
+        // Names, not state: kept through a rewind or a rebuild, and dropped only when the session is cleared.
+        _signalling = _signalling.With(e);
         if (e is ReplayRewoundEvent)
         {
             _history.Clear();
@@ -557,8 +562,10 @@ public sealed partial class PlanningEngine
             _entryDelays,
             _forecast,
             _conflicts,
-            _settings);
+            _settings,
+            _signalling);
         _publishedVersion = _state.Version;
+        _publishedSignalling = _signalling;
         _lastPublish = _time.GetUtcNow();
         Volatile.Write(ref _current, snapshot);
         if (SnapshotPublished is not { } handlers)

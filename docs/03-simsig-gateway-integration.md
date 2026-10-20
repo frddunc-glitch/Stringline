@@ -93,6 +93,8 @@ Send `{"snapshot":{}}` on TD topic. Reply is **one JSON object with many duplica
 
 Malformed JSON makes SimSig show an error dialog to the host (once). All outbound bodies must come from tested builders.
 
+**Used by assist (S19, `05-…md` §14):** route request (by ID, or by its two signals) and TD interpose, each only after the user confirms it, during a live session with assist turned on. Both go to the TD topic, which Stringline sends to whether or not it subscribed to it. The route and signal IDs offered come from the snapshot's `SG_MSG`s (route and signal objects), and the berths from CA/CB/CC steps (`SignallingIndex`), so both need the TD topic. Not yet tried against a real SimSig: whether it sets a route asked for while it cannot be set, or answers a request in any way, is unknown; the user is told to check the panel. TD step, TD cancel and signal replacement have builders but no use.
+
 ## 5. Sim time
 - Integer seconds after midnight on the sim's start day; runs past 86 400 for overnight sims → `SimTime` is an unbounded int, formatted modulo 24 h with a day marker.
 - WTT times are on the same basis.

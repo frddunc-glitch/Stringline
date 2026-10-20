@@ -124,6 +124,9 @@
           <MenuItem Header="_Disconnect" Command="{Binding DisconnectCommand}" />
           <Separator />
           <MenuItem Header="_Record to file" IsCheckable="False" IsChecked="{Binding IsRecording, Mode=OneWay}" Command="{Binding ToggleRecordingCommand}" />
+          <Separator />
+          <MenuItem Header="_Assist: send commands to SimSig…" IsCheckable="False" IsChecked="{Binding AssistEnabled, Mode=OneWay}"
+                    Command="{Binding ToggleAssistCommand}" ToolTip="{Binding AssistTip}" ToolTipService.ShowOnDisabled="True" />
         </MenuItem>
         <MenuItem Header="_View">
           <MenuItem Header="_Follow now" InputGestureText="Space" Command="{Binding FollowCommand}" />
@@ -610,7 +613,17 @@
               </DockPanel>
               <TextBlock DockPanel.Dock="Top" Text="{Binding Regulation.Summary}" Foreground="#757575" Margin="6,0,6,4" TextWrapping="Wrap"
                          ToolTip="Movements still to come here, in the order of the working plan. Bold amber rows are out of WTT order." />
-              <DataGrid x:Name="RegulationList" Style="{StaticResource PanelGrid}" ItemsSource="{Binding Regulation.Rows}" BorderThickness="0,1,0,0">
+              <DataGrid x:Name="RegulationList" Style="{StaticResource PanelGrid}" ItemsSource="{Binding Regulation.Rows}" BorderThickness="0,1,0,0"
+                        SelectedItem="{Binding Regulation.Selected}">
+                <!-- Assist (S19): enabled while Session ▸ Assist is on -->
+                <DataGrid.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Header="Re_quest route in SimSig…" Command="{Binding RequestRouteForRegulationCommand}"
+                              ToolTip="{Binding AssistTip}" ToolTipService.ShowOnDisabled="True" />
+                    <MenuItem Header="Interpose _description in SimSig…" Command="{Binding InterposeForRegulationCommand}"
+                              ToolTip="{Binding AssistTip}" ToolTipService.ShowOnDisabled="True" />
+                  </ContextMenu>
+                </DataGrid.ContextMenu>
                 <DataGrid.RowStyle>
                   <Style TargetType="DataGridRow">
                     <Setter Property="ToolTip" Value="{Binding Tip}" />

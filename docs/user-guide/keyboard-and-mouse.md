@@ -56,3 +56,4 @@ With the graph focused (click it first):
 | Double-click | A row in the train list | Centre the graph on the train's last report |
 | Double-click | A splitter | Hide or show the panel beside it |
 | Double-click | A cell in the train detail's Plat, Line or Plan columns | Edit it |
+| Right-click | A row in the regulation list | Request a route or interpose a description, with [assist](assist.md) on |

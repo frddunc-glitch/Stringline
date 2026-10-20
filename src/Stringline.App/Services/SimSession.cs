@@ -134,20 +134,23 @@ internal sealed partial class SimSession : IAsyncDisposable
     }
 
     /// <summary>Send a command to SimSig (live only). Failures are logged, not thrown.</summary>
-    public async Task SendAsync(GatewayCommand command)
+    /// <returns>True if it was sent; false for a replay, or if it could not be (not connected, say).</returns>
+    public async Task<bool> SendAsync(GatewayCommand command)
     {
         if (_client is null)
         {
-            return;
+            return false;
         }
 
         try
         {
             await _client.SendAsync(command, _stop.Token).ConfigureAwait(false);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or OperationCanceledException)
         {
             LogSendFailed(ex);
+            return false;
         }
     }
 

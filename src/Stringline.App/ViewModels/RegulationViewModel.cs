@@ -28,6 +28,12 @@ internal sealed record RegulationRowViewModel(
     bool IsChanged,
     string Tip)
 {
+    /// <summary>The train, for acting on the row (S19 assist).</summary>
+    public TrainId Train { get; init; }
+
+    /// <summary>The plan point of the movement.</summary>
+    public int Index { get; init; }
+
     public static RegulationRowViewModel Of(RegulationRow r)
     {
         ArgumentNullException.ThrowIfNull(r);
@@ -81,7 +87,11 @@ internal sealed record RegulationRowViewModel(
             order,
             r.OutOfOrder,
             r.IsChanged,
-            string.Join(Environment.NewLine, tip));
+            string.Join(Environment.NewLine, tip))
+        {
+            Train = r.Train,
+            Index = r.Index,
+        };
     }
 
     private static string Names(IReadOnlyList<Headcode> headcodes) =>
@@ -103,6 +113,10 @@ internal sealed partial class RegulationViewModel : ObservableObject
 
     [ObservableProperty]
     public partial RegulationLocation? Location { get; set; }
+
+    /// <summary>The row picked in the list, for the assist commands (S19).</summary>
+    [ObservableProperty]
+    public partial RegulationRowViewModel? Selected { get; set; }
 
     /// <summary>"14 movements in the next 3 hours · 2 out of WTT order".</summary>
     [ObservableProperty]
