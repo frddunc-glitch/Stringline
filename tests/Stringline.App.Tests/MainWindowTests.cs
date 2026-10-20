@@ -37,7 +37,18 @@ public sealed class MainWindowTests
             vm.Regulation.Location = vm.Regulation.Locations.FirstOrDefault();
         });
         await app.Ui.WaitUntil(() => vm.Detail.HasTrain, "a train picked");
-        await app.Ui.WaitUntil(() => vm.SuggestionPanel.IsVisible, "a conflict picked");
+        // The replay may still be running, so the picked conflict can drop out of the next snapshot (which clears the
+        // panel): pick the list's first conflict again until one stays.
+        await app.Ui.WaitUntil(() =>
+        {
+            if (!vm.SuggestionPanel.IsVisible && vm.ConflictList.Rows.Count > 0)
+            {
+                vm.ConflictList.Selected = null;
+                vm.ConflictList.Selected = vm.ConflictList.Rows[0];
+            }
+
+            return vm.SuggestionPanel.IsVisible;
+        }, "a conflict picked");
         var tab = await app.Ui.Run(() => (vm.SideTab, vm.Delays.ShowAll = true, vm.SideTab = 2).SideTab); // the Delays tab fills only while shown
         await app.Ui.WaitUntil(() => vm.Delays.Points.Count > 0, "the train's delays");
         await app.Ui.Run(() => vm.SideTab = tab);
