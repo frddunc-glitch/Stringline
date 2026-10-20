@@ -274,6 +274,68 @@ Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fi
   - Assist (S19) stays off. Its confirmation must name multiplayer if S19 is built later.
 - **Write-up.** Record the outcome in `00-…md` §5 question 2, and add the guide's multiplayer page (S28). If a real gap needs code, raise it as an issue sized for a session.
 
+## Phase 4b — From the open-question review (2026-10-20)
+Fred went through the open questions on 2026-10-20 (answers in `progress.md`, "Open-question review"). Four sessions came from them. Order: S30 → S31 → S32 → S33. S30 and S31 are small and can run in either order. Each session still ends with a green build, tests, `progress.md` and a commit.
+
+| Source | Topic | Session |
+|---|---|---|
+| Issue #14 | Privacy policy (stored SimSig password) | S30 |
+| Q17 | Sim name copied from an older WTT's title | S31 |
+| Q10 | Forecast line looks like a dashed category | S31 |
+| Q5, Q7 | WTT rules in entry forecasts | S32 |
+| Q12 | Holding trains at signals | S33 |
+
+### S30 — Privacy policy and stored data 🪟 (#14)
+- **Audit first.** List everything the app writes and where, and write it into the policy:
+  - roaming settings (`AppPaths`, `AppSettings`): host, port, user name, and the password only when "Remember password" is ticked, encrypted with DPAPI for the current Windows user;
+  - profiles (`%APPDATA%\Stringline\profiles`);
+  - logs and help (`%LOCALAPPDATA%\Stringline`);
+  - sessions and recordings (`Documents\Stringline`).
+  - Confirm nothing is sent anywhere but the SimSig gateway the user connects to. There is no telemetry and no update check. Confirm that no log line, session file, recording or crash report holds the password. A test greps a recorded connect, its log and its `.sslog` for a known password. The STOMP `CONNECT` frame is the one place it legitimately goes.
+- **`PRIVACY.md`** at the repo root (Australian English, plain words): what is stored, where, and how; what is sent and to whom (only the gateway); how to remove everything; and a contact (the GitHub issues). Add a copy to the user guide (`privacy.md`) and the wiki, and link it from the README and About.
+- **UI:**
+  - a "Privacy" link in Help, in About, and next to "Remember password" in the Connect dialog (a tooltip says how it is stored);
+  - **Forget saved password** (Tools ▸ Options ▸ Connection, or the Connect dialog). It clears `ProtectedPassword` and unticks Remember at once;
+  - unticking Remember and connecting already clears it (keep that tested).
+- **Uninstall.** The installer asks whether to remove settings, profiles and logs (default: keep), and always removes the saved password. Sessions in Documents are never removed. `build/test-upgrade.ps1` checks both answers silently (`/REMOVEUSERDATA` or a similar switch).
+- **Tests:** settings round trip and Forget; no password in logs, sessions or recordings; the guide's privacy page is embedded and linked; the installer's uninstall paths (`test-upgrade.ps1`).
+- Close #14 with `Fixes #14`.
+
+### S31 — Small fixes from the review (Q10, Q17)
+- **Q10: forecast dash-dot (Fred).** The forecast layer (`GraphTheme.Forecast`, the renderer's 6–4 dash) becomes **dash-dot** at its current weight, so it is never mistaken for a category's dashed (12–7) or dotted style.
+  - Do the same in the PNG and PDF exports and the plot, the legend and the guide's pictures (`build/guide-shots.ps1`).
+  - Update `05-…md` (layers) and the guide's reading-the-graph page.
+  - Verify snapshot tests change once. Add a test that no category line style the profile can name renders the same pattern as the forecast.
+- **Q17: a sim name equal to a WTT title counts as unset (Fred).** A profile made from one timetable keeps that timetable's title as its sim name, so another timetable of the same sim shows "Old WTT – New WTT".
+  - In `SimTitle` (or where the sim name is chosen), treat a profile sim name equal (ignoring case and spaces) to **any** WTT title recorded for that sim as unset, and fall back to the gateway's area ID. Keep the titles of timetables the profile was made or refreshed from in the profile (a small `ProfileJson` addition, round-tripped), and include the loaded WTT's title too.
+  - A name the user typed in the profile editor is always kept, even if it matches a title. Mark it hand-set, as headways are.
+- **Tests:** the formatter with a stale title, a typed name, and no name; `ProfileJson` round trip; the renderer's dash-dot.
+
+### S32 — WTT rules in the forecast (Q5, Q7)
+- **Q5 first:** check that rule `Time` is in seconds. Find a recording where a ruled train enters (Waterloo 331, "X appears after Y leaves") and compare the entry with Y's event. Write the result in `04-…md` and `03-…md` §6.
+- **Apply the rules** (`TimetableRule`, `04-…md`) in `Forecaster` (`06-…md` §2):
+  - **Appearance rules** (0, 1, 2, 11–13: X appears after Y enters/leaves/arrives/joins/divides/forms): an entering train's forecast entry is no earlier than Y's forecast or actual event plus `Time`.
+  - **Departure rules** (4–9: X departs after Y …), at the rule's `Location` or X's first stop: X's forecast departure is held the same way.
+  - **Exclusion rules** (3 X not if Y, 10 mutually exclusive, 14 alternatives) are not forecast. They show on the train detail as a note.
+  - Unresolved rules (a name matching no train, or several) are skipped and logged once, as the import already notes them.
+  - A chain of rules is followed in order. A cycle is broken and logged, never looped.
+- **Conflicts and suggestions.** A rule-held train is not a conflict in itself. The train detail and hover say "held by rule: after 2B44 leaves (+60 s)". The suggester and optimiser treat a rule as a constraint (a hold cannot release X before the rule allows).
+- **Option:** Options ▸ Forecast ▸ "Apply timetable rules" (on by default), so a user can compare.
+- **Tests:** each rule kind on synthetic timetables; Waterloo 331 against its recording (entry no longer forecast early); a cycle; an unresolved rule; the optimiser respects a rule. Update `06-…md` §2.
+
+### S33 — Holding trains at signals (Q12)
+- **Problem.** Suggestions and the optimiser only hold trains at timing points the WTT times, so a train already on its way to a junction gets no suggestion. SimSig can hold a train at any signal.
+- **Find out first** (write the results in `progress.md` and `06-…md` §4):
+  - Where can a train be held, as a place on the corridor? Signals are not in the WTT, but TD berth steps and `SG_MSG` aspects are in the recordings. Can a berth be placed between two timing points (by the time a train steps into it, relative to its timing points, across many trains)? Store the result per sim in the profile (`signals`: berth, signal ID if known, between which TIPLOCs, fraction along).
+  - Which messages say a train is standing at a signal (berth plus a red aspect ahead), so the forecaster can tell "held" from "late"?
+- **Build** (if the investigation gives usable places):
+  - `PlanCommand` gains **HoldAtSignal** (train, berth or signal, until time), shown on the graph as a short flat step between the timing points at the signal's place;
+  - the forecaster runs it as a stop of that length there;
+  - the suggester proposes it for a train already past its last timing point before a conflict (the cost: the held time, weighted like delay), and the optimiser can use it as one more hold place;
+  - **Assist (S19):** a hold at a signal is a reminder only (SimSig has no gateway command to hold at a signal). The regulation list shows "hold 1A23 at WM123 until 09:12".
+- **If places cannot be found reliably**, stop after the investigation, record why, and leave the build to a later session or a hand-entered list of signals in the profile editor.
+- **Tests:** berth placement on Waterloo's recordings (portable); the command's round trip, forecast and undo; a suggestion for an on-the-way train; the optimiser using a signal hold.
+
 ## Phase 5 — Optional extensions
 - **S19** Opt-in assist: route-request / TD-interpose for the selected regulation step, with explicit confirmation and per-session enable.
   - *Built in S19:* Fred chose to ask for the route and remember it per move in the profile, to interpose the picked train's description into a chosen berth, a Session menu switch that is off at each new session, and live connections only (`replay-server` counts; file replays never send). The warning names multiplayer, as S29 asked. See `05-…md` §14.
@@ -290,6 +352,7 @@ S1 → S2 → S3 ─┬→ S5 → S7 → S8 → S9
 S8 → S10 → S11 → S12 → S13 → S14 → S14a → S15 → S16 → S17 → S18 → S22 → S23 → S24 → S25 → S26 → S27 → (S19–S21)
                                                                     S18 → S28 (after S26 for grips, S29 for multiplayer)
                                                                     👤 recording → S29
+S21 → S30, S31 → S32 → S33
 ```
 S4 and S6 can run in parallel with S2–S3 (separate worktrees/sessions).
 

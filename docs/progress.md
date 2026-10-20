@@ -1754,6 +1754,30 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - 25. **Plot scale.** Is two hours a page on A3 portrait (about 3 mm a minute) a good default? Would you rather choose millimetres a minute, or have the plot fit the time onto a set number of pages?
 - 26. **Boards.** Do the board windows need their own toolbar (layers, 1h/3h/6h, Follow), or are the main window's enough, since the boards are locked in time?
 
+## 2026-10-20 — Open-question review
+
+### Done
+- Went through every open question (1–26) and open GitHub issues #1, #5 and #14 with Fred. Four new sessions went into `07-implementation-plan.md` as **Phase 4b (S30–S33)**.
+- **Answered and closed:**
+  - 13/15 (#1, code signing): signing with `signtool` and a PFX is built (S22). **Move to SignPath** once downloads grow enough to support an application (Fred's comment on #1). Until then #1 stays open and the README's SmartScreen note stays.
+  - 14/20 (Loader wording): the README and guide match SimSig's Loader.
+  - 18 (S25 naming): all kept.
+  - 21 (release 0.1.1): overtaken. v0.2.0 is released, with its files.
+  - 23 (re-plan): conflicts first stays.
+  - 24 (download size): the 23 MB solver stays bundled.
+  - 25 (plot scale): two hours a page stays; `--per-page` is enough.
+  - 26 (boards): the main window's toolbar is enough.
+- **Answered, with work to do:**
+  - #14 (privacy) → **S30**: a policy, an audit of what is stored, Forget saved password, and an uninstall choice.
+  - 10 (line styles) → **S31**: the forecast becomes dash-dot.
+  - 17 (sim name) → **S31**: a sim name equal to any of the sim's WTT titles counts as unset.
+  - 5 and 7 (WTT rules) → **S32**: apply the rules to entry and departure forecasts, after checking `Time` is in seconds.
+  - 12 (holds at signals) → **S33**: investigate placing signals or berths on the corridor first, then build if that works.
+- **Still open** (Fred has not tried them yet): 3 and 16 (multiplayer and level-crossing recordings; S29 stays blocked), 6 and 19 (corridors and headways on Fred's sims), 8, 9 and 11 (crossing tolerance, margins, penalties: keep the defaults for now), 22 (Assist: route ID or signal pair).
+
+### Next
+- S30 (or S31), then S32 and S33. S29 when the multiplayer recording exists.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
@@ -1766,25 +1790,27 @@ New from S3:
 4. ~~A single-line sim with crossing loops?~~ Resolved in S4: Llangollen (`tests/fixtures/llangollen 2012 B.WTT`).
 
 New from S4:
-5. Rule `Time` is taken as seconds. If you know otherwise (e.g. from the timetable editor), say so; otherwise S11 will check it against a recording.
+5. ~~Rule `Time` is taken as seconds. If you know otherwise (e.g. from the timetable editor), say so; otherwise S11 will check it against a recording.~~ → S32 checks it.
 
 New from S6:
 6. When convenient, run `stringline corridors` on the sims you play most and say whether the main corridor and branches look right. In particular: are all of Llangollen's sections really single line (LLANGOLLEN–GOODSJNC is hinted too)?
 
 New from S11:
-7. The forecaster does not yet use the WTT's **rules** (for example "X appears after Y leaves", 331 at Waterloo). They would hold an entering train until another has gone. Should S13/S14 apply them to entry forecasts? (Question 5, whether rule `Time` is in seconds, is still open: S11 did not need the rules.)
+7. ~~The forecaster does not yet use the WTT's **rules** (for example "X appears after Y leaves", 331 at Waterloo). They would hold an entering train until another has gone. Should S13/S14 apply them to entry forecasts? (Question 5, whether rule `Time` is in seconds, is still open: S11 did not need the rules.)~~ Yes (Fred, 2026-10-20) → S32.
 8. Is a **minute's tolerance** right for booked single-line crossings? The forecaster keeps a booked overlap of up to 60 s between opposing trains as rounding, the same as the single-line hint (S6).
 
 New from S14:
 9. Is **1 minute** right as the default platform re-occupation margin, and **30 s** as the least conflict shown, once you have tried them on a busy sim? Both are in `ConflictOptions`.
 
 New from S14a:
-10. When you have tried line styles: are dashed and dotted categories distinct enough from the forecast's dashes, or should the forecast change instead (e.g. thinner, or dash-dot)?
+10. ~~When you have tried line styles: are dashed and dotted categories distinct enough from the forecast's dashes, or should the forecast change instead (e.g. thinner, or dash-dot)?~~ Change the forecast to dash-dot (Fred, 2026-10-20) → S31.
 
 New from S15:
 11. Are the suggestion **penalties** right: 2 min for a platform or line change, 30 min for terminating short, 60 min for cancelling (all weighted like delay)? They are in `SuggestionOptions`.
-12. Should suggestions **hold a train at a signal** (e.g. outside a junction), which SimSig can do but the WTT does not time? That would give suggestions for trains already on their way.
+12. ~~Should suggestions **hold a train at a signal** (e.g. outside a junction), which SimSig can do but the WTT does not time? That would give suggestions for trains already on their way.~~ Yes (Fred, 2026-10-20) → S33, investigation first.
 
 New from S18:
-13. **Code signing:** unsigned downloads get a SmartScreen warning. Is that acceptable for now, or should releases be signed (a certificate costs money; SignPath offers free signing for open-source projects)?
-14. Does the README's "Turn on the Interface Gateway" step match what SimSig's Loader calls it now?
+13. ~~**Code signing:** unsigned downloads get a SmartScreen warning. Is that acceptable for now, or should releases be signed (a certificate costs money; SignPath offers free signing for open-source projects)?~~ Signtool + PFX built in S22; SignPath once downloads grow (Fred, #1).
+14. ~~Does the README's "Turn on the Interface Gateway" step match what SimSig's Loader calls it now?~~ Matches (Fred, 2026-10-20).
+
+Since S22 the questions are numbered in each session's notes (15–26); see "Open-question review" above for which are still open.
