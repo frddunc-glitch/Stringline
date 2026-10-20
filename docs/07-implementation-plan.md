@@ -275,7 +275,7 @@ Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fi
 - **Write-up.** Record the outcome in `00-…md` §5 question 2, and add the guide's multiplayer page (S28). If a real gap needs code, raise it as an issue sized for a session.
 
 ## Phase 4b — From the open-question review (2026-10-20)
-Fred went through the open questions on 2026-10-20 (answers in `progress.md`, "Open-question review"). Four sessions came from them. Order: S30 → S31 → S32 → S33. S30 and S31 are small and can run in either order. Each session still ends with a green build, tests, `progress.md` and a commit.
+Fred went through the open questions on 2026-10-20 (answers in `progress.md`, "Open-question review"). Four sessions came from them. Order: S30 → S31, then Phase 4c (S34–S39), then S32 → S33 (the issue review of 2026-10-21 put Phase 4c first, as #19 asked). S30 and S31 are small and can run in either order. Each session still ends with a green build, tests, `progress.md` and a commit.
 
 | Source | Topic | Session |
 |---|---|---|
@@ -314,6 +314,7 @@ Fred went through the open questions on 2026-10-20 (answers in `progress.md`, "O
 - *Built in S31:* the forecast is dash-dot (7–4–dot–4). Fred chose to settle names from before S31 by reading the titles of the sim's other `.wtt` files in the loaded WTT's folder: a match counts as a title, any other name is kept as typed.
 
 ### S32 — WTT rules in the forecast (Q5, Q7)
+- *Runs after Phase 4c* (S34–S39), as #19 asked. A rule-held train's forecast uses S36–S38's progress between points like any other.
 - **Q5 first:** check that rule `Time` is in seconds. Find a recording where a ruled train enters (Waterloo 331, "X appears after Y leaves") and compare the entry with Y's event. Write the result in `04-…md` and `03-…md` §6.
 - **Apply the rules** (`TimetableRule`, `04-…md`) in `Forecaster` (`06-…md` §2):
   - **Appearance rules** (0, 1, 2, 11–13: X appears after Y enters/leaves/arrives/joins/divides/forms): an entering train's forecast entry is no earlier than Y's forecast or actual event plus `Time`.
@@ -327,16 +328,143 @@ Fred went through the open questions on 2026-10-20 (answers in `progress.md`, "O
 
 ### S33 — Holding trains at signals (Q12)
 - **Problem.** Suggestions and the optimiser only hold trains at timing points the WTT times, so a train already on its way to a junction gets no suggestion. SimSig can hold a train at any signal.
-- **Find out first** (write the results in `progress.md` and `06-…md` §4):
-  - Where can a train be held, as a place on the corridor? Signals are not in the WTT, but TD berth steps and `SG_MSG` aspects are in the recordings. Can a berth be placed between two timing points (by the time a train steps into it, relative to its timing points, across many trains)? Store the result per sim in the profile (`signals`: berth, signal ID if known, between which TIPLOCs, fraction along).
-  - Which messages say a train is standing at a signal (berth plus a red aspect ahead), so the forecaster can tell "held" from "late"?
-- **Build** (if the investigation gives usable places):
-  - `PlanCommand` gains **HoldAtSignal** (train, berth or signal, until time), shown on the graph as a short flat step between the timing points at the signal's place;
+- **Its investigation moved to Phase 4c** (issue review, 2026-10-21). S37 places signals, track circuits and berths on the corridor and stores them in the profile. S38 tells "held at a signal" from "late". This session is now the build only, on top of those.
+- **Build:**
+  - `PlanCommand` gains **HoldAtSignal** (train, signal, until time), shown on the graph as a short flat step at the signal's placed position between its timing points;
   - the forecaster runs it as a stop of that length there;
-  - the suggester proposes it for a train already past its last timing point before a conflict (the cost: the held time, weighted like delay), and the optimiser can use it as one more hold place;
+  - the suggester proposes it for a train already past its last timing point before a conflict (the cost: the held time, weighted like delay), and the optimiser can use it as one more hold place. Only signals placed with good confidence (S37) are offered;
   - **Assist (S19):** a hold at a signal is a reminder only (SimSig has no gateway command to hold at a signal). The regulation list shows "hold 1A23 at WM123 until 09:12".
-- **If places cannot be found reliably**, stop after the investigation, record why, and leave the build to a later session or a hand-entered list of signals in the profile editor.
-- **Tests:** berth placement on Waterloo's recordings (portable); the command's round trip, forecast and undo; a suggestion for an on-the-way train; the optimiser using a signal hold.
+- **If S37 found placement unreliable** for a sim, its signals are not offered, and the session builds only for the sims where it works (or a hand-entered list in the profile editor's Signals tab).
+- **Tests:** the command's round trip, forecast and undo; a suggestion for an on-the-way train; the optimiser using a signal hold; a signal with low confidence is not offered.
+
+## Phase 4c — From GitHub issues #16–#19 (issue review, 2026-10-21)
+Fred raised #16–#19 on 2026-10-20 after testing on more sims (#1 and #5 stay where they were: SignPath later, and S29). In the review, Fred chose:
+- **#19:** signal detail is **learned from play** (recordings and every live or replayed session), not built from sim files or by AI from schematics. It is stored in the sim's profile, which can be exported and imported so users can share it.
+- **#17:** do all four: use the timing locations SimSig reports that a train's WTT leaves out; draw and forecast through signal passes; extend each running train's line to "now"; and optionally show extra points on the corridor axis.
+- **Conflicts:** **block headways**. Section headways come from the learned signal blocks, and catching-up is checked at signal positions. Full block occupancy is not planned yet.
+- **Track circuits:** placed along with the signals.
+- **Learning:** on by default, saved at the session's end, and reviewable in the profile editor (confidence, samples, reset).
+- **#16:** trains SimSig will not run are marked **"Not running" automatically**. This can be undone, and it is not a plan edit.
+- **#18:** a user-focused README, with the developer content in `docs/developer.md`.
+- **Order:** S34 and S35 (small, either order, can share a sitting) → S36 → S37 → S38 → S39, then S32 → S33. S36 needs nothing new. S38 and S39 need S37.
+
+| Issue | Title | Session |
+|---|---|---|
+| #16 | Starting seeded trains | S34 |
+| #18 | Re-write Readme.md | S35 |
+| #17 | Locations not on a train's WTT | S36 (today's data), S38 (signals) |
+| #19 | Granularity of signalling and network information | S37 (placement), S38 (graph and forecast), S39 (headways and conflicts) |
+
+**Why learning works.** The gateway already sends every signal a train passes as a `train_location` (about two thirds of all of them, with `aspPass`/`aspAppr`; `03-…md` §2). SimSig also reports timing locations a train's own schedule leaves out (`03-…md` §6.2). Today the forecaster drops both, and the graph drops the signal passes (`Forecaster.StartRunning`, `GraphSceneBuilder.AddActual`). The derived corridor axis is measured in run time (`04-…md` §4.5), so a signal's place can be measured the same way: where its pass time falls between the train's times at the timing locations either side. Track circuit `SG_MSG`s (`clear` true/false) and TD berth steps come only with the TD topic (`--td`); signal passes do not need it.
+
+👤 **Before S37:** record 1–2 h, with `--td`, on the sim where #17 showed (an older sim with few timing points), and on one busy sim. Run at 1×–4×, because faster runs give coarser times. Put them in `local-fixtures/` (payware) or `tests/fixtures/` (free). The Waterloo fixtures are short: `waterloo-1x` has 614 `train_location`s, and `waterloo-4x` has no TD topic.
+
+### S34 — Seed groups and trains that will not run 🪟 (core part portable) (#16)
+- **Problem.** When a sim starts at a time other than 00:00, Stringline still forecasts trains SimSig will never run:
+  - unseeded trains that should already have been part-way through their run at the start;
+  - seeded trains of another seed group.
+  - The user must cancel each by hand. Today the forecaster skips only trains that were over before the session started (`Forecaster.Run`). The import ignores `SeedGroups` and each train's `SeedGroup` (`04-…md` §1).
+- **Import** (`WttReader`, `04-…md`):
+  - `SeedGroups/SeedGroup` → `SeedGroup(Id, StartTime, Title)` on the timetable (Penrith: 04:00 and 14:00);
+  - each train's `SeedGroup` and `Started`;
+  - `wtt-dump` prints the groups, and `--train` prints a train's group.
+- **Which trains run** (`Stringline.Planning`, a pure function of the WTT, the session's start clock and live sightings):
+  - **The start group** is the seed group whose `StartTime` equals the session start, or the latest before it, else none. The session start is `LiveState.SessionStart`: the sim's first clock, not a replay's `--start` seek. Check how a replay seek sets it.
+  - **Will not run:**
+    - a seeded train of another group;
+    - an unseeded train whose first booked time (entry, or its first timed point) is before the session start, *unless* a train that will run forms it (`FormedFrom`).
+    - **Find out first** on Penrith's 14:00 recording, and record it in `04-…md`: does SimSig start an unseeded train booked a minute or so before the start? Set the tolerance to match.
+  - **Not seen:** a seeded train of the start group that has not appeared by `PresentAtStartSeconds` after the start is flagged "not seen" (it may have been removed). It is not hidden.
+  - A train that is matched live always runs, whatever the rules said.
+- **Shown as "Not running":**
+  - a new `TrainForecastStatus.NotRunning` with a reason ("not seeded", "seed group 04:00");
+  - kept out of the graph's forecast, conflicts, suggestions, the optimiser and the regulation list;
+  - the booked line is drawn faintly (or hidden, by the WTT layer's setting);
+  - the train list has a "Not running" group;
+  - the delay report counts them apart.
+  - It is not a plan command: it is worked out again from the session start, so resume and review agree.
+  - **Run anyway** (right-click, or the train detail) *is* a plan command (`ExpectToRun`), undoable and saved, for a sim where the rule is wrong.
+- **Tests:** seed group import (Penrith, local); the rule on synthetic timetables (each case above, the forming exception, a timetable with no groups, a start at 00:00 changes nothing); Penrith's 14:00 recording (no 04:00-group train forecast, and nothing that ran is marked); `ExpectToRun` round trip and undo; an App test of the train list group.
+- Close #16 with `Fixes #16`.
+
+### S35 — README for users (#18)
+- **README.md**, written for someone who plays SimSig and has never seen Stringline (Australian English, plain words):
+  - what it is, with one picture of the graph (from `build/guide-shots.ps1`, free-sim data);
+  - download and install, and the SmartScreen note (#1);
+  - turning on the Interface Gateway in SimSig's Loader;
+  - connecting and the first graph, in a few steps;
+  - links to the user guide (wiki) for everything else;
+  - privacy, licence (GPL-3.0-or-later), and where to report a problem.
+  - Keep it short: about one screen before the links.
+- **`docs/developer.md`** gets everything for developers:
+  - build and test (Windows, Linux `.slnf`), the stack and project layout;
+  - the `Stringline.Tools` commands (from `CLAUDE.md`'s list, not copied word for word: link to `CLAUDE.md` for the full set or keep one list);
+  - the fixtures policy (free sims in `tests/fixtures`, payware in `local-fixtures`);
+  - benchmarks, publishing and releases, the wiki workflow, the design docs (`docs/00…07`), and the licence rule for dependencies.
+  - The README links to it under "Contributing". `CONTRIBUTING.md`, if added, is a short pointer to it.
+- **Check:** the links that tests or workflows rely on still work: `PrivacyTests` checks the README links the policy, the wiki script, and the guide link check. Extend the guide's link check to `README.md` and `docs/developer.md`.
+- Close #18 with `Fixes #18`.
+
+### S36 — Progress between booked points, from today's data (#17, part 1)
+- **Find out first:** on Waterloo's recordings and the corpus, how often trains report a timing location their WTT leaves out, and how long trains go between reports on corridor locations. A long gap is the problem #17 describes. Record a baseline (median and 95th percentile gap per sim) in `progress.md`, so S38 can show the gain.
+- **Unbooked timing locations in the forecast** (`Forecaster.StartRunning` skips them now):
+  - A reported location between booked points k and k+1 becomes a progress anchor, provided it lies on the train's corridor route or in the `LocationGraph` between them.
+  - The rest of the run to k+1 is forecast from that location, using `MinRunTable` from it to k+1 (and the train's lateness so far). Without a minimum from it, the run is shared in proportion, as `CorridorMeasurement` does.
+  - Delay is not measured there, because it has no booked time. The hover says "passed EARLSFD 09:12 (not booked)".
+- **The actual line** already draws reported corridor locations (`AddActual`). Check that unbooked ones keep their place, and that delay colouring carries the latest known delay across them (`DelayColours`).
+- **Live head:**
+  - Each running train's actual line goes on from its last report to "now", along its forecast, as a short segment in the actual style;
+  - it ends in a small marker that moves with the clock (the scene builder adds it; the renderer draws it each frame from the clock, without a rebuild);
+  - it is held at the last report's place once the forecast says the train should be past the next point but no report has come ("overdue"), so it never runs ahead of reality;
+  - it is off in review and exports unless the layer is on.
+  - **Live head** is a layer toggle, on by default, next to Forecast.
+- **Corridor extra points (first part):** the profile can hold corridor locations shown as faint, narrow rows (`CorridorLocation.Minor`: no label unless zoomed, no grid line). They are for timing locations the corridor generator skipped, and in S38 for placed signals. The profile editor can add and remove them.
+- **Tests:** a train reporting an unbooked location between two booked points (the forecast moves to it); no minimum from it (proportional); the live head's position against the clock and its overdue hold (Graph.Tests, portable); minor rows in the axis and editor; the gap baseline on Waterloo.
+
+### S37 — Learning signal, track circuit and berth places (#19, part 1)
+Takes over S33's "find out first".
+- **Model** (`Stringline.Network`, portable): `SignallingPlaces` in the profile:
+  - **signals:** ID, direction (Up/Down), the timing locations either side (from, to), fraction along (0–1, in run time), and the line if the trains passing it share one;
+  - **track circuits:** ID, from, to, start and end fractions, the signals bounding them where known;
+  - **berths:** ID, from, to, fraction, and the signal it belongs to where the ID matches (e.g. berth `0457` ↔ `S457`);
+  - for each: sample count, spread, last learned (sim day and session), and a hand-set mark that learning never overwrites.
+  - `ProfileJson` round trips it (version stays 2 if older Stringlines can ignore it, as S31 did).
+- **Learner** (`SignalLearner`, pure; fed a WTT, a profile and an event stream):
+  - For each matched train between two reported timing locations a and b (booked or not), with times t_a and t_b and no stop between (no arrival or departure, and t_b − t_a within, say, 1.5 × the minimum), a signal passed at t gives a sample (t − t_a) / (t_b − t_a) for (signal, a→b). The place is the median, and the spread is the interquartile range. Samples from a train stopped by a signal (`aspAppr` red before the pass) are left out.
+  - **Track circuits:** an `SG_MSG track … clear:"False"` is put to the train most recently at the signal or place just before it in the right direction, if exactly one train is near. The track circuit's start is that time's fraction, and its end is when it clears. A track circuit occupied with no train near is skipped (that is a failure: see `03-…md` §6). Find out how reliable this is, and record it.
+  - **Berths:** a CA step into a berth is placed the same way, by the train whose description it is.
+  - A place is **used** only with at least 3 samples and a spread under about 10% of the section; otherwise it is kept as "learning". A section seen in both directions, with signals one way only, is fine: signals are directional.
+- **Learning in the app:** on by default (Options ▸ Profile ▸ "Learn signal places", with the sample threshold).
+  - Every live or replayed session feeds the learner off the planning thread; it must not slow the engine.
+  - The result is merged into the profile when the session ends (or on Save profile), and logged as one line.
+  - Review mode does not learn twice from a session it has already learned from: keep the session IDs it has used.
+- **Profile editor ▸ Signals tab:** per corridor section, its signals, track circuits and berths in order, with fraction, samples, spread and state (used / learning / hand-set). The user can edit a fraction (marks it hand-set), delete one, add one by hand, or Reset learned places for a section or the whole sim.
+- **Sharing:** Tools ▸ Export profile… and Import profile… (a `.json`; on import, the user picks merge, which keeps hand-set and pools samples, or replace). The guide gets a page on sharing a profile for a sim.
+- **CLI:** `stringline learn --wtt t.wtt --log x.sslog [--profile p.json] [--out p.json] [--report]`: learns from one or more recordings, and prints per section the places, samples and spread, and what is still learning.
+- **Gate:** on Fred's recordings and Waterloo, report the share of signals passed by 3 or more trains that reach "used", and how far the places move between two recordings of the same sim. If places are not stable (they move more than the spread), stop, write why in `progress.md` and `06-…md` §4, and leave S38–S39 and S33 for a rethink.
+- **Tests:** the learner on a synthetic stream (a known fraction comes back; a stopped train is left out; too few samples stays learning; a hand-set place is not moved); track circuit attribution with two trains near (skipped); `ProfileJson` round trip; merge on import; Waterloo learning (portable, from `tests/fixtures`); an App test of learning a replay and seeing it in the Signals tab.
+
+### S38 — Signals and track circuits in the graph and forecast (#17 part 2, #19)
+- **Actual line through signals.** A pass at a placed (used) signal adds a vertex at its place between the two timing locations, so the line bends where the train was checked. Track circuit occupation moves the live head (S36) to the track circuit's start.
+- **Forecast re-anchors** at each placed signal, track circuit and berth step: the rest of the run to the next timing point is the remaining fraction of the section's run (the minimum, scaled by the train's running so far in that section). It is cheap enough to do on every pass (GR-9 budget: check with the benchmarks).
+- **Held, not late:** a train whose last pass had a red approach aspect (`aspAppr` 0), or whose track circuit stays occupied with the next one clear, while a signal ahead shows red, is **standing at a signal**. The live head stops there; the hover says "standing at S457 since 09:12"; the forecast assumes it moves only after the conflicting train clears, rather than now. Record in `03-…md` §6 which messages show it, and how soon.
+- **Extra points on the axis:** placed signals can be shown as minor rows (S36) or as small ticks on the axis (View ▸ Signals: off / ticks / rows), with the signal ID on hover.
+- **Hover:** the actual line at a signal says "passed S457 at 09:12:30 (green / single yellow…)", with the aspect names as SimSig uses them.
+- **Tests:** a path with signal vertices; the forecast re-anchoring at a signal and a track circuit; the held detection on Waterloo's failure recording (the T1620 failure must not count as a train held); render snapshots with ticks and rows; the benchmark still under 33 ms a frame; the S36 gap baseline again (it should fall).
+
+### S39 — Block headways and conflicts at signals (#19, part 3)
+- **Section headways from signal blocks.** Where a section has used signal places, its headway is the time for a leader to clear the blocks a follower needs clear. That is the next *n* blocks plus the overlap: *n* = 2 for four-aspect signalling, 1 for three-aspect. The aspect count is learned from the highest `aspPass` seen on the line, or set in the profile. It is measured from observed running (the learner's per-block times), at the section's minimum run speed.
+  - **Order** (extends S27, `06-…md` §3): hand-set > **blocks (measured; may be above or below the default)** > WTT (only tighten) > profile default > global default.
+  - The source shows as "blocks" in the profile editor, `stringline corridors --headways` and the conflict tooltip.
+- **Catching up inside a section.** `SectionOccupancy` checks headway only at timing locations. A fast train catching a slow one between them is missed. Check the same-direction separation at each placed signal (forecast times by fraction) as well. A headway conflict there names the signal: "1A23 catches 2B44 at S457 (1 min 10 s)".
+- **Suggester and optimiser** use the same headways (through `Section`), so they need no change beyond checking that they still pass. The optimiser's model may need the per-signal check as extra constraints, if catching-up conflicts stay after a re-plan. Measure first.
+- **Tests:**
+  - block headways on synthetic sections (four- and three-aspect);
+  - a catching-up conflict found at a signal and not before;
+  - Waterloo's conflicts before and after on the 4× and failure recordings: false headway conflicts should fall, and none of the real ones should be lost (as S27);
+  - Llangollen's single line unchanged;
+  - `ProfileJson` round trip of the aspect count.
+  - Update `06-…md` §3.
 
 ## Phase 5 — Optional extensions
 - **S19** Opt-in assist: route-request / TD-interpose for the selected regulation step, with explicit confirmation and per-session enable.
@@ -354,7 +482,8 @@ S1 → S2 → S3 ─┬→ S5 → S7 → S8 → S9
 S8 → S10 → S11 → S12 → S13 → S14 → S14a → S15 → S16 → S17 → S18 → S22 → S23 → S24 → S25 → S26 → S27 → (S19–S21)
                                                                     S18 → S28 (after S26 for grips, S29 for multiplayer)
                                                                     👤 recording → S29
-S21 → S30, S31 → S32 → S33
+S21 → S30, S31 → S34, S35 → S36 → S37 → S38 → S39 → S32 → S33
+                          👤 longer --td recordings → S37 (S38, S39 and S33 need S37's places)
 ```
 S4 and S6 can run in parallel with S2–S3 (separate worktrees/sessions).
 

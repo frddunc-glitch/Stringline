@@ -1851,6 +1851,30 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Questions for Fred
 - 28. **Dash-dot.** Is 7–4–dot–4 at 1.5 px clear enough on your screen, or would you like a longer dash?
 
+## 2026-10-21 — Issue review (#16–#19)
+
+### Done
+- Reviewed open issues #16, #17, #18 and #19 with Fred (#1 and #5 left as they were). Six sessions went into `07-implementation-plan.md` as **Phase 4c (S34–S39)**. They run before S32, as #19 asked, and S33 is now its build only.
+- **Findings from the code:**
+  - The gateway already sends signal passes. They are about two thirds of `train_location`s, with aspects. SimSig also reports timing locations that a train's WTT leaves out. `Forecaster.StartRunning` skips both, and `GraphSceneBuilder.AddActual` draws only timing locations. So a train on a sim with few timing points shows no progress for long stretches (#17), and headways and conflicts are only checked at timing points (#19).
+  - The WTT's `SeedGroups` (Penrith: 04:00, 14:00) and each train's `SeedGroup` are ignored on import. The forecaster skips only trains that were over before the session started, so unseeded trains that should have been part-way through their run, and other groups' seeded trains, are still forecast (#16).
+  - The fixtures are short for learning: `waterloo-1x` has 614 `train_location`s, and `waterloo-4x` has no TD topic.
+- **Fred's choices:**
+  - learn signal places from play (recordings and every session), shareable through profile export and import; not AI from schematics;
+  - all four of: unbooked locations, signal passes on the line, a live head to now, and extra corridor points;
+  - block headways and catching-up checks at signals (not full block occupancy yet);
+  - track circuits placed with the signals;
+  - learning on by default, reviewable in the profile editor;
+  - automatic "Not running" for trains SimSig will not run, with Run anyway;
+  - README for users, and developer content in `docs/developer.md`.
+
+### Next
+- S34 (#16) and S35 (#18), then S36 → S37 → S38 → S39, then S32 → S33.
+- 👤 Fred, before S37: record 1–2 h with `--td` on the sim where #17 showed and on a busy sim, at 1×–4×.
+
+### Questions for Fred
+- 29. **Which sim showed #17?** Name it in the recording's notes, so S36's baseline and S37's gate use it.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
