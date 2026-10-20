@@ -28,6 +28,14 @@ public partial class App : Application
     {
         base.OnStartup(e);
         var paths = AppPaths.Default;
+        if (e.Args is [var only] && string.Equals(only, StartupOptions.ForgetPassword, StringComparison.OrdinalIgnoreCase))
+        {
+            // The uninstaller (S30): remove a saved password and stop, with no window and no log.
+            new AppSettingsStore(paths, new DpapiSecretProtector(), NullLogger<AppSettingsStore>.Instance).ForgetSavedPassword();
+            Shutdown(0);
+            return;
+        }
+
         // Read before the host is built, for the log level and how many log files to keep.
         var settings = new AppSettingsStore(paths, new DpapiSecretProtector(), NullLogger<AppSettingsStore>.Instance).Load();
         var logging = new AppLogging(paths.Logs, settings.DetailedLogging);

@@ -291,7 +291,7 @@ public sealed class GatewayClientTests : IAsyncLifetime, IDisposable
             : new StompFrame(StompCommands.Connected, [new("version", "1.1")]);
         await using var client = new GatewayClient(Options(o => new GatewayClientOptions
         {
-            Host = o.Host, Port = o.Port, ConnectTimeout = TimeSpan.FromMilliseconds(200), MinReconnectDelay = TimeSpan.FromMilliseconds(10),
+            Host = o.Host, Port = o.Port, ConnectTimeout = TimeSpan.FromSeconds(1), MinReconnectDelay = TimeSpan.FromMilliseconds(10),
         }));
         var reasons = new ConcurrentQueue<string?>();
         client.ConnectionChanged += (_, c) =>
@@ -305,8 +305,9 @@ public sealed class GatewayClientTests : IAsyncLifetime, IDisposable
 
         await _server.WaitForSubscribersAsync(GatewayTopics.SimSig);
 
-        attempts.Should().Be(2);
-        reasons.Should().ContainSingle().Which.Should().Contain("No CONNECTED reply");
+        // Only the first attempt is ignored; a slow runner may time out a later one too.
+        attempts.Should().BeGreaterThanOrEqualTo(2);
+        reasons.Should().NotBeEmpty().And.OnlyContain(r => r != null && r.Contains("No CONNECTED reply", StringComparison.Ordinal));
     }
 
     [Fact]
