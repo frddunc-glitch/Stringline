@@ -48,6 +48,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private readonly IDialogService _dialogs;
     private readonly IUiDispatcher _ui;
     private readonly AppPaths _defaultPaths;
+    private readonly HelpGuide _guide;
     private readonly AppLogging? _logging;
     private readonly TimeProvider _time;
     private readonly ILoggerFactory _loggerFactory;
@@ -88,6 +89,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _dialogs = dialogs;
         _ui = ui;
         _defaultPaths = paths;
+        _guide = new HelpGuide(paths.Help);
         _paths = paths;
         _logging = logging;
         _time = time;

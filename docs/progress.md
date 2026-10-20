@@ -1460,6 +1460,84 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Questions for Fred
 - 19. **Headways on your sims.** Run `stringline corridors your.wtt --headways` on the sims you play (and with `--log` for a recording if you have one). Do the WTT figures look like the signalling? Any section you know runs closer, or needs more room, can be set by hand.
 
+## 2026-10-20 — S28: User guide, in-app help and wiki (#4)
+
+### Done
+- **The guide** (`docs/user-guide`, 17 pages, Australian English, SimSig's railway terms). Its pages are a contents page (`README.md`, with a five-minute start) and:
+  - installing;
+  - turning on the gateway;
+  - connecting (single player, payware, train describer, dropped connections, a provisional multiplayer section, replays);
+  - timetables and profiles (loading, matching, corridors, the profile editor, headways and where they come from);
+  - reading the graph (layout, axes, lines, delay colours, moving around, hovering, the train list, status bar and clock);
+  - re-planning (selecting, grips and their limits, nudges, the right-click menu, the train detail panel, undo and history);
+  - disruptions and notes;
+  - conflicts and suggestions (the kinds, headways, suggestions, knock-on);
+  - the regulation list;
+  - sessions, recordings and review (including replays);
+  - exports and reports (the Delays tab, PNG, PDF, CSV);
+  - settings (every Options tab, and the window layout);
+  - troubleshooting and logs;
+  - a glossary;
+  - keyboard and mouse;
+  - further reading.
+- **Pictures** (`docs/user-guide/images`, 8 PNGs, about 2.8 MB), from Waterloo only. `build/guide-shots.ps1` makes them again:
+  - `render-png` makes `graph.png` and `graph-by-delay.png`;
+  - `GuideScreenshotTests` (App), run with `STRINGLINE_WINDOW_SHOTS` set, makes the main window (a running train selected, an hour across), its grips, and the Connect, Open replay, Options and profile editor windows.
+  - The shots draw through a `VisualBrush`, so a dialog's margin no longer shifts and crops it. The dialogs show plain file names, not this machine's folders.
+- **In-app help, offline** (Fred: render at run time). `HelpGuide` (App/Services, no WPF):
+  - The guide's Markdown and images are embedded in the exe (`Stringline.Guide/…`).
+  - On first use in a run, it renders them with **Markdig 1.4.0** (BSD-2-Clause; added to `Directory.Packages.props`, `THIRD-PARTY-NOTICES.md` and About's credits) into `%LOCALAPPDATA%\Stringline\help` (`AppPaths.Help`). The pages have a contents sidebar, light and dark styles, GitHub heading IDs, links pointed at the `.html`, and a footer linking the page on GitHub.
+  - A heading is opened through a small `open.html`, because Windows drops the `#heading` when it hands a file to the browser.
+  - **Help ▸ User guide** (F1 shown) opens the contents. **Getting started (online)** stays.
+  - **F1** is `ApplicationCommands.Help` with one class binding on `Window` (`Views.Help`), so it works in dialogs too. The page is the inherited `views:Help.Topic` of the focused element (`HelpTopics`):
+    - graph, train list, train detail, the four tabs and the replay transport;
+    - Connect, Open replay, Options and the profile editor.
+  - `MainViewModel.OpenGuide(topic)` writes the guide and opens it; a write failure is logged and shown.
+- **Wiki** (Fred: workflow and script).
+  - `build/publish-wiki.ps1 -Out dir` writes the wiki's pages: README becomes Home, `.md` links become wiki links with their headings kept, and the script adds images, a `_Sidebar` in contents order and a `_Footer` saying where to edit.
+  - `-Push` clones, commits and pushes. The token goes to git as a header, never in a URL or the log. With no wiki repository yet, it warns and passes.
+  - `.github/workflows/wiki.yml` runs it on pushes to `main` that touch the guide, and by hand.
+- **Other sources.** I reviewed the SimSig wiki's [Interface Gateway](https://www.simsig.co.uk/Wiki/Show?page=usertrack:interface_gateway) page and the forum's [Interface Gateway board](https://www.simsig.co.uk/Forum/BoardView/266), and linked both from Further reading.
+  - From the forum: SimSig fails with "cannot open a TCP port for hosting the information gateway" when 51515 is taken or blocked. That is now in Troubleshooting and on the gateway page.
+- **Fixed on the way:** the Connect dialog's "Remember the password (encrypted for your Windows account)" ran off the dialog's right edge. Both check boxes now span the Browse column and wrap.
+- **Docs:** `05-…md` §1 (Help menu) and new §13, the plan, README (a link to the guide, and a developers' section on keeping it), `CLAUDE.md`.
+- **Tests:**
+  - `GuideLinkTests` (3, Architecture, portable): every relative link, image and heading resolves (Markdig's GitHub IDs); links stay inside the guide; every page is in the contents; every image is used. `WordingTests` already covers the guide.
+  - `HelpTests` (6, App): every guide file is embedded; every F1 topic's page and heading is rendered; the HTML's links, images and contents; `open.html`; an unknown page opens the contents; F1 on the graph, lists, detail and history; Help ▸ User guide gives the contents; F1 in the Connect dialog.
+  - `GuideScreenshotTests` (2, App).
+  - `WikiScriptTests` (1, App).
+  - `MenuTests`: F1 is the Help command, not a window key binding.
+- Totals: 1 548 (Core 259, Architecture 13, Gateway 207, Timetable 166, Network 160, Planning 234, Persistence 12, Graph 259, Tools 67, App 171). Green on Windows (Debug), and on Linux (`sdk:10.0` container, portable filter, Release: 1 377).
+
+### Decisions
+- **Fred:**
+  - embed the Markdown and render it at run time, with no build-time step;
+  - the wiki by a workflow plus a script;
+  - a provisional multiplayer section;
+  - commit the pictures.
+- **Markdig 1.4.0**, not 1.4.1 or 1.4.2: both are under two weeks old.
+- **No F1 key binding on the window.** WPF's Help command already has F1, and a window binding would swallow it before the focused panel's page could be picked. The menu item sends "contents".
+- **The guide is written again in each run.** That costs about 20 small files, and a new version's guide always replaces the last, even between builds of one version.
+- **Links stay inside the guide.** Anything else, such as the README or the design docs, is linked on GitHub, so the bundled help and the wiki have no broken links.
+- **Follow-up issues not raised (Fred).** To raise if wanted:
+  - check the gateway page's Loader steps against SimSig's current Loader (also question 14);
+  - have Stringline say why when port 51515 is already taken (by its own replay-server, say).
+
+### Next
+- S29: the multiplayer investigation (#5), when Fred's recording is ready. It replaces the provisional section in `connecting.md`.
+- Keep the guide in step with UI changes. `guide-shots.ps1` remakes the pictures.
+
+### Known issues
+- **Not tried by hand.** 👤 Fred:
+  - press F1 in a few panels and dialogs in the app, and use Help ▸ User guide;
+  - read the guide for anything that does not match SimSig as you play it.
+- **👤 The wiki needs its first page.** The repository's wiki is turned on but empty. Create any first page on GitHub, then run Actions ▸ Wiki ▸ Run workflow. Until then the workflow warns and passes.
+- The guide's pictures are Waterloo at 08:05 on the 4× recording. They show WPF's off-screen rendering, which is close to the app on screen but not exact.
+- The guide lists the Options defaults. If a default changes, the guide must change too: no test checks this.
+
+### Questions for Fred
+- 20. **The guide's gateway steps.** Do "tick **Interface Gateway** in the options for starting the sim" and the payware login match what you see in SimSig's Loader? This is question 14 again; the guide repeats the README.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

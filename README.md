@@ -22,6 +22,8 @@ Uninstalling leaves your settings, profiles, sessions and logs in place (see [Wh
 
 ## Getting started
 
+The **[user guide](docs/user-guide/README.md)** covers everything below in more detail. In the app, **Help ▸ User guide** opens it, and **F1** opens the page for the panel or window you are in; both work offline. It is also on the [wiki](https://github.com/frddunc-glitch/Stringline/wiki).
+
 1. **Turn on the Interface Gateway in SimSig.** In SimSig's options for starting a sim, turn on **Interface Gateway** before you start the sim. It uses port 51515. The [SimSig wiki](https://www.simsig.co.uk/) explains the option on its "Interface Gateway" page.
 2. **Start the sim, then connect.** In Stringline, choose **Session ▸ Connect to SimSig…** (F5). The host is `localhost` and the port 51515, unless you changed them in SimSig.
    - For a **payware sim**, enter your SimSig forum username and password: SimSig checks them online. Tick **Remember the password** to keep it, encrypted for your Windows account. Stringline never writes it to its logs.
@@ -151,6 +153,17 @@ Without `--profile`, corridors come from the WTT (`corridors` lists them).
 - `--colour delay` colours the actual running by delay band: green on time or early, amber 1–5 min late, orange 6–15, red over 15.
 
 An output ending in `.pdf` writes a PDF (`--page a3|a4|view`). `report` writes the delay table as CSV.
+
+### The user guide
+
+The guide is Markdown in `docs/user-guide` (Australian English, railway terms as SimSig uses them). The app embeds it and renders it to HTML with Markdig when Help ▸ User guide or F1 is used. A test checks every link, image and heading in it, and that every F1 page exists.
+
+```powershell
+./build/guide-shots.ps1                     # make docs/user-guide/images again from free-sim data (render-png and the App window tests)
+./build/publish-wiki.ps1 -Out wiki-preview  # the wiki's pages, to look at
+```
+
+The **Wiki** workflow copies the guide to the GitHub wiki whenever it changes on `main` (`publish-wiki.ps1 -Push`). Edit the guide, never the wiki. The wiki needs its first page made by hand on GitHub before it can be pushed to.
 
 ### Benchmarks
 

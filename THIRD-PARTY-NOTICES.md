@@ -10,6 +10,7 @@ Stringline is licensed under the GNU General Public License, version 3 or later 
 | Serilog | Apache-2.0 | log files | https://serilog.net |
 | Microsoft.Data.Sqlite and SQLitePCLRaw | MIT and Apache-2.0 | saved sessions | https://github.com/dotnet/efcore |
 | SQLite | Public domain | saved sessions | https://sqlite.org |
+| Markdig | BSD-2-Clause | showing the user guide | https://github.com/xoofx/markdig |
 | Noto Sans | SIL Open Font Licence 1.1 | the graph's labels | https://notofonts.github.io |
 
 The Noto Sans fonts are embedded in `Stringline.Graph`. Their licence is in `src/Stringline.Graph/Fonts/OFL.txt` and is shipped with the app as `OFL.txt`.

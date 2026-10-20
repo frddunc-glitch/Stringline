@@ -35,6 +35,28 @@ internal sealed partial class MainViewModel
     [RelayCommand]
     private void OpenHelp() => Open(AboutInfo.SourceUrl + "#readme");
 
+    /// <summary>
+    /// The user guide bundled with the app (S28, #4), at a page and heading such as <see cref="HelpTopics.Conflicts"/>,
+    /// or its contents. Help ▸ User guide opens the contents; F1 the page for the panel or window with the focus.
+    /// </summary>
+    [RelayCommand]
+    public void OpenGuide(string? topic)
+    {
+        string path;
+        try
+        {
+            path = _guide.PathFor(topic);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            LogGuideFailed(ex, _guide.Folder);
+            _dialogs.ShowError("Stringline", $"Could not write the user guide to {_guide.Folder}: {ex.Message}");
+            return;
+        }
+
+        Open(path);
+    }
+
     [RelayCommand]
     private void OpenLogFolder()
     {
@@ -130,6 +152,9 @@ internal sealed partial class MainViewModel
         var deleted = SessionCatalogue.DeleteOlderThan(folder, cutoff, Store?.Path);
         LogSessionsDeleted(deleted.Count, days, folder);
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not write the user guide to {Folder}")]
+    private partial void LogGuideFailed(Exception ex, string folder);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Logging at {Level} from now on")]
     private partial void LogLoggingChanged(string level);

@@ -255,6 +255,7 @@ Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fi
   - 👤 Fred turns on the wiki and creates its first page. GitHub needs that first page before the wiki can be pushed to.
 - **Other sources.** Review the SimSig wiki and forum pages on the Interface Gateway, and link them from the guide's "Further reading". Raise follow-up issues for gaps found (the issue expects this may need another issue).
 - **Tests:** link check over the guide (no broken relative links or images); the bundled help resource exists and every F1 target page exists.
+- *Built in S28:* Fred chose to embed the Markdown and render it at run time (Markdig 1.4), a workflow plus script for the wiki, a provisional multiplayer section (S29 confirms it), and committed pictures. See `05-…md` §13.
 
 ### S29 — Multiplayer investigation 🪟 (#5)
 - 👤 **Before this session**, Fred records:

@@ -3,6 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Stringline.App.Controls"
         xmlns:views="clr-namespace:Stringline.App.Views"
+        xmlns:services="clr-namespace:Stringline.App.Services"
+        views:Help.Topic="{x:Static services:HelpTopics.ProfileEditor}"
         Title="{Binding Title}" Height="720" Width="1040" MinWidth="760" MinHeight="520"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False" UseLayoutRounding="True">
   <Window.Resources>

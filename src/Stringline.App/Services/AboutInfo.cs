@@ -61,6 +61,7 @@ internal static class AboutInfo
         new("Serilog", "Apache-2.0", "https://serilog.net", "log files", "Serilog*"),
         new("Microsoft.Data.Sqlite and SQLitePCLRaw", "MIT and Apache-2.0", "https://github.com/dotnet/efcore", "saved sessions", "Microsoft.Data.Sqlite"),
         new("SQLite", "Public domain", "https://sqlite.org", "saved sessions"),
+        new("Markdig", "BSD-2-Clause", "https://github.com/xoofx/markdig", "showing the user guide", "Markdig"),
         new("Noto Sans", "SIL Open Font Licence 1.1", "https://notofonts.github.io", "the graph's labels"),
     ];
 

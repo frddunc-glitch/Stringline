@@ -11,4 +11,9 @@
     <ProjectReference Include="..\..\src\Stringline.Tools\Stringline.Tools.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The user guide's link check (S28) reads the Markdown as the app's help does. -->
+    <PackageReference Include="Markdig" />
+  </ItemGroup>
+
 </Project>

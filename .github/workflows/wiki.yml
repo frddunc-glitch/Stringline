@@ -1,0 +1,31 @@
+name: Wiki
+
+# Copies the user guide (docs/user-guide) into the GitHub wiki whenever it changes on main, or when run by hand
+# (Actions ▸ Wiki ▸ Run workflow). The repository is the source; the wiki is never edited by hand. Until the wiki has
+# its first page (made on GitHub by hand), the script warns and the run still passes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/user-guide/**'
+      - 'build/publish-wiki.ps1'
+      - '.github/workflows/wiki.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Publish the user guide to the wiki
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./build/publish-wiki.ps1 -Push

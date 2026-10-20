@@ -21,6 +21,7 @@ public partial class MainWindow : Window
 
     internal MainWindow(MainViewModel viewModel)
     {
+        Views.Help.Register();
         InitializeComponent();
         _viewModel = viewModel;
         DataContext = viewModel;

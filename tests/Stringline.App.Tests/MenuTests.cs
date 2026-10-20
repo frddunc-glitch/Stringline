@@ -162,6 +162,15 @@ public sealed class MenuTests
                         continue;
                     }
 
+                    if (shown == "F1")
+                    {
+                        // S28: F1 is WPF's Help command, in every window; the menu sends it for the guide's contents.
+                        item.Command.Should().Be(ApplicationCommands.Help);
+                        ApplicationCommands.Help.InputGestures.OfType<KeyGesture>().Should().Contain(g => g.Key == Key.F1 && g.Modifiers == ModifierKeys.None);
+                        bindings.Should().NotContain(b => b.Text == "F1", "F1 must reach the Help command, which picks the page from the focus");
+                        continue;
+                    }
+
                     if (shown is "Space" or "Esc")
                     {
                         var key = shown == "Esc" ? "Escape" : shown;

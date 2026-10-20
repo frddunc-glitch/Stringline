@@ -31,6 +31,9 @@
     <Resource Include="Assets\stringline.ico" />
     <!-- The GPL's text, for the About window's View licence (embedded, so a single-file build has it). -->
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="Stringline.LICENSE.txt" Link="LICENSE" Visible="false" />
+    <!-- The user guide (S28, #4), rendered to HTML for Help ▸ User guide and F1. Named by its path under docs/user-guide. -->
+    <EmbeddedResource Include="..\..\docs\user-guide\**\*.md;..\..\docs\user-guide\**\*.png" Visible="false"
+                      LogicalName="Stringline.Guide/%(RecursiveDir)%(Filename)%(Extension)" Link="Guide\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -49,6 +52,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Markdig" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Serilog.Extensions.Hosting" />
     <PackageReference Include="Serilog.Sinks.File" />

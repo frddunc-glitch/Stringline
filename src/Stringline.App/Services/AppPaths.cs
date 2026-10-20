@@ -27,6 +27,9 @@ internal sealed record AppPaths(string Settings, string Profiles, string Logs, s
         }
     }
 
+    /// <summary>Where the bundled user guide is written as HTML (S28): <c>%LOCALAPPDATA%\Stringline\help</c>, beside the logs.</summary>
+    public string Help => Path.Combine(Path.GetDirectoryName(Logs) ?? Logs, "help");
+
     /// <summary>These paths with the folders the user chose in the settings (S18), where they chose any.</summary>
     public AppPaths WithFolders(AppSettings settings)
     {

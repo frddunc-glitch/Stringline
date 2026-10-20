@@ -5,6 +5,8 @@
   </PropertyGroup>
   <ItemGroup Label="App">
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- Markdig: BSD-2-Clause. Renders the bundled user guide (S28). -->
+    <PackageVersion Include="Markdig" Version="1.4.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
     <PackageVersion Include="SkiaSharp.Views.WPF" Version="4.153.1" />
   </ItemGroup>

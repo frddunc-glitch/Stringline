@@ -23,7 +23,7 @@ public sealed class MainWindowTests
     private static readonly string? Shots = Environment.GetEnvironmentVariable("STRINGLINE_WINDOW_SHOTS");
 
     /// <summary>A replay run to its end, with a train, a conflict (and its suggestions) and a regulation location picked, so every list has rows.</summary>
-    private static async Task<MainViewModel> Replay(TestApp app)
+    internal static async Task<MainViewModel> Replay(TestApp app)
     {
         var vm = app.ViewModel;
         await app.Ui.RunAsync(() => vm.OpenReplayAsync(Fixtures.Path(Fixtures.Waterloo4x), Fixtures.Path(Waterloo), double.PositiveInfinity, null));
@@ -44,7 +44,7 @@ public sealed class MainWindowTests
         return vm;
     }
 
-    private static MainWindow Show(MainViewModel vm, double width, double height)
+    internal static MainWindow Show(MainViewModel vm, double width, double height)
     {
         var window = new MainWindow(vm)
         {
@@ -61,7 +61,7 @@ public sealed class MainWindowTests
     }
 
     /// <summary>Let layout, data binding and the grids' second measure (Auto columns) finish.</summary>
-    private static void Settle(Window window)
+    internal static void Settle(Window window)
     {
         for (var i = 0; i < 3; i++)
         {

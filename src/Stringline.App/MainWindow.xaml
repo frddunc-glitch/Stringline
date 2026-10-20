@@ -6,7 +6,8 @@
         xmlns:services="clr-namespace:Stringline.App.Services"
         xmlns:local="clr-namespace:Stringline.App"
         Title="{Binding Title}" Icon="pack://application:,,,/Stringline;component/Assets/stringline.ico" Height="860" Width="1600" MinWidth="1050" MinHeight="520"
-        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display"
+        views:Help.Topic="{x:Static services:HelpTopics.Contents}">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     <views:NotNullToVisibilityConverter x:Key="NotNull" />
@@ -177,6 +178,8 @@
           <MenuItem Header="Re_generate corridors…" Command="{Binding RegenerateCorridorsCommand}" />
         </MenuItem>
         <MenuItem Header="_Help">
+          <!-- The bundled guide's contents (S28); F1 opens the page for the panel or window with the focus (Views.Help) -->
+          <MenuItem Header="_User guide" InputGestureText="F1" Command="ApplicationCommands.Help" CommandParameter="contents" />
           <MenuItem Header="_Getting started (online)" Command="{Binding OpenHelpCommand}" />
           <MenuItem Header="Open _log folder" Command="{Binding OpenLogFolderCommand}" />
           <Separator />
@@ -278,7 +281,8 @@
 
     <!-- Replay transport -->
     <Border DockPanel.Dock="Bottom" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="6,4" Background="#FAFAFA"
-            DataContext="{Binding Transport}" Visibility="{Binding Converter={StaticResource NotNull}}">
+            DataContext="{Binding Transport}" Visibility="{Binding Converter={StaticResource NotNull}}"
+            views:Help.Topic="{x:Static services:HelpTopics.Replay}">
       <DockPanel>
         <Button DockPanel.Dock="Left" Width="70" Command="{Binding PlayPauseCommand}">
           <Button.Style>
@@ -335,7 +339,7 @@
         <ColumnDefinition x:Name="SideColumn" Width="490*" MinWidth="{x:Static services:WindowLayout.MinSideWidth}" />
       </Grid.ColumnDefinitions>
 
-      <DockPanel x:Name="TrainListPanel" Grid.Column="0" DataContext="{Binding Trains}">
+      <DockPanel x:Name="TrainListPanel" Grid.Column="0" DataContext="{Binding Trains}" views:Help.Topic="{x:Static services:HelpTopics.TrainList}">
         <StackPanel DockPanel.Dock="Top" Margin="6,6,6,4">
           <DockPanel>
             <TextBlock Text="Trains" FontWeight="SemiBold" VerticalAlignment="Center" />
@@ -382,7 +386,7 @@
                     ToolTip="Drag to resize the train list; double-click to hide or show it"
                     MouseDoubleClick="OnSplitterDoubleClick" DragCompleted="OnSplitterDragCompleted" />
 
-      <Grid Grid.Column="2">
+      <Grid Grid.Column="2" views:Help.Topic="{x:Static services:HelpTopics.Graph}">
         <controls:GraphView x:Name="Graph" Scene="{Binding Scene}" Selection="{Binding Selection}" Navigator="{Binding Navigator}" Ghosts="{Binding Ghosts}" Grips="{Binding Grips}" Draft="{Binding DraftDisruption}">
           <controls:GraphView.InputBindings>
             <KeyBinding Key="Space" Command="{Binding ToggleFollowCommand}" />
@@ -406,7 +410,7 @@
         </Grid.RowDefinitions>
 
         <!-- Train detail (RP-1) -->
-        <DockPanel Grid.Row="0">
+        <DockPanel Grid.Row="0" views:Help.Topic="{x:Static services:HelpTopics.TrainDetail}">
           <StackPanel DockPanel.Dock="Top" Margin="6,6,6,4">
             <DockPanel>
               <Rectangle Width="4" Fill="{Binding Detail.Colour}" Margin="0,1,6,1"
@@ -520,8 +524,8 @@
 
         <!-- Conflicts (FC-4, S14), regulation, delays and edit history (RP-7), as tabs (Fred) -->
         <TabControl x:Name="SideTabs" Grid.Row="2" BorderThickness="0,1,0,0" Padding="0" SelectedIndex="{Binding SideTab}">
-          <TabItem Header="{Binding ConflictList.Header}">
-            <Grid>
+          <TabItem Header="{Binding ConflictList.Header}" views:Help.Topic="{x:Static services:HelpTopics.Conflicts}">
+            <Grid views:Help.Topic="{x:Static services:HelpTopics.Conflicts}">
               <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" MinHeight="40" />
@@ -596,8 +600,8 @@
             </Grid>
           </TabItem>
           <!-- Regulation list (RP-9, S15) -->
-          <TabItem Header="Regulation">
-            <DockPanel>
+          <TabItem Header="Regulation" views:Help.Topic="{x:Static services:HelpTopics.Regulation}">
+            <DockPanel views:Help.Topic="{x:Static services:HelpTopics.Regulation}">
               <DockPanel DockPanel.Dock="Top" Margin="6,4">
                 <TextBlock Text="At" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <ComboBox x:Name="RegulationLocations" ItemsSource="{Binding Regulation.Locations}" SelectedItem="{Binding Regulation.Location}"
@@ -632,8 +636,8 @@
             </DockPanel>
           </TabItem>
           <!-- Delay table (SES-2, S17) -->
-          <TabItem Header="Delays">
-            <Grid>
+          <TabItem Header="Delays" views:Help.Topic="{x:Static services:HelpTopics.Delays}">
+            <Grid views:Help.Topic="{x:Static services:HelpTopics.Delays}">
               <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -711,8 +715,8 @@
               </DataGrid>
             </Grid>
           </TabItem>
-          <TabItem Header="History">
-            <DockPanel>
+          <TabItem Header="History" views:Help.Topic="{x:Static services:HelpTopics.History}">
+            <DockPanel views:Help.Topic="{x:Static services:HelpTopics.History}">
               <DockPanel DockPanel.Dock="Top" Margin="6,4">
                 <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="↷ Redo" Command="{Binding RedoCommand}"
                         ToolTip="{Binding RedoTip}" ToolTipService.ShowOnDisabled="True" />
