@@ -11,6 +11,8 @@
     <PackageVersion Include="SkiaSharp.Views.WPF" Version="4.153.1" />
   </ItemGroup>
   <ItemGroup Label="Libraries">
+    <!-- Google.OrTools: Apache-2.0 (with Google.Protobuf, BSD-3-Clause). The optimiser's CP-SAT solver (S20). -->
+    <PackageVersion Include="Google.OrTools" Version="9.15.6755" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
     <PackageVersion Include="Serilog" Version="4.4.0" />

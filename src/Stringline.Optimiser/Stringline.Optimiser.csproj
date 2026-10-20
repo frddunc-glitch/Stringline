@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Stringline.Optimiser</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Stringline.Core\Stringline.Core.csproj" />
+    <ProjectReference Include="..\Stringline.Planning\Stringline.Planning.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- OR-Tools CP-SAT (S20): Apache-2.0, with its native solver for Windows, Linux and macOS. -->
+    <PackageReference Include="Google.OrTools" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Stringline.Optimiser.Tests" />
+  </ItemGroup>
+
+</Project>

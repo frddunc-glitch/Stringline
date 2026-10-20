@@ -14,6 +14,7 @@ public class LayeringTests
         "Stringline.Timetable",
         "Stringline.Network",
         "Stringline.Planning",
+        "Stringline.Optimiser",
         "Stringline.Persistence",
         "Stringline.Graph",
         "stringline", // Stringline.Tools

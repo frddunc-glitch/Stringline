@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using Stringline.Core;
 using Stringline.Planning;
 
 namespace Stringline.App.Services;
@@ -129,6 +130,7 @@ internal sealed record PlanningSettings
     private static readonly ForecastOptions Forecast = new();
     private static readonly ConflictOptions Conflict = new();
     private static readonly SuggestionOptions Suggestion = new();
+    private static readonly ReplanOptions Replan = new();
 
     public int DefaultDwellSeconds { get; init; } = Forecast.DefaultDwellSeconds;
 
@@ -154,6 +156,17 @@ internal sealed record PlanningSettings
 
     public double CancelPenalty { get; init; } = Suggestion.CancelPenalty;
 
+    /// <summary>How far ahead Plan ▸ Re-plan works (S20; Fred: 60 min).</summary>
+    public int ReplanHorizonMinutes { get; init; } = Replan.HorizonSeconds / SimTime.SecondsPerMinute;
+
+    /// <summary>How long a re-plan may think (Fred: 5 s).</summary>
+    public double ReplanTimeLimitSeconds { get; init; } = Replan.TimeLimitSeconds;
+
+    public ReplanMethod ReplanMethod { get; init; } = ReplanMethod.Optimiser;
+
+    /// <summary>Let a re-plan move trains to other platforms (Fred: yes).</summary>
+    public bool ReplanPlatformChanges { get; init; } = Replan.AllowPlatformChanges;
+
     public ForecastOptions ToForecastOptions(bool interaction) => new()
     {
         Interaction = interaction,
@@ -163,6 +176,15 @@ internal sealed record PlanningSettings
     };
 
     public ConflictOptions ToConflictOptions() => new() { PlatformMarginSeconds = PlatformMarginSeconds, MinSeveritySeconds = MinConflictSeconds };
+
+    public ReplanOptions ToReplanOptions() => new()
+    {
+        HorizonSeconds = ReplanHorizonMinutes * SimTime.SecondsPerMinute,
+        TimeLimitSeconds = ReplanTimeLimitSeconds,
+        AllowPlatformChanges = ReplanPlatformChanges,
+        PlatformChangePenalty = PlatformChangePenalty,
+        LineChangePenalty = LineChangePenalty,
+    };
 
     public SuggestionOptions ToSuggestionOptions(bool allowCancellation) => new()
     {

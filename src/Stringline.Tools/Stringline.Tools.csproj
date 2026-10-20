@@ -13,6 +13,7 @@
     <ProjectReference Include="..\Stringline.Network\Stringline.Network.csproj" />
     <ProjectReference Include="..\Stringline.Graph\Stringline.Graph.csproj" />
     <ProjectReference Include="..\Stringline.Persistence\Stringline.Persistence.csproj" />
+    <ProjectReference Include="..\Stringline.Optimiser\Stringline.Optimiser.csproj" />
   </ItemGroup>
 
   <ItemGroup>

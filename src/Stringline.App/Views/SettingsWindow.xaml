@@ -132,6 +132,31 @@
             <TextBox x:Name="CancelPenaltyBox" Grid.Row="3" Grid.Column="1" Margin="0,4" Text="{Binding CancelPenalty, UpdateSourceTrigger=PropertyChanged}" />
             <TextBlock Grid.Row="3" Grid.Column="2" Style="{StaticResource Hint}" Margin="8,0,0,0" VerticalAlignment="Center" Text="min (60)" />
           </Grid>
+
+          <!-- Re-planning the horizon (S20, FC-6) -->
+          <TextBlock Style="{StaticResource Intro}" Margin="0,14,0,6"
+                     Text="Plan ▸ Re-plan clears the conflicts ahead all at once, by holding trains where they can wait and (if allowed) moving them to other platforms." />
+          <RadioButton Content="Re-plan with the _optimiser (every conflict at once)" IsChecked="{Binding ReplanWithOptimiser}" GroupName="ReplanMethod" />
+          <RadioButton Content="Re-plan with the suggestion _rules (one conflict at a time, the earliest first)" GroupName="ReplanMethod" Margin="0,2,0,0"
+                       IsChecked="{Binding ReplanWithOptimiser, Converter={x:Static views:InverseBooleanConverter.Instance}}" />
+          <CheckBox Content="Let a re-plan move trains to other _platforms" IsChecked="{Binding ReplanPlatformChanges}" Margin="0,6,0,0" />
+          <Grid Margin="0,6,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="230" />
+              <ColumnDefinition Width="90" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Label Content="Re-plan _ahead" Target="{Binding ElementName=ReplanHorizonBox}" />
+            <TextBox x:Name="ReplanHorizonBox" Grid.Column="1" Text="{Binding ReplanHorizon, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Grid.Column="2" Style="{StaticResource Hint}" Margin="8,0,0,0" VerticalAlignment="Center" Text="min of sim time (60)" />
+            <Label Grid.Row="1" Content="Re-plan _time limit" Target="{Binding ElementName=ReplanLimitBox}" />
+            <TextBox x:Name="ReplanLimitBox" Grid.Row="1" Grid.Column="1" Margin="0,4" Text="{Binding ReplanTimeLimit, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource Hint}" Margin="8,0,0,0" VerticalAlignment="Center" Text="s to think; the best plan found by then is used (5)" />
+          </Grid>
         </StackPanel>
       </TabItem>
 

@@ -46,6 +46,7 @@
     <ProjectReference Include="..\Stringline.Timetable\Stringline.Timetable.csproj" />
     <ProjectReference Include="..\Stringline.Network\Stringline.Network.csproj" />
     <ProjectReference Include="..\Stringline.Planning\Stringline.Planning.csproj" />
+    <ProjectReference Include="..\Stringline.Optimiser\Stringline.Optimiser.csproj" />
     <ProjectReference Include="..\Stringline.Persistence\Stringline.Persistence.csproj" />
     <ProjectReference Include="..\Stringline.Graph\Stringline.Graph.csproj" />
   </ItemGroup>

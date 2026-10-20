@@ -100,6 +100,7 @@ internal sealed partial class MainViewModel
 
         if (before.Planning != next.Planning)
         {
+            UpdateReplanCommand();
             _engine.SetForecast(options: next.Planning.ToForecastOptions(next.ForecastKnockOn), conflicts: next.Planning.ToConflictOptions());
             UpdateSuggestions();
         }

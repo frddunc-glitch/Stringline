@@ -12,6 +12,7 @@
 | Ctrl+P | File ▸ Export ▸ Graph as PDF (A3 landscape)… |
 | Ctrl+Z | Plan ▸ Undo |
 | Ctrl+Y, Ctrl+Shift+Z | Plan ▸ Redo |
+| Ctrl+Shift+R | Plan ▸ Re-plan the next 60 min… |
 | Ctrl+, | Tools ▸ Options… |
 | Ctrl+1 … Ctrl+9 | Show the first to ninth corridor |
 | Alt+F4 | File ▸ Exit |

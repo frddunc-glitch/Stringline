@@ -648,7 +648,7 @@ public sealed partial class WttReader
              "PowerToWeightCategory", "CanUseGoodsLines", "ClassOfService", "SeedingGap", "SeedGroup", "BonusScore", "Started",
              "ActualEntryPoint", "AsRequiredTested", "Delay", "DelayWarned", "EntryAlerted", "EntryChoice", "EntryDecision",
              "EntrySpeed", "EntryWarned", "IncrementOnTransfer", "NonARSOnEntry", "PermissionDelayed", "QueuePosition", "RunOnTime",
-             "STP", "ShuntLastEntry", "ShuntMove", "ShuntPhone", "ShuntTimes"];
+             "STP", "ShuntInterpose", "ShuntLastEntry", "ShuntMove", "ShuntPhone", "ShuntTimes"];
 
         /// <summary>Read, plus SimSig routing hints (Auto…, Prev/NextPath…) and stopping details the graph does not need.</summary>
         public static readonly HashSet<string> Trip =

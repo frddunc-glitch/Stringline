@@ -278,6 +278,7 @@ Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fi
 - **S19** Opt-in assist: route-request / TD-interpose for the selected regulation step, with explicit confirmation and per-session enable.
   - *Built in S19:* Fred chose to ask for the route and remember it per move in the profile, to interpose the picked train's description into a chosen berth, a Session menu switch that is off at each new session, and live connections only (`replay-server` counts; file replays never send). The warning names multiplayer, as S29 asked. See `05-…md` §14.
 - **S20** Optimiser (`IReplanner` using OR-Tools CP-SAT) for a rolling horizon.
+  - *Built in S20:* Fred chose OR-Tools CP-SAT in its own project (`Stringline.Optimiser`, about 20 MB more in the download), holds and platform changes, Plan ▸ Re-plan over the whole horizon shown in the suggestions panel, and 60 min and 5 s in Options. The rules (one conflict at a time) are the other `IReplanner`. `stringline replan` tries either on a recording. See `06-…md` §5 and `05-…md` §15.
 - **S21** Split-view multiple corridors / multi-board layout; vertical TCD print plotting.
 
 ## Dependencies

@@ -75,6 +75,11 @@ internal sealed partial class MainViewModel
         if (ConflictList.Selected?.Id is not { } id || Snapshot.Conflicts.Find(id) is not { } conflict)
         {
             _suggestKey = null;
+            if (SuggestionPanel.IsReplan)
+            {
+                return; // a re-plan stays until a conflict is picked or it is closed
+            }
+
             ClearSuggestionPreview();
             SuggestionPanel.Clear();
             return;
@@ -159,8 +164,14 @@ internal sealed partial class MainViewModel
 
         // Its commands are for the plan it was worked out on (a shift is relative): never apply them to another.
         if (SuggestionPanel.PlanVersion != Snapshot.PlanVersion || _engine.Current.PlanVersion != Snapshot.PlanVersion ||
-            (_suggestKey is { } key && key.Plan != SuggestionPanel.PlanVersion))
+            (row.Replan is null && _suggestKey is { } key && key.Plan != SuggestionPanel.PlanVersion))
         {
+            if (row.Replan is not null)
+            {
+                EditStatus = "The plan has changed since the re-plan was worked out; re-plan again (Plan ▸ Re-plan).";
+                return;
+            }
+
             EditStatus = "The plan has changed since; the suggestions are being worked out again.";
             _suggestKey = null;
             UpdateSuggestions();
@@ -171,8 +182,8 @@ internal sealed partial class MainViewModel
         var version = Snapshot.PlanVersion;
         _previewId = null;
         _previewShown = false;
-        Ghosts = PreviewPaths(row.Suggestion);
-        var result = await ExecuteAsync(row.Suggestion.ToCommand());
+        Ghosts = PreviewPaths(row);
+        var result = await ExecuteAsync(row.Command);
         if (result.Applied && Ghosts is not null)
         {
             _ghostUntil = version + 1;
@@ -180,6 +191,11 @@ internal sealed partial class MainViewModel
         else
         {
             Ghosts = null;
+        }
+
+        if (result.Applied && row.Replan is { } replan)
+        {
+            SuggestionPanel.ReplanApplied(replan.Describe(t => PlanInput.Format(t)));
         }
     }
 
@@ -200,7 +216,7 @@ internal sealed partial class MainViewModel
 
         if (row is not null)
         {
-            Ghosts = PreviewPaths(row.Suggestion);
+            Ghosts = PreviewPaths(row);
             _previewShown = true;
         }
         else if (_previewShown)
@@ -228,16 +244,16 @@ internal sealed partial class MainViewModel
         }
     }
 
-    /// <summary>The plans a suggestion changes, on the corridor shown, as ghosts.</summary>
-    private List<GraphPath>? PreviewPaths(Suggestion suggestion)
+    /// <summary>The plans a suggestion (or re-plan) changes, on the corridor shown, as ghosts.</summary>
+    private List<GraphPath>? PreviewPaths(SuggestionRowViewModel row)
     {
-        if (SelectedCorridor is not { } tab || suggestion.Plan is not { } plan)
+        if (SelectedCorridor is not { } tab || row.Plan is not { } plan)
         {
             return null;
         }
 
         var paths = new List<GraphPath>();
-        foreach (var id in suggestion.Changed)
+        foreach (var id in row.Changed)
         {
             if (plan.Find(id) is { Cancelled: false } train)
             {
@@ -247,6 +263,17 @@ internal sealed partial class MainViewModel
         }
 
         return paths;
+    }
+
+    /// <summary>Close the re-plan shown in the suggestions panel.</summary>
+    [RelayCommand]
+    private void CloseReplan()
+    {
+        if (SuggestionPanel.IsReplan)
+        {
+            ClearSuggestionPreview();
+            SuggestionPanel.Clear();
+        }
     }
 
     /// <summary>Show the regulation list for a location (from the graph's right-click menu).</summary>

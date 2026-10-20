@@ -20,6 +20,15 @@
 
 Whether suggestions may terminate a train short or cancel it for a block (the same switch as **Allow cancelling** on the Conflicts tab), and what each kind of change costs when the [suggestions](conflicts-and-suggestions.md#suggestions) are ranked, in minutes of weighted delay: a platform change (2), a line change (2), terminating short (30) and cancelling (60). A higher cost makes that kind of suggestion rarer.
 
+For [Plan ▸ Re-plan](conflicts-and-suggestions.md#re-planning-the-next-hour):
+
+| Setting | Default | What it does |
+|---|---|---|
+| Re-plan with the optimiser, or with the suggestion rules | the optimiser | The optimiser weighs every conflict at once; the rules take one conflict at a time, the earliest first, and apply its best suggestion. |
+| Let a re-plan move trains to other platforms | on | Each move costs the platform change penalty above. |
+| Re-plan ahead | 60 min | How far ahead of the sim's time to clear conflicts. |
+| Re-plan time limit | 5 s | How long it may think; the best plan found by then is used. |
+
 ## Folders
 
 Where Stringline looks for timetables (SimSig's Timetables folder unless you change it), and where it puts saved sessions, recordings and exports. Leave a box blank to use the folder shown under it.

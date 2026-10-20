@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stringline.App.Services;
 using Stringline.Network.Profiles;
+using Stringline.Planning;
 
 namespace Stringline.App.ViewModels;
 
@@ -75,6 +76,20 @@ internal sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string CancelPenalty { get; set; } = string.Empty;
+
+    // Re-planning (S20).
+    [ObservableProperty]
+    public partial string ReplanHorizon { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ReplanTimeLimit { get; set; } = string.Empty;
+
+    /// <summary>Re-plan with the optimiser (else with the suggestion rules, one conflict at a time).</summary>
+    [ObservableProperty]
+    public partial bool ReplanWithOptimiser { get; set; }
+
+    [ObservableProperty]
+    public partial bool ReplanPlatformChanges { get; set; }
 
     // Folders.
     [ObservableProperty]
@@ -211,6 +226,10 @@ internal sealed partial class SettingsViewModel : ObservableObject
         LineChangePenalty = Minutes(p.LineChangePenalty);
         TerminatePenalty = Minutes(p.TerminatePenalty);
         CancelPenalty = Minutes(p.CancelPenalty);
+        ReplanHorizon = p.ReplanHorizonMinutes.ToString(CultureInfo.CurrentCulture);
+        ReplanTimeLimit = p.ReplanTimeLimitSeconds.ToString("0.#", CultureInfo.CurrentCulture);
+        ReplanWithOptimiser = p.ReplanMethod == ReplanMethod.Optimiser;
+        ReplanPlatformChanges = p.ReplanPlatformChanges;
         TimetableFolder = s.TimetableFolder ?? string.Empty;
         SessionsFolder = s.SessionsFolder ?? string.Empty;
         RecordingsFolder = s.RecordingsFolder ?? string.Empty;
@@ -237,6 +256,10 @@ internal sealed partial class SettingsViewModel : ObservableObject
             LineChangePenalty = Penalty(LineChangePenalty, "line change penalty"),
             TerminatePenalty = Penalty(TerminatePenalty, "terminate short penalty"),
             CancelPenalty = Penalty(CancelPenalty, "cancellation penalty"),
+            ReplanHorizonMinutes = Count(ReplanHorizon, "re-plan horizon (minutes)", 10, 240),
+            ReplanTimeLimitSeconds = Seconds(ReplanTimeLimit, "re-plan time limit", 1, 60),
+            ReplanMethod = ReplanWithOptimiser ? ReplanMethod.Optimiser : ReplanMethod.Rules,
+            ReplanPlatformChanges = ReplanPlatformChanges,
         };
         return _original with
         {
@@ -275,6 +298,21 @@ internal sealed partial class SettingsViewModel : ObservableObject
         return minutes is >= 0 and <= 24 * 60
             ? Math.Round(minutes * 60)
             : throw new ProfileEditException($"The {what} must be from 0 to 1440 minutes.");
+    }
+
+    /// <summary>A number of seconds (fractions allowed).</summary>
+    private static double Seconds(string text, string what, double min, double max)
+    {
+        var t = text.Trim().TrimEnd('s', 'S').Trim();
+        if (!double.TryParse(t, NumberStyles.Float, CultureInfo.CurrentCulture, out var seconds)
+            && !double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds))
+        {
+            throw new ProfileEditException($"The {what} must be a number of seconds.");
+        }
+
+        return seconds >= min && seconds <= max
+            ? seconds
+            : throw new ProfileEditException(string.Create(CultureInfo.CurrentCulture, $"The {what} must be from {min} to {max} seconds."));
     }
 
     private static int Count(string text, string what, int min, int max)

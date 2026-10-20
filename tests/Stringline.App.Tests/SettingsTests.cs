@@ -38,6 +38,7 @@ public sealed class SettingsTests : IDisposable
             shown = s;
             (s.DefaultDwell, s.DefaultTurnaround, s.PossiblyStopped, s.PlatformMargin, s.MinConflict).Should().Be(("0:30", "0:30", "5:00", "1:00", "0:30"));
             (s.PlatformChangePenalty, s.LineChangePenalty, s.TerminatePenalty, s.CancelPenalty).Should().Be(("2", "2", "30", "60"));
+            (s.ReplanHorizon, s.ReplanTimeLimit, s.ReplanWithOptimiser, s.ReplanPlatformChanges).Should().Be(("60", "5", true, true));
             (s.ForecastKnockOn, s.AllowCancellation, s.DetailedLogging, s.DeleteOldSessions).Should().Be((true, false, false, false));
             (s.TimetableFolder, s.SessionsFolder, s.LogRetentionDays).Should().Be((string.Empty, string.Empty, "14"));
             s.Defaults.Sessions.Should().Be(app.Paths.Sessions);
@@ -46,6 +47,8 @@ public sealed class SettingsTests : IDisposable
             s.PlatformMargin = "2:00";
             s.MinConflict = "1.5";
             s.CancelPenalty = "90";
+            s.ReplanHorizon = "90";
+            s.ReplanWithOptimiser = false;
             s.ForecastKnockOn = false;
             s.AllowCancellation = true;
             s.ExportsFolder = exports;
@@ -63,6 +66,7 @@ public sealed class SettingsTests : IDisposable
             vm.SuggestionPanel.AllowCancellation.Should().BeTrue();
             vm.Paths.Exports.Should().Be(exports);
             vm.Paths.Sessions.Should().Be(app.Paths.Sessions, "a blank folder keeps the default");
+            vm.ReplanHeader.Should().Be("Re-_plan the next 90 min…");
         });
         logging.Level.MinimumLevel.Should().Be(LogEventLevel.Debug);
         await app.Ui.WaitUntil(
@@ -70,7 +74,11 @@ public sealed class SettingsTests : IDisposable
             "the engine using the new numbers");
 
         var saved = app.Settings.Load();
-        saved.Planning.Should().Be(new PlanningSettings { DefaultDwellSeconds = 45, PlatformMarginSeconds = 120, MinConflictSeconds = 90, CancelPenalty = 5400 });
+        saved.Planning.Should().Be(new PlanningSettings
+        {
+            DefaultDwellSeconds = 45, PlatformMarginSeconds = 120, MinConflictSeconds = 90, CancelPenalty = 5400, ReplanHorizonMinutes = 90, ReplanMethod = ReplanMethod.Rules,
+        });
+        saved.Planning.ToReplanOptions().Should().Be(new ReplanOptions { HorizonSeconds = 90 * 60 });
         (saved.ForecastKnockOn, saved.SuggestCancellations, saved.ExportsFolder, saved.DetailedLogging, saved.LogRetentionDays).Should().Be((false, true, exports, true, 30));
         saved.Planning.ToSuggestionOptions(true).Should().Be(new SuggestionOptions { AllowCancellation = true, CancelPenalty = 5400 });
     }

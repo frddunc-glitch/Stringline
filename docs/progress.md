@@ -1637,6 +1637,65 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Questions for Fred
 - 22. **Assist on a real sim.** Do route requests and interposes work as above? Is the route ID or the signal pair easier to find in SimSig (the panel's hover, or the F2 route list)? If signals are easier, the dialog could put them first.
 
+## 2026-10-20 — S20: Optimiser (FC-6)
+
+### Done
+- **Fred's choices** (asked at the start):
+  - OR-Tools CP-SAT, as planned;
+  - holds **and** platform changes;
+  - Plan ▸ Re-plan over the whole horizon, shown in the suggestions panel;
+  - 60 min and 5 s by default, both in Options.
+- **Planning** (`Replanning.cs`, `RuleReplanner.cs`; `06-…md` §5):
+  - `IReplanner` → `ReplanResult`: the commands, the steps (`ReplanStep`), the conflicts in the horizon before and after, the delay, impacts and changed trains, and the plan with it. `ToCommand()` is one `AcceptSuggestion` ("Re-plan to 09:05: 4 holds, 1 platform change").
+  - `ReplanEvaluator` checks and scores a candidate as the engine would. Better means fewer conflicts in the horizon, then less weighted severity, then less weighted delay plus penalty.
+  - `RuleReplanner`: the suggestions, the earliest clash between trains first.
+- **Optimiser** (new project `Stringline.Optimiser`, net10.0; Google.OrTools 9.15.6755, Apache-2.0; `CpSatReplanner`, `ReplanModel`):
+  - The model's trains follow the plan builder and forecaster exactly (tested): run times, dwells, formations, and how a hold moves the plan on while keeping dwells.
+  - Holds are where suggestions hold, to the half minute. Platform moves bring the train forming or formed from it.
+  - Either-or orders come from the detector's spacing rules, for each clashing pair and its trains' neighbours.
+  - Rounds check the plan with the forecaster and add what it still finds. A last pass drops steps that do not help.
+  - Debug logging per round.
+- **App** (`05-…md` §15):
+  - Plan ▸ Re-plan the next 60 min… (Ctrl+Shift+R) works off the UI thread and shows one row in the suggestions panel: title, cost line, each change, tooltip, Preview and Apply, Close.
+  - It stays while the sim moves on, until a conflict is picked. Apply refuses it once the plan has changed.
+  - Options ▸ Suggestions: optimiser or rules, platform changes, minutes ahead (10–240), time limit (1–60 s).
+  - The suggestion rows are now general (`SuggestionRowViewModel` carries the command, plan and changed trains; `Suggestion` and `Replan` are nullable).
+- **Tools:** `stringline replan --wtt --log [--at] [--minutes] [--seconds] [--rules] [--no-platforms] [--no-knock-on] [--verbose]`.
+- **Licences:** OR-Tools and what it bundles (Protocol Buffers, Abseil, RE2, SCIP, HiGHS, zlib, bzip2; BSD-3, Apache-2.0, MIT, zlib, bzip2) are in About and `THIRD-PARTY-NOTICES.md`. The win-x64 zip grows from 69 to 92 MB; the single-file exe is 98 MB with the solver inside.
+- **Fixed on the way:** King's Cross 2020 (added to the WTT corpus today) has `ShuntInterpose` on its trains, a saved-game field. It is now ignored with the other Shunt… fields, so the corpus test passes.
+- **Docs:** `06-…md` §5; `05-…md` §1 and new §15; the plan; `01-…md`; `02-…md`; `CLAUDE.md`; README; the guide's conflicts and suggestions (new "Re-planning the next hour"), settings, and keyboard and mouse pages.
+- **Tests:**
+  - `Stringline.Optimiser.Tests` (new, portable, 22):
+    - scenarios for both re-planners: hold at origin; priorities make the swap; single-line crossing; another platform; platforms only if allowed; nothing in the horizon; several conflicts; the command;
+    - the model against the forecaster;
+    - Waterloo fixtures (the 4× recording half way and at its end, the failure recording), each checked by applying the result.
+  - `ReplanCommandTests` (3, Tools).
+  - `ReplanPanelTests` (2, App): preview, apply, kept while the sim moves, conflict pick, close; a stale re-plan refused.
+  - `SettingsTests`: the new settings round trip.
+- Totals: 1 597 (Core 263, Architecture 14, Gateway 211, Timetable 166, Network 161, Planning 238, Persistence 12, Graph 259, Optimiser 22, Tools 70, App 181). Green on Windows (Debug), and on Linux (`sdk:10.0` container, portable filter, Release: 1 416, the native solver included).
+
+### Decisions
+- **The optimiser is checked by the forecaster and detector**, which have the last word. The model makes candidates; it never sets the result on its own. Pairs are added lazily, from what the detector still finds, so the model stays small: 125–151 trains and 3–200 pairs at Waterloo.
+- **Clashes under the least conflict reported (30 s) are allowed**, as the detector allows them. Without this the model paid for spacing nobody sees, and lost to the rules.
+- **Multi-track sections:** a pair's order needs spacing only once the detector finds them clashing that way round, as the train behind may take another track.
+- **A held second costs a little** (0.2 weighted s) beyond the delay at the train's last point. A train that recovers by then is still late on the way, so the shortest, latest hold wins.
+- **Settings on the Suggestions tab**, not Forecast and conflicts as my question said: they sit beside the penalties they use.
+- **Not worked out again as the sim moves on** (it takes seconds), unlike suggestions; Apply refuses it once the plan has changed.
+- **Blocks and runs planned too fast** stay with their suggestions: they are about one train, not the order of trains.
+
+### Next
+- S21 (multi-corridor views) remains optional; S29 when Fred's multiplayer recording is ready.
+- Perhaps: polish the optimiser's plan with the rules for what is left; line changes; a deterministic time limit for repeatable plans.
+
+### Known issues
+- **Not tried by hand.** 👤 Fred: in the app, on a late-running sim, use Plan ▸ Re-plan, preview it and apply it; try the published exe (the solver unpacks from it on first use).
+- On a busy horizon, the plan found in the time limit varies from run to run and with the machine's load. On Waterloo's 4× recording at its end (21 conflicts), the optimiser left 12 to 18, the rules 16. Most of those are trains arriving at Waterloo's platforms now, which nothing can clear.
+- The optimiser can make a plan with more weighted delay than the rules' when it clears more conflicts: fewer conflicts come first.
+
+### Questions for Fred
+- 23. **Re-plan on your sims.** Do the re-plans look like what a signaller would do? Is clearing more conflicts at the cost of more delay the right way round, or should delay weigh more?
+- 24. **Download size.** The solver adds about 23 MB to the zip. Acceptable, or should the optimiser be an optional download?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

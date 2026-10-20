@@ -765,6 +765,7 @@ internal sealed partial class MainViewModel : IGraphEditor
         CancelSelectedCommand.NotifyCanExecuteChanged();
         CloneSelectedCommand.NotifyCanExecuteChanged();
         LinkSelectedCommand.NotifyCanExecuteChanged();
+        UpdateReplanCommand();
         OnPropertyChanged(nameof(UndoHeader));
         OnPropertyChanged(nameof(RedoHeader));
         OnPropertyChanged(nameof(UndoTip));

@@ -9,11 +9,12 @@ Stringline.sln
 │  ├─ Stringline.Gateway/       net10.0   STOMP client, message parsing, recorder, replay source
 │  ├─ Stringline.Timetable/     net10.0   .wtt import, train matching
 │  ├─ Stringline.Network/       net10.0   Corridors, sections, profile I/O, auto-generation, distance axis
-│  ├─ Stringline.Planning/      net10.0   Working plan + commands, forecaster, conflicts, suggestions
+│  ├─ Stringline.Planning/      net10.0   Working plan + commands, forecaster, conflicts, suggestions, re-planning (IReplanner, rules)
+│  ├─ Stringline.Optimiser/     net10.0   CP-SAT re-planner (Google OR-Tools, native solver for Windows, Linux and macOS)
 │  ├─ Stringline.Persistence/   net10.0   SQLite session store (Microsoft.Data.Sqlite)
 │  ├─ Stringline.Graph/         net10.0   Graph scene model + Skia renderer (SkiaSharp), hit testing — no WPF
 │  ├─ Stringline.App/           net10.0-windows10.0.19041.0  WPF shell, MVVM, SKElement host, dialogs (SkiaSharp.Views.WPF 4 needs the versioned TFM)
-│  └─ Stringline.Tools/         net10.0   CLI: record, replay-server, wtt-dump, render-png
+│  └─ Stringline.Tools/         net10.0   CLI: record, replay-server, wtt-dump, render-png, report, replan…
 ├─ tests/
 │  ├─ Stringline.*.Tests/       xUnit + FluentAssertions 7.x (+ Verify for snapshot tests)
 │  ├─ Stringline.Architecture.Tests/  guards the WPF/portability rule below
@@ -121,6 +122,7 @@ PlanningEngine       // single writer: queue of GatewayEvents, SetTimetable/Clea
 PlanSnapshot         // immutable: timetable, live trains, SimClockReading (interpolate on any thread), match summary, WorkingPlan, PlanHistory, PlanVersion, EntryDelays, Forecast; FindByTrain/FindByUid; S14: Conflicts; S15: Settings (ForecastSettings: the network, forecast and conflict options it was made with)
 ConflictDetector     // S14, pure: ConflictRequest(plan, forecast, network, options) → ConflictSet (06-…md §3)
 Suggester            // S15, pure: SuggestionRequest(forecast request, conflict, options; baseline forecast and conflicts) → Suggestion[] (hold, swap, platform, line, retime, terminate, cancel), scored by re-forecasting (06-…md §4); Suggestion.ToCommand() → AcceptSuggestion
+IReplanner           // S20: ReplanRequest(forecast request, conflict options, ReplanOptions; baseline) → ReplanResult (commands, steps, conflicts before/after, delay); RuleReplanner (suggestions, earliest conflict first) and, in Stringline.Optimiser, CpSatReplanner (CP-SAT model of the plan builder, forecaster and detector, checked each round); ReplanEvaluator scores candidates for both (06-…md §5)
 RegulationList       // S15, pure: plan + forecast + location + now → RegulationRow[] in plan order, with trains ahead of / behind others against the WTT order (RP-9)
 Forecaster           // S11, pure: ForecastRequest(plan, live trains, now, session start, entry delays, ForecastNetwork, ForecastOptions) → Forecast; one event queue, independent and interaction passes (06-…md §2)
 ForecastNetwork      // S11: the profile's corridor sections as resources (headway, single line, tracks each way widened to what the WTT uses at once), category priorities; built once per timetable and profile

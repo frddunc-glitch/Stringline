@@ -62,6 +62,8 @@ internal static class AboutInfo
         new("Microsoft.Data.Sqlite and SQLitePCLRaw", "MIT and Apache-2.0", "https://github.com/dotnet/efcore", "saved sessions", "Microsoft.Data.Sqlite"),
         new("SQLite", "Public domain", "https://sqlite.org", "saved sessions"),
         new("Markdig", "BSD-2-Clause", "https://github.com/xoofx/markdig", "showing the user guide", "Markdig"),
+        new("Google OR-Tools", "Apache-2.0", "https://github.com/google/or-tools", "the re-planning optimiser", "Google.OrTools"),
+        new("Protocol Buffers, Abseil, RE2, SCIP, HiGHS, zlib and bzip2", "BSD-3-Clause, Apache-2.0, MIT, zlib and bzip2", "https://github.com/google/or-tools/blob/stable/LICENSE", "inside OR-Tools", "Google.Protobuf"),
         new("Noto Sans", "SIL Open Font Licence 1.1", "https://notofonts.github.io", "the graph's labels"),
     ];
 

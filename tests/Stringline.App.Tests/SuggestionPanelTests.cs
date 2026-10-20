@@ -49,12 +49,12 @@ public sealed class SuggestionPanelTests
         status.Should().BeEmpty();
         rows.Count.Should().BeLessThanOrEqualTo(3);
         var best = rows[0];
-        best.Suggestion.Kind.Should().Be(SuggestionKind.Hold, "planning the hold costs nothing more than the block already does");
-        best.Suggestion.Train.Should().Be(held.Conflict.A);
+        best.Suggestion!.Kind.Should().Be(SuggestionKind.Hold, "planning the hold costs nothing more than the block already does");
+        best.Suggestion!.Train.Should().Be(held.Conflict.A);
         best.Title.Should().StartWith($"Hold {held.Conflict.HeadcodeA} at ").And.Contain(" until ");
         best.Detail.Should().Contain("clears");
         best.Tip.Should().NotBeEmpty();
-        rows.Should().NotContain(r => r.Suggestion.Kind == SuggestionKind.Cancel || r.Suggestion.Kind == SuggestionKind.TerminateShort, "cancelling is off by default");
+        rows.Should().NotContain(r => r.Suggestion!.Kind == SuggestionKind.Cancel || r.Suggestion!.Kind == SuggestionKind.TerminateShort, "cancelling is off by default");
 
         // The conflict's tooltip on the graph gives the best one (#12).
         await app.Ui.WaitUntil(() => vm.Scene!.Conflicts.Any(c => c.Id == held.Id), "its ring drawn");
@@ -65,7 +65,7 @@ public sealed class SuggestionPanelTests
         await app.Ui.Run(() => vm.PreviewSuggestionCommand.Execute(best));
         var (ghosts, previewed) = await app.Ui.Run(() => (vm.Ghosts, best.IsPreviewed));
         ghosts.Should().NotBeNullOrEmpty();
-        ghosts!.Should().OnlyContain(g => g.Train == best.Suggestion.Train);
+        ghosts!.Should().OnlyContain(g => g.Train == best.Suggestion!.Train);
         previewed.Should().BeTrue();
         await app.Ui.Run(() => vm.PreviewSuggestionCommand.Execute(best));
         (await app.Ui.Run(() => (vm.Ghosts, best.IsPreviewed))).Should().Be(((IReadOnlyList<GraphPath>?)null, false));
@@ -74,7 +74,7 @@ public sealed class SuggestionPanelTests
         var version = await app.Ui.Run(() => vm.Snapshot.PlanVersion);
         await app.Ui.RunAsync(() => vm.ApplySuggestionCommand.ExecuteAsync(best));
         await app.Ui.WaitUntil(() => vm.Snapshot.PlanVersion > version && vm.ConflictList.Rows.All(r => r.Id != held.Id), "the suggestion applied");
-        (await app.Ui.Run(() => vm.Snapshot.History.UndoDescription)).Should().Be($"Suggestion: {best.Suggestion.Describe()}");
+        (await app.Ui.Run(() => vm.Snapshot.History.UndoDescription)).Should().Be($"Suggestion: {best.Suggestion!.Describe()}");
         (await app.Ui.Run(() => vm.EditStatus)).Should().StartWith("Done: Suggestion: Hold ");
         await app.Ui.WaitUntil(() => !vm.SuggestionPanel.IsVisible, "the panel closed with its conflict");
         await app.Ui.WaitUntil(() => vm.Ghosts is null, "the ghost dropped once the graph shows the edit");
@@ -96,14 +96,14 @@ public sealed class SuggestionPanelTests
         await app.Ui.Run(() => vm.SuggestionPanel.AllowCancellation = true);
 
         // No train has started (no sim is running), so each can be cancelled.
-        await app.Ui.WaitUntil(() => vm.SuggestionPanel.Rows.Any(r => r.Suggestion.Kind == SuggestionKind.Cancel), "a cancellation offered");
-        var cancel = await app.Ui.Run(() => vm.SuggestionPanel.Rows.First(r => r.Suggestion.Kind == SuggestionKind.Cancel));
+        await app.Ui.WaitUntil(() => vm.SuggestionPanel.Rows.Any(r => r.Suggestion!.Kind == SuggestionKind.Cancel), "a cancellation offered");
+        var cancel = await app.Ui.Run(() => vm.SuggestionPanel.Rows.First(r => r.Suggestion!.Kind == SuggestionKind.Cancel));
         cancel.Title.Should().Be($"Cancel {held.Conflict.HeadcodeA}");
         cancel.Tip.Should().Contain("Counted for the cancelling: 1 h");
         app.Settings.Load().SuggestCancellations.Should().BeTrue();
 
         await app.Ui.Run(() => vm.SuggestionPanel.AllowCancellation = false);
-        await app.Ui.WaitUntil(() => vm.SuggestionPanel.Rows.Count > 0 && vm.SuggestionPanel.Rows.All(r => r.Suggestion.Kind != SuggestionKind.Cancel), "cancellations gone");
+        await app.Ui.WaitUntil(() => vm.SuggestionPanel.Rows.Count > 0 && vm.SuggestionPanel.Rows.All(r => r.Suggestion!.Kind != SuggestionKind.Cancel), "cancellations gone");
         app.Settings.Load().SuggestCancellations.Should().BeFalse();
     }
 
@@ -115,7 +115,7 @@ public sealed class SuggestionPanelTests
         var held = await Blocked(app, vm);
         await app.Ui.Run(() => vm.ConflictList.Selected = held);
         await app.Ui.WaitUntil(() => vm.SuggestionPanel.Rows.Count > 0, "the suggestions worked out");
-        var (conflict, suggestions, version) = await app.Ui.Run(() => (held.Conflict, vm.SuggestionPanel.Rows.Select(r => r.Suggestion).ToList(), vm.Snapshot.PlanVersion));
+        var (conflict, suggestions, version) = await app.Ui.Run(() => (held.Conflict, vm.SuggestionPanel.Rows.Select(r => r.Suggestion!).ToList(), vm.Snapshot.PlanVersion));
 
         // As if they had been worked out before the last edit.
         await app.Ui.Run(() => vm.SuggestionPanel.Show(conflict, suggestions, version - 1, vm.Profile));

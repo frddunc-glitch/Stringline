@@ -37,7 +37,7 @@ Reviewed against this spec and Windows conventions in S25. The bar is the spec's
 | Session | Connect to SimSig… (F5), Open replay… (Ctrl+O), Disconnect · Record to file (ticked while recording) · Assist: send commands to SimSig… (ticked while on; S19, §14) |
 | View | Follow now (Space) · 1 hour, 3 hours, 6 hours · Show WTT, actual, forecast, disruptions and notes, conflicts · Colour by delay, Vertical · Panels ▸ (Train list, Side panel, Tabs), Reset layout |
 | Corridor | each corridor in tab order, the one shown ticked, the first nine numbered (Ctrl+1 … Ctrl+9) · Whole corridor |
-| Plan | Undo *edit* (Ctrl+Z), Redo *edit* (Ctrl+Y, Ctrl+Shift+Z) · Reset selected train to WTT, Cancel or reinstate, Clone as ad-hoc…, Link live train…, Clear selection (Esc) · Forecast knock-on from other trains |
+| Plan | Undo *edit* (Ctrl+Z), Redo *edit* (Ctrl+Y, Ctrl+Shift+Z) · Reset selected train to WTT, Cancel or reinstate, Clone as ad-hoc…, Link live train…, Clear selection (Esc) · Forecast knock-on from other trains · Re-plan the next 60 min… (Ctrl+Shift+R; S20, §15) |
 | Tools | Options… (Ctrl+,) · Edit profile…, Open profile file, Reload profile, Regenerate corridors… |
 | Help | User guide (F1), Getting started (online), Open log folder · About Stringline |
 
@@ -282,3 +282,21 @@ Opt-in commands to SimSig: a **route request** for a train's move, and a **TD in
   - *Interpose.* For the train picked (Fred): its headcode in **Description**, and a **Berth** from those any TD step has named. If SimSig shows the description in a berth already, the heading says which.
 - **Sending.** Bodies come from `GatewayCommands` only; the dialogs check each ID with `GatewayCommands.IsValidId` first. `SimSession.SendAsync` reports whether the frame went; if not (not connected), the info bar says so. Each command is logged at Information ("Assist: sending …"), as is turning assist on and off.
 - **Not built:** the other outbound commands in `03-…md` §4 (TD step and cancel, signal replacement), and anything automatic: assist never sends without the user pressing Send.
+
+## 15. Re-planning the horizon (S20, FC-6)
+
+Built in S20 (`MainViewModel.Replan`; the re-planners in `06-…md` §5). Fred chose: the Plan menu, the whole horizon; holds and platform changes; 60 min and 5 s, set in Options.
+
+- **Plan ▸ Re-plan the next 60 min…** (Ctrl+Shift+R; the menu names the horizon set in Options). It is enabled once a timetable is loaded and while no re-plan is being worked out. It clears the conflict picked in the list, switches to the Conflicts tab, and opens the suggestions panel: "Re-plan the next 60 min", "Working out a re-plan (up to 5 s)…".
+- **Off the UI thread.** `IReplanner.Replan(ReplanRequest.For(snapshot, options))` on the snapshot as it stood, with the optimiser (`CpSatReplanner`, logging each round at Debug) or the rules (`RuleReplanner`). The outcome is logged at Information.
+- **The panel** ("Re-plan to 09:05") shows one row:
+  - its title ("Re-plan to 09:05: 4 holds, 1 platform change");
+  - a cost line ("Conflicts to 09:05: 21 → 12 · weighted delay +6 min · 1 new");
+  - each change on its own line ("• Hold 2O05 at Queens Road until 06:11½ (+57 s)");
+  - a tooltip with the trains made later or sooner and their weights, what the platform changes add, and who worked it out and how long it took;
+  - **Preview** and **Apply**, as for suggestions.
+
+  The status line says how many conflicts would be left, and when some are blocks or runs planned too fast, that those have their own suggestions. With nothing to clear it says "No conflicts to clear before 09:05."; with nothing better, "Nothing better found…". A **Close** button replaces Allow cancelling while a re-plan is shown.
+- **It stays while the sim moves on**, until a conflict is picked (which shows its suggestions) or it is closed. It is **not worked out again**: it takes seconds. Apply refuses it once the plan has changed ("…re-plan again").
+- **Apply** is one `AcceptSuggestion` edit titled with the re-plan ("Suggestion: Re-plan to 09:05: 4 holds, 1 platform change" in the history). The row then goes, and the status says "Applied: … Undo takes it back."
+- **Options ▸ Suggestions** has the method (the optimiser or the suggestion rules), "Let a re-plan move trains to other platforms", "Re-plan ahead" (minutes, 10–240) and "Re-plan time limit" (seconds, 1–60). The platform change penalty is the suggestions' one. Fred's answer put the two figures under Forecast and conflicts; they went on the Suggestions tab beside the penalties they use, which keeps the Forecast tab to the forecast.

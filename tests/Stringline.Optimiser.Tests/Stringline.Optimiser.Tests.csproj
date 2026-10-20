@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Stringline.Optimiser\Stringline.Optimiser.csproj" />
+    <!-- For the fixture tests: recordings are read and parsed with the gateway's own code. -->
+    <ProjectReference Include="..\..\src\Stringline.Gateway\Stringline.Gateway.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Stringline.Gateway.Tests\Fixtures.cs" Link="Fixtures.cs" />
+    <Compile Include="..\Stringline.Timetable.Tests\Live\TestTimetable.cs" Link="TestTimetable.cs" />
+    <Compile Include="..\Stringline.Planning.Tests\ForecastTesting.cs" Link="ForecastTesting.cs" />
+  </ItemGroup>
+
+</Project>

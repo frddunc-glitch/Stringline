@@ -114,6 +114,36 @@ Score = Σ (priority weight × added delay at destination) over all affected tra
 ## 5. Later: optimiser (C)
 Rolling-horizon MILP/CP over the next 60–90 min within the corridor using Google OR-Tools CP-SAT: decision variables are section entry times and order binaries per conflicting pair; objective weighted delay; constraints headway/single-line/platform/min-run. Outputs a command set for preview. Kept behind an interface `IReplanner` so v1 rules and the optimiser are interchangeable.
 
+*Built in S20.* Fred chose: OR-Tools CP-SAT (in its own project, `Stringline.Optimiser`); holds **and** platform changes; the Plan menu over the whole horizon (`05-…md` §15); 60 min and 5 s by default, both in Options.
+- **The interface** (`Stringline.Planning`): `IReplanner.Replan(ReplanRequest)` → `ReplanResult`. The result has:
+  - the commands and the steps (`ReplanStep`: a hold or swap with when the train now leaves, or a platform or line change);
+  - the conflicts in the horizon before and after, and how many it clears and adds;
+  - the weighted delay, impacts, penalty and changed trains, and the plan with it, as for suggestions;
+  - the rounds, whether the last model was solved optimally, and the time taken.
+
+  `ToCommand()` is one `AcceptSuggestion` titled "Re-plan to 09:05: 4 holds, 1 platform change". `ReplanEvaluator` is shared by both re-planners: it applies a candidate set of commands, forecasts and checks it as the engine would (with the knock-on pass if on), and scores it.
+- **Better** (`ReplanCandidate.BetterThan`) means fewer conflicts in the horizon; then less weighted severity (Σ weight × severity); then less weighted delay plus penalty. Delay is measured as for suggestions: at each train's last point in the horizon, against the plan's forecast. A result is `Improved` only if it is better than the plan as it stands; else `NoImprovement` (or `NoConflicts`), with no commands.
+- **Which conflicts.** Clashes between two trains: headway, overtake, single line and platform, with `When` up to the horizon's end. Blocks and runs planned too fast are about one train and stay with their own suggestions.
+- **Rules** (`RuleReplanner`): the earliest such conflict not yet tried gets its suggestions (§4, with the re-plan's step, hold limit and penalties; never cancelling). The first that resolves it and leaves the plan better is applied. Then the next, until none is left, 40 steps, or the time limit.
+- **Optimiser** (`CpSatReplanner`, `ReplanModel`).
+  - **Trains.** Every train not finished with a forecast time up to the horizon, from its latest actual to its first timed point past the horizon. The model's times follow the plan builder and the forecaster exactly, so with the same holds it gives the same times (`ReplanModelTests`):
+    - a run takes `max(min, min(planned run, planned arrival − departure))`;
+    - a stop's departure is the later of arrival + dwell and the planned departure;
+    - a train formed from another starts after it arrives plus the turnaround;
+    - a hold changes the **plan**: later points move on only as far as minimum runs need, keeping their booked dwells (§1), and the forecaster never runs the train before its plan. So a held train makes up time on run allowances, not at stops.
+  - **Holds** are where suggestions hold: a call (`SetDwell`), a platform passed (`AddStop`, with the forecaster's dwell), the first point (`SetDwell`, less any sim entry delay; entering the area, `ShiftTrain`). They are rounded up to the half minute.
+  - **Platforms.** A train at a platform clash may move to up to 3 other platforms used there that are free while it is there (`PlatformCandidates`, nearest number first). A train formed there from another, or forming one there, moves with it. It cannot move once it, or the train it is formed from, is there.
+  - **Orders.** Each pair that clashes, and each of their trains' neighbours on their routes (the trains either side in each section with one track that way, opposing trains on a single line, and either side at their platforms), gets an either-or order with the detector's spacing. The spacing comes from `SectionOccupancy`: in a section, the headway at both ends, or as close as the WTT books them; on a single line, after the other has cleared; at a platform, the margin, or as booked. A section's entry and exit are shares of the run, as the forecaster splits it. Clashes under the least conflict reported are allowed, as the detector allows them.
+    - On a section with **more than one track** that way, a side needs spacing only once the detector finds the pair clashing that way round. Until then it only keeps the order, as the train behind may take another track.
+    - At a platform, an order applies only while both trains are planned there.
+    - A pair the model cannot keep apart (both trains already running) costs 100 weighted seconds a second, so the model is always solvable.
+  - **Cost** (minimised, tenths of weighted seconds): Σ weight × delay at each train's last point in the model; 0.2 × weight a second held (a train that makes up time is still late on the way, so the shortest, latest hold wins); 15 × weight a hold; the platform change penalty (2 min) a move.
+  - **Rounds.** Up to 6 rounds within 80% of the time limit. Each round solves the model (hinted with the last solution), turns it into commands, and checks them with the forecaster and conflict detector, which have the last word. Each conflict still found becomes an order, with its trains' neighbours. A pair that still clashes as the model planned it gets the shortfall as more spacing on the side chosen. The best plan checked is kept.
+  - **Pruning.** In the time left, each step is dropped in turn, smallest hold first, if the plan without it is no worse. A solution found under a time limit, or rounded to the half minute, can otherwise hold trains for nothing.
+  - **Threads**: as many as the machine has, up to 8 (`ReplanOptions.Workers`; 1 makes the solver deterministic). With several threads and a time limit, a busy horizon's plan can differ from run to run.
+- **Measured** (Debug, this machine, 5 s): see `progress.md`, S20. Waterloo's 4× recording half way (2 conflicts): both clear them; the optimiser holds 6L49 3 min for −150 weighted s, the rules −90. The failure recording (4): both leave 1 (a block's train already running) for no delay. The 4× recording at its end (21 conflicts, most at Waterloo's platforms with trains arriving now): the optimiser 21 → 12–18, the rules 21 → 16.
+- **Not built:** line changes; holding at signals; cancelling or terminating short; a whole train's re-route. The rules' result is not used to polish the optimiser's.
+
 ## 6. Tests
 - Golden scenarios as fixtures: small synthetic corridors (double line with loop, single line with crossing loop, junction) and hand-written WTTs; expected forecasts/conflicts/suggestions asserted.
 - Property tests: forecast never earlier than plan at stops; never faster than min run time; deterministic for same inputs.

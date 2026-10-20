@@ -71,6 +71,7 @@
     <KeyBinding Key="Z" Modifiers="Ctrl" Command="{Binding UndoCommand}" />
     <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCommand}" />
     <KeyBinding Key="Z" Modifiers="Ctrl+Shift" Command="{Binding RedoCommand}" />
+    <KeyBinding Key="R" Modifiers="Ctrl+Shift" Command="{Binding ReplanCommand}" />
     <KeyBinding Key="OemComma" Modifiers="Ctrl" Command="{Binding ShowSettingsCommand}" />
     <KeyBinding Key="D1" Modifiers="Ctrl" Command="{Binding SelectCorridorCommand}" CommandParameter="1" />
     <KeyBinding Key="D2" Modifiers="Ctrl" Command="{Binding SelectCorridorCommand}" CommandParameter="2" />
@@ -171,6 +172,10 @@
           <Separator />
           <MenuItem Header="Forecast _knock-on from other trains" IsCheckable="True" IsChecked="{Binding ForecastKnockOn}"
                     ToolTip="Hold trains in the forecast for headways and single lines, so a late train delays the ones behind it" />
+          <Separator />
+          <!-- Re-plan the horizon (S20, FC-6) -->
+          <MenuItem Header="{Binding ReplanHeader}" InputGestureText="Ctrl+Shift+R" Command="{Binding ReplanCommand}"
+                    ToolTip="Clear the conflicts ahead all at once, by holding trains and moving them to other platforms (Tools ▸ Options ▸ Suggestions). Shown in the suggestions panel to preview and apply." />
         </MenuItem>
         <MenuItem Header="_Tools">
           <MenuItem Header="_Options…" InputGestureText="Ctrl+," Command="{Binding ShowSettingsCommand}" />
@@ -570,7 +575,10 @@
                       Visibility="{Binding SuggestionPanel.IsVisible, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel Margin="6,4">
                   <DockPanel DockPanel.Dock="Top">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="Close" Command="{Binding CloseReplanCommand}" VerticalAlignment="Center"
+                            Visibility="{Binding SuggestionPanel.IsReplan, Converter={StaticResource BoolToVisibility}}" ToolTip="Close the re-plan." />
                     <CheckBox DockPanel.Dock="Right" Content="Allow cancelling" IsChecked="{Binding SuggestionPanel.AllowCancellation}" VerticalAlignment="Center"
+                              Visibility="{Binding SuggestionPanel.IsReplan, Converter={StaticResource NotNull}, ConverterParameter=invert}"
                               ToolTip="Also suggest terminating a train short, or cancelling one not yet started, for a block." />
                     <TextBlock Text="{Binding SuggestionPanel.Heading}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                ToolTip="{Binding SuggestionPanel.Heading}" />
@@ -592,6 +600,8 @@
                             <StackPanel>
                               <TextBlock Text="{Binding Title}" TextWrapping="Wrap" />
                               <TextBlock Text="{Binding Detail}" Foreground="#616161" FontSize="11" TextWrapping="Wrap" />
+                              <TextBlock Text="{Binding Steps}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0"
+                                         Visibility="{Binding Steps, Converter={StaticResource NotNull}}" />
                             </StackPanel>
                           </DockPanel>
                         </DataTemplate>

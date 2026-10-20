@@ -40,7 +40,7 @@ The **[user guide](docs/user-guide/README.md)** covers everything below in more 
    - Click a train to select it and show its grips: drag a square to retime from that timing point, a bar to change a dwell, or the round handle (or the line itself) to retime the rest of the run. Click a grip and use the arrow keys to nudge it by 15 s (Shift: 1 min). Grey hollow grips are points the train has passed. Right-click a train to hold it, change its platform, cancel it or clone it.
    - Right-click the graph's background, or B+drag, to add a block, a speed restriction or a note.
    - Everything can be undone (Plan ▸ Undo, Ctrl+Z).
-   - The **Conflicts** tab lists the clashes the forecast finds, with suggested fixes. **Regulation** lists the movements at a location in their planned order. **Delays** lists each train's lateness.
+   - The **Conflicts** tab lists the clashes the forecast finds, with suggested fixes. **Plan ▸ Re-plan the next 60 min…** (Ctrl+Shift+R) clears the clashes ahead all at once with an optimiser, for you to preview and apply. **Regulation** lists the movements at a location in their planned order. **Delays** lists each train's lateness.
 6. **Keep and share.** Sessions save themselves as you go, and Stringline offers to resume one left running; File ▸ Resume saved session… and Review saved session… open any of them. File ▸ Export saves the graph as PNG or PDF (A3 landscape for printing), and the delay table as CSV.
 
 **No sim running?** Session ▸ Open replay… (Ctrl+O) plays a recording (`.sslog`) as if it were live. Try `tests/fixtures/waterloo-4x.sslog` with `waterloo 2010.WTT` from this repository.
@@ -57,7 +57,7 @@ The **[user guide](docs/user-guide/README.md)** covers everything below in more 
   - how long without a report before a train may have stopped;
   - the platform margin;
   - the smallest conflict worth showing.
-- **Suggestions:** whether suggestions may terminate short or cancel a train, and what each kind of re-plan costs when suggestions are ranked.
+- **Suggestions:** whether suggestions may terminate short or cancel a train, what each kind of re-plan costs when suggestions are ranked, and how Plan ▸ Re-plan works (the optimiser or the suggestion rules, platform changes, how far ahead, how long it may think).
 - **Folders:** where to look for timetables, and where sessions, recordings and exports go.
 - **Logging and housekeeping:** detailed (Debug) logging, how many days of logs to keep, and deleting saved sessions after a number of days (off unless you turn it on; the newest is always kept).
 - **Display:** the size of the sim clock at the top right (Normal, Large or Huge).
@@ -154,7 +154,7 @@ Without `--profile`, corridors come from the WTT (`corridors` lists them).
 - `--vertical` runs time down the image.
 - `--colour delay` colours the actual running by delay band: green on time or early, amber 1–5 min late, orange 6–15, red over 15.
 
-An output ending in `.pdf` writes a PDF (`--page a3|a4|view`). `report` writes the delay table as CSV.
+An output ending in `.pdf` writes a PDF (`--page a3|a4|view`). `report` writes the delay table as CSV. `replan` re-plans the hour ahead of a point in a recording, with the optimiser or (`--rules`) the suggestion rules, and lists the conflicts before and after and what it changes.
 
 ### The user guide
 

@@ -48,6 +48,20 @@ Suggestions hold the train that gives way at the last place before the clash whe
 
 "No suggestion" means neither train can wait anywhere before the clash. Re-plan by hand with the [grips](re-planning.md#grips).
 
+## Re-planning the next hour
+
+**Plan ▸ Re-plan the next 60 min…** (Ctrl+Shift+R) clears the conflicts ahead all at once, rather than one at a time. It works out which train goes first at each clash, where trains wait, and (if allowed) which trains move to another platform, for the least weighted delay. It thinks for up to 5 seconds, then shows its plan in the panel under the conflicts list:
+
+- what it does ("Re-plan to 09:05: 4 holds, 1 platform change"), each change on its own line, and how the conflicts and delay come out ("Conflicts to 09:05: 21 → 12 · weighted delay +6 min");
+- **Preview**, which draws the trains it changes as ghosts on the graph;
+- **Apply**, which makes all the changes as one edit you can undo.
+
+The plan is worked out on the sim as it stood when you asked. Unlike suggestions it is not worked out again as the sim moves on, and Apply refuses it once the plan has changed: re-plan again. Picking a conflict shows that conflict's suggestions instead; **Close** shuts the re-plan.
+
+It holds trains where suggestions do: at a stop, at their first point, or at a platform they pass. It clears clashes between trains (headways, single lines, platforms). Blocks and runs planned too fast are left to their own suggestions. "Nothing better found" means no train that could wait or move clears the clashes: trains arriving now, say.
+
+How far ahead it looks, how long it thinks, whether it may change platforms, and whether it uses the optimiser or the suggestion rules (one conflict at a time) are in [Tools ▸ Options ▸ Suggestions](settings.md#suggestions).
+
 ## Knock-on in the forecast
 
 **Plan ▸ Forecast knock-on from other trains** (on by default) holds trains in the forecast for headways and single lines, so a late train delays the trains behind it, and the forecast lines show the knock-on. Turn it off to see each train's forecast on its own. It does not change which conflicts are listed.

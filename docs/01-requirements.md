@@ -74,7 +74,7 @@ IDs are referenced from the implementation plan. Priority: **M** = MVP, **S** = 
 | FC-3 | Detect headway, single-line opposing, platform and disruption conflicts; mark on graph | M |
 | FC-4 | Conflict list panel; click to focus | M |
 | FC-5 | Rule-based resolution suggestions with predicted delay impact; preview and accept | S |
-| FC-6 | Optimised re-planning over a horizon | C |
+| FC-6 | Optimised re-planning over a horizon (S20: Plan ▸ Re-plan, OR-Tools CP-SAT) | C |
 
 ## Session and reporting
 | ID | Requirement | P |
