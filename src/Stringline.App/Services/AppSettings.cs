@@ -300,33 +300,6 @@ internal sealed partial class AppSettingsStore(AppPaths paths, ISecretProtector 
             : settings with { RememberPassword = remember, ProtectedPassword = null };
     }
 
-    /// <summary>True if the settings hold a saved password (whether or not it can still be decrypted).</summary>
-    public static bool HasPassword(AppSettings settings) => !string.IsNullOrEmpty(settings?.ProtectedPassword);
-
-    /// <summary>The settings with no saved password and Remember unticked (S30, Forget saved password).</summary>
-    public static AppSettings WithoutPassword(AppSettings settings)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        return settings with { RememberPassword = false, ProtectedPassword = null };
-    }
-
-    /// <summary>
-    /// Removes a saved password from the settings file, leaving everything else as it is; the uninstaller runs this
-    /// (<c>Stringline.exe --forget-password</c>). Nothing is written when no password is saved.
-    /// </summary>
-    /// <returns>True if a password was removed.</returns>
-    public bool ForgetSavedPassword()
-    {
-        var settings = Load();
-        if (!HasPassword(settings) && !settings.RememberPassword)
-        {
-            return false;
-        }
-
-        Save(WithoutPassword(settings));
-        return true;
-    }
-
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not read settings from {Path}; using defaults")]
     private partial void LogLoadFailed(Exception ex, string path);
 
