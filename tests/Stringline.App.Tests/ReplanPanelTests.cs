@@ -56,15 +56,17 @@ public sealed class ReplanPanelTests
         ghosts.Should().NotBeNullOrEmpty();
         ghosts!.Should().OnlyContain(g => row.Changed.Any(id => id == g.Train));
 
-        // Apply: one edit, named after it; the panel says so and the copy's clashes are gone.
+        // Apply: one edit, named after it; the panel says so and the plan has the conflicts the re-plan promised.
+        // (Not necessarily fewer of the copy's: under the time limit the optimiser may clear others instead.)
         var before = await app.Ui.Run(() => vm.Snapshot.PlanVersion);
         await app.Ui.RunAsync(() => vm.ApplySuggestionCommand.ExecuteAsync(row));
         await app.Ui.WaitUntil(() => vm.Snapshot.PlanVersion > before, "the re-plan applied");
         (await app.Ui.Run(() => vm.Snapshot.History.UndoDescription)).Should().Be($"Suggestion: {row.Replan.Describe()}");
         (await app.Ui.Run(() => vm.SuggestionPanel.Status)).Should().StartWith("Applied: Re-plan to ");
         (await app.Ui.Run(() => vm.SuggestionPanel.Rows.Count)).Should().Be(0);
-        (await app.Ui.Run(() => vm.Snapshot.Conflicts.All.Count(c => c.Involves(clone) && c.When <= row.Replan.Until)))
-            .Should().BeLessThan(row.Replan.Before.Count(c => c.Involves(clone)));
+        row.Replan.After.Count.Should().BeLessThanOrEqualTo(row.Replan.Before.Count);
+        (await app.Ui.Run(() => vm.Snapshot.Conflicts.All.Count(c => c.When <= row.Replan.Until)))
+            .Should().Be(row.Replan.After.Count);
 
         // Picking a conflict shows its suggestions instead; Close shuts a re-plan.
         if (await app.Ui.Run(() => vm.ConflictList.Rows.FirstOrDefault()) is { } pick)
