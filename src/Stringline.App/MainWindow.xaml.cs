@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private readonly MainViewModel _viewModel;
     private readonly DispatcherTimer _timer;
     private bool _closed;
+    private Task? _shutDown;
 
     internal MainWindow(MainViewModel viewModel)
     {
@@ -71,12 +72,9 @@ public partial class MainWindow : Window
 
         // Stop the session (and any recording) cleanly before closing.
         e.Cancel = true;
-        _timer.Stop();
-        CaptureLayout();
-        _viewModel.SaveLayout();
         try
         {
-            await _viewModel.DisposeAsync();
+            await ShutDownAsync();
         }
         finally
         {
@@ -84,6 +82,37 @@ public partial class MainWindow : Window
             // Later, not here: if the session was already over, the dispose finished at once and this window is still closing.
             _ = Dispatcher.BeginInvoke(Close);
         }
+    }
+
+    /// <summary>
+    /// Windows is ending the session: logging off, shutting down, or an installer closing the app through the Restart
+    /// Manager to update it. WPF then closes this window without waiting for <see cref="OnClosing"/>'s work, so this
+    /// does it first, running the dispatcher until it is done or <paramref name="timeout"/> has passed.
+    /// </summary>
+    /// <returns>True if the session was stopped and saved in time.</returns>
+    internal bool ShutDownNow(TimeSpan timeout)
+    {
+        var task = ShutDownAsync();
+        if (!task.IsCompleted)
+        {
+            var frame = new DispatcherFrame();
+            _ = task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
+            using var timer = new Timer(_ => frame.Continue = false, null, timeout, Timeout.InfiniteTimeSpan);
+            Dispatcher.PushFrame(frame);
+        }
+
+        return task.IsCompletedSuccessfully;
+    }
+
+    /// <summary>Stops the tick, saves the layout and stops the session, once however often it is asked.</summary>
+    private Task ShutDownAsync() => _shutDown ??= ShutDownCoreAsync();
+
+    private async Task ShutDownCoreAsync()
+    {
+        _timer.Stop();
+        CaptureLayout();
+        _viewModel.SaveLayout();
+        await _viewModel.DisposeAsync();
     }
 
     /// <summary>Help ▸ About Stringline (a routed command, so every menu item has a command; File ▸ Exit is <c>ApplicationCommands.Close</c>).</summary>

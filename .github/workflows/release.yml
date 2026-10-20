@@ -102,6 +102,26 @@ jobs:
           try { ./build/publish.ps1 -Version ${{ steps.version.outputs.version }} -Installer }
           finally { if ($pfx) { Remove-Item $pfx -Force -ErrorAction SilentlyContinue } }
 
+      # Installs the previous release's setup (or, if it has none, an older build of this one), starts it with a
+      # replay running, and updates it with the new setup while it runs; then tries a downgrade and uninstalls.
+      - name: Test the update
+        if: steps.check.outputs.skip != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $new = "artifacts/Stringline-$env:VERSION-setup.exe"
+          $previous = gh release list --exclude-drafts --limit 30 --json tagName --jq '.[].tagName' | Where-Object { $_ -ne $env:TAG } | Select-Object -First 1
+          $old = $null
+          if ($previous) {
+            gh release download $previous --pattern '*-setup.exe' --dir artifacts/previous 2>$null
+            $old = Get-ChildItem artifacts/previous -Filter '*-setup.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          $global:LASTEXITCODE = 0
+          if ($old) { Write-Host "Updating from $previous"; ./build/test-upgrade.ps1 -Old $old.FullName -New $new }
+          else { Write-Host 'No earlier release has a setup; updating from an older build of this one.'; ./build/test-upgrade.ps1 -New $new }
+
       - uses: actions/upload-artifact@v7
         if: steps.check.outputs.skip != 'true'
         with:

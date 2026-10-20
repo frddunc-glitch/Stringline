@@ -227,6 +227,37 @@ public sealed class MainWindowTests
         });
     }
 
+    /// <summary>
+    /// An installer closing the app to update it (or Windows logging off): WPF closes the window without waiting, so
+    /// the window stops the session and saves the layout first, with the dispatcher running.
+    /// </summary>
+    [Fact]
+    public async Task Windows_closing_the_app_stops_the_session_and_saves_the_layout_first()
+    {
+        await using var app = new TestApp(wpf: true);
+        var vm = app.ViewModel;
+        await app.Ui.RunAsync(() => vm.OpenReplayAsync(Fixtures.Path(Fixtures.Waterloo4x), Fixtures.Path(Waterloo), 1, null));
+        await app.Ui.WaitUntil(() => vm.HasSession, "a replay running");
+
+        var stopped = await app.Ui.Run(() =>
+        {
+            var window = Show(vm, 1400, 800);
+            try
+            {
+                return (window.ShutDownNow(TimeSpan.FromSeconds(10)), window.ShutDownNow(TimeSpan.FromSeconds(10)));
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        stopped.Should().Be((true, true), "it stops the session once, however often it is asked");
+        (await app.Ui.Run(() => vm.HasSession)).Should().BeFalse();
+        await using var again = new TestApp(root: app.Root, wpf: true);
+        (await again.Ui.Run(() => again.ViewModel.Layout.Current.Window)).Should().NotBeNull("the layout was saved");
+    }
+
     [Fact]
     public async Task The_layout_comes_back_after_a_restart()
     {

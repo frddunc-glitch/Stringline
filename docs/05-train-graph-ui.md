@@ -253,7 +253,11 @@ Built as §1 describes, with these specifics:
   - per-user by default, with no admin prompt (all users can be chosen);
   - a Start-menu shortcut, and an optional desktop one;
   - Windows 10 2004 or later, x64;
-  - the uninstaller leaves user data.
+  - the uninstaller leaves user data;
+  - **updating** (since 0.1.1): a newer setup updates an install in place. It finds it by `AppId`, which must never change, and keeps its folder and per-user or all-users mode. It closes a running Stringline through the Restart Manager (`CloseApplications`, `Stringline.exe` only). WPF closes the window at a Windows session end without waiting for `OnClosing`'s async work, so `App.OnSessionEnding` calls `MainWindow.ShutDownNow`, which does that work while running the dispatcher (up to 4 s). Without it, the session was never stopped and the layout not saved. This also applies to logging off and shutting down. Silently: `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS`;
+  - an older setup over a newer install asks first; a silent one refuses (exit code 1) unless given `/ALLOWDOWNGRADE`. 0.1.0's setup has no such check;
+  - a file a later version stops shipping goes under `[InstallDelete]`;
+  - `build/test-upgrade.ps1` installs an old setup, starts it with a replay running and updates it silently. It checks the session was stopped, the version and folder, that there is one uninstall entry, the downgrade check, and the uninstall. The Release workflow runs it from the previous release's setup (or from a 0.0.1 build when no release has one).
 - **Releases.** Pushing a `v*` tag runs `.github/workflows/release.yml` on Windows. It tests, publishes with the tag's version and makes a draft GitHub release with both files. Running it by hand builds them as workflow artifacts.
 
 ## 13. User guide and in-app help (S28, #4)

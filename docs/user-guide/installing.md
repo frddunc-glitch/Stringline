@@ -22,7 +22,13 @@ The downloads are not yet code-signed, so Windows says **Unknown publisher**, an
 
 ## Updating
 
-Install the new version over the old one, or unzip the new portable version in place of the old. Your settings, profiles and sessions are kept.
+Run the new version's installer. It finds Stringline where you installed it and updates it there, for your account or for all users as before. Your settings, profiles and sessions are kept.
+
+If Stringline is running, the installer offers to close it. Leave **Automatically close the applications** chosen. From version 0.1.1, Stringline stops and saves the session it has open before it closes, the same as at File ▸ Exit, and offers to resume it the next time it starts.
+
+Installing an older version over a newer one asks first. Your files are kept, but a newer version may have saved them in a form the older one cannot read.
+
+For the portable version, close Stringline and unzip the new version in place of the old.
 
 ## Uninstalling
 

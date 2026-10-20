@@ -3,6 +3,14 @@
 ; With a certificate it also passes /DSign and /Sstringline=... so the installer and uninstaller are signed.
 ; It installs the single-file Stringline.exe with its licence and notices, for the current user by default (no admin
 ; prompt) or for all users. Uninstalling leaves settings, profiles, sessions and logs in place.
+;
+; Updating: running a newer setup over an installed Stringline upgrades it in place. Setup finds the install by AppId,
+; keeps its folder and per-user or all-users mode, closes a running Stringline through the Restart Manager (the app
+; saves its session when Windows asks it to close) and replaces the files. A silent update:
+;   Stringline-x.y.z-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS
+; Installing an older version over a newer one asks first; a silent one refuses (exit code 1) unless given
+; /ALLOWDOWNGRADE. build/test-upgrade.ps1 checks all of this. A file a later version no longer ships must be listed
+; under [InstallDelete], or the upgrade leaves it behind.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -13,13 +21,14 @@
 #ifndef SourceDir
   #define SourceDir "..\artifacts\publish\Stringline"
 #endif
+; Never change the AppId: it is how upgrades and the uninstaller find an existing install.
+#define AppId "6E0B7C2A-5F1D-4C8E-9A3B-2D7F41C9E8B5"
 #ifndef OutputDir
   #define OutputDir "..\artifacts"
 #endif
 
 [Setup]
-; Never change the AppId: it is how upgrades and the uninstaller find an existing install.
-AppId={{6E0B7C2A-5F1D-4C8E-9A3B-2D7F41C9E8B5}
+AppId={{{#AppId}}
 AppName=Stringline
 AppVersion={#AppVersion}
 AppVerName=Stringline {#AppVersion}
@@ -29,6 +38,7 @@ AppSupportURL=https://github.com/frddunc-glitch/Stringline/issues
 AppUpdatesURL=https://github.com/frddunc-glitch/Stringline/releases
 AppCopyright=Copyright (C) 2026 Frederick Duncan and Stringline contributors
 VersionInfoVersion={#AppNumericVersion}
+VersionInfoProductTextVersion={#AppVersion}
 VersionInfoDescription=Stringline setup
 DefaultDirName={autopf}\Stringline
 DefaultGroupName=Stringline
@@ -48,6 +58,8 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
+; Close only Stringline itself, not other programs that happen to have a file of ours open.
+CloseApplicationsFilter=Stringline.exe
 #ifdef Sign
 ; publish.ps1 defines Sign and the "stringline" sign tool (build/sign.ps1) when a code-signing certificate is set up.
 SignTool=stringline
@@ -67,9 +79,98 @@ Source: "{#SourceDir}\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreve
 Source: "{#SourceDir}\OFL.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
+[InstallDelete]
+; Files earlier versions installed that this one no longer does (none yet).
+
 [Icons]
 Name: "{autoprograms}\Stringline"; Filename: "{app}\Stringline.exe"; Comment: "A live train graph for SimSig"
 Name: "{autodesktop}\Stringline"; Filename: "{app}\Stringline.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\Stringline.exe"; Description: "{cm:LaunchProgram,Stringline}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+const
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{{#AppId}}_is1';
+
+// The next dot-separated number of a version, taken off its front; -1 if there is none.
+function NextPart(var Version: String): Integer;
+var
+  Dot: Integer;
+begin
+  Dot := Pos('.', Version);
+  if Dot = 0 then Dot := Length(Version) + 1;
+  Result := StrToIntDef(Copy(Version, 1, Dot - 1), -1);
+  Delete(Version, 1, Dot);
+end;
+
+// The numeric part of a version ("0.2.0-beta+abc" -> 0.2.0), packed for comparing; False if it is not one.
+function PackVersion(Version: String; var Packed: Int64): Boolean;
+var
+  Cut, Major, Minor, Patch: Integer;
+begin
+  Cut := Pos('+', Version);
+  if Cut > 0 then Version := Copy(Version, 1, Cut - 1);
+  Cut := Pos('-', Version);
+  if Cut > 0 then Version := Copy(Version, 1, Cut - 1);
+  Major := NextPart(Version);
+  Minor := NextPart(Version);
+  Patch := NextPart(Version);
+  Result := (Major >= 0) and (Minor >= 0) and (Patch >= 0) and (Version = '');
+  if Result then
+    Packed := PackVersionComponents(Major, Minor, Patch, 0);
+end;
+
+// The newest version installed for this user or for all users, or False if there is none.
+function InstalledVersion(var Version: String; var Packed: Int64): Boolean;
+var
+  Found: String;
+  FoundPacked: Int64;
+begin
+  Result := False;
+  if RegQueryStringValue(HKCU, UninstallKey, 'DisplayVersion', Found) and PackVersion(Found, FoundPacked) then
+  begin
+    Version := Found;
+    Packed := FoundPacked;
+    Result := True;
+  end;
+  if RegQueryStringValue(HKLM64, UninstallKey, 'DisplayVersion', Found) and PackVersion(Found, FoundPacked) and
+    (not Result or (ComparePackedVersion(FoundPacked, Packed) > 0)) then
+  begin
+    Version := Found;
+    Packed := FoundPacked;
+    Result := True;
+  end;
+end;
+
+function HasSwitch(Name: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), Name) = 0 then
+      Result := True;
+end;
+
+// Installing an older version over a newer one is usually a mistake, so it asks first.
+function InitializeSetup(): Boolean;
+var
+  Installed: String;
+  Old, New: Int64;
+begin
+  Result := True;
+  if not InstalledVersion(Installed, Old) or not PackVersion('{#AppVersion}', New) then
+    Exit;
+  if ComparePackedVersion(New, Old) >= 0 then
+    Exit;
+  Log(Format('Stringline %s is installed; this setup is the older %s.', [Installed, '{#AppVersion}']));
+  if HasSwitch('/ALLOWDOWNGRADE') then
+    Exit;
+  Result := SuppressibleMsgBox(Format('Stringline %s is installed, which is newer than this setup''s %s.'#13#10#13#10 +
+    'Install the older version over it? Your settings, profiles and sessions are kept, but a newer version may have ' +
+    'saved them in a form the older one cannot read.', [Installed, '{#AppVersion}']),
+    mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES;
+  if not Result then
+    Log('Not installing the older version.');
+end;

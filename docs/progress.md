@@ -1151,7 +1151,49 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Next
 - S22.
 
+### 2026-10-20 — Installer updates an installed Stringline
+
+### Done
+- **Tried it first.** I built 0.1.0 and 0.1.1 setups, installed 0.1.0, started it, and ran 0.1.1 silently over it. The installer already updated in place: the same `AppId`, folder and per-user mode, with the Restart Manager closing the app. **But with a session open, the app closed without stopping it.** At a Windows session end (an installer's Restart Manager, logging off, shutting down), WPF closes the window without waiting for `OnClosing`'s async work. The log went straight from "shutting down" to "stopped". The session was not stopped and the layout was not saved.
+- **Fix:** `App.OnSessionEnding` calls `MainWindow.ShutDownNow(4 s)`. It does `OnClosing`'s work (tick, layout, `MainViewModel.DisposeAsync`) once, running the dispatcher in a nested frame until that is done. The log says "Windows is closing the app (…); stopping the session" and then "Session stopped for Windows". A window test covers it.
+- **Installer** (`installer/Stringline.iss`):
+  - comments on how updating works;
+  - `CloseApplicationsFilter=Stringline.exe`;
+  - the product version on the setup exe;
+  - an empty `[InstallDelete]` for files a later version drops;
+  - a **downgrade check**: an older setup over a newer install (for this user or all users) asks first. A silent one refuses with exit code 1 unless given `/ALLOWDOWNGRADE`. Pre-release and build suffixes are ignored, so reinstalling the same version is allowed.
+- **`build/test-upgrade.ps1`**: it installs an old setup, starts it with the Waterloo replay running, and updates it with `/VERYSILENT … /CLOSEAPPLICATIONS`. It checks:
+  - the app was closed and logged that it stopped its session;
+  - the version in the Apps list and on the exe;
+  - the folder is unchanged;
+  - there is no second (all-users) entry;
+  - a silent downgrade is refused, and `/ALLOWDOWNGRADE` goes ahead;
+  - the uninstall removes the program and its entry, and leaves the logs.
+
+  An old app or setup from before this change has neither the session save nor the downgrade check; for those it warns instead of failing.
+- **Release workflow:** a "Test the update" step runs the script from the previous release's setup. When no release has one, it uses a 0.0.1 build of this code.
+- **Passed by hand:**
+  - 0.0.1 → 0.1.1 built here: every check;
+  - the real 0.1.0 setup (from the V0.1.0 Release run's artifact) → 0.1.1: every check, plus the two expected warnings.
+- `Directory.Build.props` is now **0.1.1**. Updated the guide's Installing ▸ Updating, the README, `05-…md` §12 and CLAUDE.md.
+
+### Decisions
+- **The Restart Manager, not `AppMutex`.** A mutex would only make setup ask the user to close Stringline (and abort a silent update). The Restart Manager closes it, and now the app saves its session first.
+- **The downgrade check is in the older setup**, so it only protects from 0.1.1 on. Installing 0.1.0 over a newer version still goes ahead silently.
+- **The test is in the Release workflow only.** It publishes and installs, which is too slow for each push.
+
+### Next
+- S29, as before.
+
+### Known issues
+- **0.1.0 cannot be helped.** Updating from a running 0.1.0 closes it without saving its session or layout. That happens once, and an edited session is still offered for resuming from its last autosave.
+- **The V0.1.0 release has no files.** The one Release run was started by hand without a tag, so the zip and setup only went to that run's workflow artifacts, which GitHub deletes after the retention period (90 days by default). Anyone who installed 0.1.0 got it from there.
+- **Not seen on the hosted runner yet.** The script passed on Fred's PC; the first tagged release will show whether the Restart Manager behaves the same on `windows-latest`.
+
 ### Questions for Fred
+- 21. **Release 0.1.1?** It carries the save-on-close fix and the downgrade check. Pushing tag `v0.1.1` builds it, tests the update, and attaches the files. Should V0.1.0 also get its files, with Actions ▸ Release ▸ Run workflow and tag `V0.1.0`? That build would not have this change.
+
+## Questions for Fred
 - 15. **#1:** which code-signing route: SignPath Foundation (free for open source, recommended), Azure Trusted Signing or an OV certificate? Without one, Windows keeps saying "Unknown publisher".
 - 16. **#5:** a multiplayer recording is needed before S29.
 

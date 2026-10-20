@@ -107,6 +107,29 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Windows is logging off or shutting down, or an installer is closing the app to update it (<c>05-…md</c> §12).
+    /// WPF will close the window without waiting for it, so the session is stopped and saved here first.
+    /// </summary>
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        base.OnSessionEnding(e);
+        if (e.Cancel || MainWindow is not MainWindow window)
+        {
+            return;
+        }
+
+        AppLog.Information("Windows is closing the app ({Reason}); stopping the session", e.ReasonSessionEnding);
+        if (window.ShutDownNow(TimeSpan.FromSeconds(4)))
+        {
+            AppLog.Information("Session stopped for Windows");
+        }
+        else
+        {
+            AppLog.Warning("The session did not stop within 4 s; closing anyway");
+        }
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         if (_host is { } host)

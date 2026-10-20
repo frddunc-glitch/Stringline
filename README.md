@@ -18,6 +18,8 @@ Download one of these from the [Releases](https://github.com/frddunc-glitch/Stri
 
 The downloads are not yet code-signed, so Windows shows "Unknown publisher" and SmartScreen may warn you the first time. Choose **More info ▸ Run anyway**. Only a code-signing certificate makes Windows show the publisher; the build signs the files as soon as one is set up (see [Code signing](#code-signing)). The first start takes a few seconds longer while Windows unpacks the app.
 
+To update, run the new version's installer. It updates Stringline where it is installed, closing it first if it is running (from 0.1.1 Stringline saves its session as it closes), and keeps your settings, profiles and sessions.
+
 Uninstalling leaves your settings, profiles, sessions and logs in place (see [Where your files are kept](#where-your-files-are-kept)). Delete those folders by hand if you want them gone too.
 
 ## Getting started
@@ -110,7 +112,7 @@ dotnet test Stringline.Portable.slnf
 ./build/publish.ps1 -Installer      # also artifacts/Stringline-<version>-setup.exe (needs Inno Setup 6: winget install JRSoftware.InnoSetup)
 ```
 
-The version comes from `Directory.Build.props` unless you pass `-Version`. Pushing a tag such as `v0.2.0` runs the **Release** workflow, which tests, publishes and makes a draft GitHub release with both files. The installer script is `installer/Stringline.iss`. The app icon is drawn by code (`AppIcon` in `Stringline.Graph`); after changing it, run `dotnet run --project src/Stringline.Tools -- icon src/Stringline.App/Assets/stringline.ico`.
+The version comes from `Directory.Build.props` unless you pass `-Version`. Pushing a tag such as `v0.2.0` runs the **Release** workflow, which tests, publishes and makes a draft GitHub release with both files. The installer script is `installer/Stringline.iss`. `./build/test-upgrade.ps1` checks that a setup updates an installed Stringline, including one that is running. The Release workflow runs it from the previous release. The app icon is drawn by code (`AppIcon` in `Stringline.Graph`); after changing it, run `dotnet run --project src/Stringline.Tools -- icon src/Stringline.App/Assets/stringline.ico`.
 
 ### Code signing
 
