@@ -112,7 +112,9 @@ SkiaGraphRenderer    // Render(SKCanvas, scene, viewport, selection?), RenderPng
 SkiaGraphRenderer.Render(…, GraphSelection?, ghosts?) // S8: the selected train (WTT train and/or live uid) heavy with a halo, the rest dimmed; S12: ghost paths drawn over everything, uncached
 PlanDrag             // S12: a drag edit of the selected train (body → ShiftTrain from the next point, Alt+vertex → ShiftTrain from it, stop end → SetDwell); 15 s snap, not before now or the latest report, min-run stop; each move previews the command on the plan → PlanDragPreview (command, train, status)
 GraphAnnotations     // S13: disruptions and notes for a scene, where they draw (RectOf, MarkerOf, LabelOf), hit tests (DisruptionAt, NoteAt), the span a B+drag or right-click picks (SpanBetween: widened to location lines, 5 min steps), tooltips; Render(…, ghosts?, draft?) draws a B+drag draft
-GraphNavigator       // S8: pan/zoom/follow state for one surface, toolkit-free: Resize, Tick(now), Wheel (Ctrl = corridor, Shift = pan), drag, presets, CentreOn; S9: SetOrientation
+GraphNavigator       // S8: pan/zoom/follow state for one surface, toolkit-free: Resize, Tick(now), Wheel (Ctrl = corridor, Shift = pan), drag, presets, CentreOn; S9: SetOrientation; S21: MatchTime(other)
+GraphTimeLink        // S21: keeps several navigators (boards) on one clock: a change of time range or follow mode on one is matched by the rest; each keeps its corridor range
+GraphPlot            // S21: GraphPlotOptions(from, to, SecondsPerPage, PdfPage (A3/A4 portrait or landscape), Orientation; Problem) → GraphPlotPage[] (one scale, last page cut short); SkiaGraphRenderer.RenderPlot writes the multi-page PDF
 GraphHitTester       // S8: nearest projected segment within 5 px, actual preferred over WTT; linear scan → GraphHit(path, segment, nearest vertex, time)
 GraphHitIndex        // S9: the same answers from a 16 px grid over one scene × viewport; the app keeps one until the view or scene changes
 GraphHover           // S8: GraphHit + scene + PlanSnapshot → HoverInfo (location, WTT and actual times, delay, S11: forecast, knock-on, possibly stopped, match, train)

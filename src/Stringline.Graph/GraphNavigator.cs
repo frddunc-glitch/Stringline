@@ -250,6 +250,19 @@ public sealed class GraphNavigator
 
     public void EndDrag() => _dragFrom = null;
 
+    /// <summary>
+    /// Show the same time as <paramref name="other"/> (S21, boards locked in time): its time range, follow mode and
+    /// sim time. The corridor range, size, margins and orientation stay this navigator's own.
+    /// </summary>
+    public void MatchTime(GraphNavigator other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        Now = other.Now ?? Now;
+        var following = IsFollowing != other.IsFollowing;
+        IsFollowing = other.IsFollowing;
+        Set(Viewport with { TimeStart = other.Viewport.TimeStart, TimeEnd = other.Viewport.TimeEnd }, force: following);
+    }
+
     private void Set(GraphViewport viewport, bool force = false)
     {
         if (viewport == Viewport && !force)

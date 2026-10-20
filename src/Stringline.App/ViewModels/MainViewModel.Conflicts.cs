@@ -34,7 +34,7 @@ internal sealed partial class MainViewModel
 
     /// <summary>A click on the graph at a point: see <see cref="ClickConflict"/>.</summary>
     public bool ClickConflictAt(ScreenPoint at) =>
-        ClickConflict(Scene is { } scene ? GraphHitTester.TargetAt(scene, Navigator.Viewport, at) : null);
+        ClickConflict(ActiveBoard.Scene is { } scene ? GraphHitTester.TargetAt(scene, ActiveBoard.Navigator.Viewport, at) : null);
 
     /// <summary>
     /// A click on the graph: a conflict's ring, or its highlight away from any line (#12), picks it (true); otherwise
@@ -57,14 +57,18 @@ internal sealed partial class MainViewModel
         SuggestionPanel.ConflictId == conflict.Id && SuggestionPanel.Rows.Count > 0 ? SuggestionPanel.Rows[0].Title : null;
 
     /// <summary>
-    /// Show a conflict (FC-4): on the corridor shown if it meets it, else the first that does; the view stops following
-    /// and centres on where and when the train that must give way meets it, and that train is selected.
+    /// Show a conflict (FC-4): on the board last used if its corridor meets it, else another board that shows it
+    /// (S21), else the main graph switches to the first corridor that does. The view stops following and centres on
+    /// where and when the train that must give way meets it (every board moves in time with it), and that train is
+    /// selected.
     /// </summary>
     public void FocusConflict(Conflict conflict)
     {
         ArgumentNullException.ThrowIfNull(conflict);
-        if (SelectedCorridor is not { } current || !GraphConflicts.Shows(current.Corridor, conflict))
+        var board = Shows(ActiveBoard, conflict) ? ActiveBoard : Boards.FirstOrDefault(b => Shows(b, conflict));
+        if (board is null)
         {
+            board = MainBoard;
             if (Corridors.FirstOrDefault(c => GraphConflicts.Shows(c.Corridor, conflict)) is { } other)
             {
                 SelectedCorridor = other;
@@ -75,18 +79,21 @@ internal sealed partial class MainViewModel
             }
         }
 
-        var axis = SelectedCorridor?.Corridor.PositionOf(conflict.Where);
+        var axis = board.Corridor?.Corridor.PositionOf(conflict.Where);
         if (axis is { } a)
         {
-            Navigator.CentreOn(conflict.When.Seconds, a);
+            board.Navigator.CentreOn(conflict.When.Seconds, a);
         }
         else
         {
-            Navigator.CentreOn(conflict.When.Seconds);
+            board.Navigator.CentreOn(conflict.When.Seconds);
         }
 
         SelectConflict(conflict);
     }
+
+    private static bool Shows(GraphBoardViewModel board, Conflict conflict) =>
+        board.Corridor is { } tab && GraphConflicts.Shows(tab.Corridor, conflict);
 
     private void SelectConflict(Conflict conflict) =>
         SetSelection(conflict.A, Snapshot.FindByTrain(conflict.A)?.Train.SimUid, conflict.Id);

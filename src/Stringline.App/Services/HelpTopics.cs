@@ -12,6 +12,9 @@ internal static class HelpTopics
 
     public const string TrainList = "reading-the-graph.md#the-train-list";
 
+    /// <summary>The split view and board windows (S21).</summary>
+    public const string Boards = "reading-the-graph.md#boards-split-view-and-board-windows";
+
     public const string TrainDetail = "re-planning.md#the-train-detail-panel";
 
     public const string Conflicts = "conflicts-and-suggestions.md";
@@ -34,5 +37,5 @@ internal static class HelpTopics
 
     /// <summary>Every topic, for the test that each page and heading is there.</summary>
     public static IReadOnlyList<string> All { get; } =
-        [Contents, Graph, TrainList, TrainDetail, Conflicts, Regulation, Delays, History, Replay, Connect, Options, ProfileEditor, Disruptions];
+        [Contents, Graph, TrainList, Boards, TrainDetail, Conflicts, Regulation, Delays, History, Replay, Connect, Options, ProfileEditor, Disruptions];
 }

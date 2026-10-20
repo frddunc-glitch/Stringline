@@ -33,7 +33,7 @@ ViziRail's ETG is a live train-control-diagram interface linked to the control s
 
 | ViziRail capability | Stringline v1 | Later |
 |---|---|---|
-| Live time–distance train control diagram | ✅ Per-corridor graph; WTT / working plan / actual / forecast layers; now line; auto-scroll | Multiple boards side by side, print/plot |
+| Live time–distance train control diagram | ✅ Per-corridor graph; WTT / working plan / actual / forecast layers; now line; auto-scroll | Multiple boards side by side, print/plot (both built in S21) |
 | Interface with train control | ✅ Read-only from SimSig gateway | Opt-in "assist" (route request, TD interpose) |
 | Drag-and-drop schedule adjustment | ✅ Drag whole path or "from this point on" in time | Snap to next free headway slot |
 | Point-and-click path changes | ✅ Hold at location, change platform/line, add/skip stop, terminate short, cancel, reinstate | Divert via another corridor |

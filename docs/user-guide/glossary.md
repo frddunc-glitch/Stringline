@@ -9,6 +9,7 @@ Railway words are used as SimSig uses them.
 | **Area ID** | SimSig's short name for a sim, sent over the gateway (for example `waterloo`). Stringline names profiles by it. |
 | **Assist** | Sending a route request or a TD interpose to SimSig from Stringline, when you turn it on. See [Assist](assist.md). |
 | **Berth** | A train describer position on the panel, which holds a train's description. |
+| **Board** | One train graph showing one corridor: the main graph, the split view's second graph, or a board window. All boards keep the same time. See [Boards](reading-the-graph.md#boards-split-view-and-board-windows). |
 | **Block** (possession) | A section, or some of its tracks, closed for a time. Trains are held until it ends. |
 | **Category** | A kind of train (express passenger, freight and so on) with its colour, line style and priority in the profile. |
 | **Conflict** | Two trains, or a train and a block, that cannot both have what the plan gives them. See [Conflicts](conflicts-and-suggestions.md). |
@@ -26,6 +27,7 @@ Railway words are used as SimSig uses them.
 | **Now line** | The red line at the current sim time. |
 | **Pass** | A timing point a train runs through without stopping. Shown in italics. |
 | **Plan** (working plan) | The WTT with your changes. |
+| **Plot** | A train control diagram printed over several pages at one scale, time running down the page. See [Plotting](exports-and-reports.md#plotting-a-train-control-diagram). |
 | **Profile** | Stringline's settings for one sim: corridors, location names, distances, sections, headways and categories. |
 | **Regulation** | Deciding the order trains take through a junction or section. See [the regulation list](regulation.md). |
 | **Route request** | Asking SimSig to set a route, as clicking its entrance and exit signals does. |

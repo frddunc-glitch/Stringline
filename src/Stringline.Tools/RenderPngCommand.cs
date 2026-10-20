@@ -15,7 +15,8 @@ namespace Stringline.Tools;
 /// <summary>
 /// <c>stringline render-png</c> (or <c>render</c>): draw one corridor's train graph to a PNG, or to a PDF when the output
 /// ends in <c>.pdf</c> (S17), from a WTT and optionally a recording played up to the chosen time, with the same renderer
-/// the app uses.
+/// the app uses. With <c>--plot</c> (S21) the PDF is a multi-page plot: a time range at a fixed scale a page, time
+/// running down on A3 portrait unless told otherwise.
 /// </summary>
 internal static class RenderPngCommand
 {
@@ -37,12 +38,17 @@ internal static class RenderPngCommand
         var noForecast = new Option<bool>("--no-forecast") { Description = "Leave out the forecast layer (drawn with --log)." };
         var noKnockOn = new Option<bool>("--no-knock-on") { Description = "Forecast each train on its own, without knock-on delay from the others." };
         var noConflicts = new Option<bool>("--no-conflicts") { Description = "Leave out the conflict marks (found with --log, unless --no-forecast)." };
-        var page = new Option<string>("--page") { Description = "PDF page: a3 (landscape), a4 (landscape) or view (--width × --height points).", DefaultValueFactory = _ => "a3" };
+        var page = new Option<string?>("--page") { Description = "PDF page: a3 or a4 (landscape), a3p or a4p (portrait), or view (--width × --height points). Default: a3, or a3p for a vertical plot." };
+        var plot = new Option<bool>("--plot") { Description = "Write a multi-page PDF plot of --from to --to at --per-page a page, time running down (S21)." };
+        var from = new Option<string?>("--from") { Description = "With --plot: where it starts (HH:mm). Default: the hour before --at, or the timetable's start." };
+        var to = new Option<string?>("--to") { Description = "With --plot: where it ends (HH:mm). Default: --hours after --from." };
+        var perPage = new Option<int>("--per-page") { Description = "With --plot: minutes a page.", DefaultValueFactory = _ => GraphPlotOptions.DefaultSecondsPerPage / SimTime.SecondsPerMinute };
+        var horizontal = new Option<bool>("--horizontal") { Description = "With --plot: time runs across the pages rather than down." };
         var verbose = new Option<bool>("--verbose") { Description = "Debug logging." };
 
         var command = new Command("render-png", "Draw a corridor's train graph (WTT, actuals and forecast) to a PNG, or a PDF.")
         {
-            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, vertical, colour, noForecast, noKnockOn, noConflicts, page, verbose,
+            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, vertical, colour, noForecast, noKnockOn, noConflicts, page, plot, from, to, perPage, horizontal, verbose,
         };
         command.Aliases.Add("render");
 
@@ -55,7 +61,12 @@ internal static class RenderPngCommand
                 NoForecast = parse.GetValue(noForecast),
                 NoKnockOn = parse.GetValue(noKnockOn),
                 NoConflicts = parse.GetValue(noConflicts),
-                Page = parse.GetValue(page) ?? "a3",
+                Page = parse.GetValue(page),
+                Plot = parse.GetValue(plot),
+                From = parse.GetValue(from),
+                To = parse.GetValue(to),
+                PerPageMinutes = parse.GetValue(perPage),
+                Horizontal = parse.GetValue(horizontal),
             },
             parse.InvocationConfiguration.Output,
             parse.InvocationConfiguration.Error,
@@ -91,8 +102,25 @@ internal static class RenderPngCommand
         /// <summary>Leave out the conflict marks.</summary>
         public bool NoConflicts { get; init; }
 
-        /// <summary>The PDF page by name (<see cref="PdfPage.Parse"/>), for a <c>.pdf</c> output.</summary>
-        public string Page { get; init; } = "a3";
+        /// <summary>The PDF page by name (<see cref="PdfPage.Parse"/>), for a <c>.pdf</c> output; null for the default.</summary>
+        public string? Page { get; init; }
+
+        /// <summary>A multi-page plot (S21) rather than one view.</summary>
+        public bool Plot { get; init; }
+
+        /// <summary>Where the plot starts; null for the hour before <see cref="At"/>, or the timetable's start.</summary>
+        public string? From { get; init; }
+
+        /// <summary>Where the plot ends; null for <see cref="Hours"/> after the start.</summary>
+        public string? To { get; init; }
+
+        public int PerPageMinutes { get; init; } = GraphPlotOptions.DefaultSecondsPerPage / SimTime.SecondsPerMinute;
+
+        /// <summary>A plot with time across the pages.</summary>
+        public bool Horizontal { get; init; }
+
+        /// <summary>The page asked for, or the default: A3 landscape, or A3 portrait for a vertical plot.</summary>
+        public string PageName => Page ?? (Plot && !Horizontal ? "a3p" : "a3");
 
         public bool IsPdf => Output.Extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase);
     }
@@ -118,10 +146,41 @@ internal static class RenderPngCommand
             return 2;
         }
 
-        if (settings.IsPdf && PdfPage.Parse(settings.Page, GraphViewport.Create(0, 3600, settings.Width, settings.Height)) is null)
+        if (settings.IsPdf && PdfPage.Parse(settings.PageName, GraphViewport.Create(0, 3600, settings.Width, settings.Height)) is null)
         {
-            await error.WriteLineAsync($"--page '{settings.Page}' is not a page (a3, a4 or view).").ConfigureAwait(false);
+            await error.WriteLineAsync($"--page '{settings.Page}' is not a page (a3, a4, a3p, a4p or view).").ConfigureAwait(false);
             return 2;
+        }
+
+        if (settings.Plot && !settings.IsPdf)
+        {
+            await error.WriteLineAsync("--plot writes a PDF: give an output ending in .pdf.").ConfigureAwait(false);
+            return 2;
+        }
+
+        SimTime? plotFrom = null;
+        SimTime? plotTo = null;
+        foreach (var (name, text) in new[] { ("--from", settings.From), ("--to", settings.To) })
+        {
+            if (text is null)
+            {
+                continue;
+            }
+
+            if (!SimTime.TryParse(text, out var parsed))
+            {
+                await error.WriteLineAsync($"{name} '{text}' is not a time (HH:mm or HH:mm:ss).").ConfigureAwait(false);
+                return 2;
+            }
+
+            if (name == "--from")
+            {
+                plotFrom = parsed;
+            }
+            else
+            {
+                plotTo = parsed;
+            }
         }
 
         using var loggerFactory = ConsoleLogging.Create(settings.Verbose);
@@ -198,8 +257,13 @@ internal static class RenderPngCommand
         var viewport = GraphViewport.Around(now.Value, (int)Math.Round(settings.Hours * SimTime.SecondsPerHour), settings.Width, settings.Height, settings.NowAt,
             GraphLabels.MarginsFor(orientation, scene.Locations), orientation);
 
+        var pdfPage = settings.IsPdf ? PdfPage.Parse(settings.PageName, viewport) : null;
+        if (settings.Plot)
+        {
+            return await PlotAsync(settings, scene, corridor, pdfPage!, plotFrom ?? PlotStart(at, tt), plotTo, output, error, cancellationToken).ConfigureAwait(false);
+        }
+
         byte[] bytes;
-        var pdfPage = settings.IsPdf ? PdfPage.Parse(settings.Page, viewport) : null;
         using (var renderer = new SkiaGraphRenderer())
         {
             bytes = pdfPage is null ? renderer.RenderPng(scene, viewport) : renderer.RenderPdf(scene, viewport, page: pdfPage);
@@ -220,6 +284,49 @@ internal static class RenderPngCommand
             $"Wrote {settings.Output.Name}{(pdfPage is null ? string.Empty : $" ({pdfPage.Name})")}: {corridor.Id} ({corridor.Name}), {viewport.TimeStart.ToSimTime()}–{viewport.TimeEnd.ToSimTime()}, " +
             $"now {now}, {visible} paths in view ({scene.InLayer(GraphLayer.Actual).Count()} actual, {scene.InLayer(GraphLayer.Forecast).Count()} forecast in all)" +
             (conflicts is null ? "." : $", {scene.Conflicts.Count} of {conflicts.Count} conflicts on this corridor.")).ConfigureAwait(false);
+        return 0;
+    }
+
+    /// <summary>The plot's default start: the whole hour before --at, else the timetable's start hour.</summary>
+    private static SimTime PlotStart(SimTime? at, Core.Timetables.WorkingTimetable tt)
+    {
+        var from = at is { } t ? t.Seconds - SimTime.SecondsPerHour : tt.Header.StartTime.Seconds;
+        return new SimTime(Math.Max(0, from / SimTime.SecondsPerHour * SimTime.SecondsPerHour));
+    }
+
+    private static async Task<int> PlotAsync(Settings settings, GraphScene scene, Network.Corridor corridor, PdfPage page, SimTime from, SimTime? to, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var options = new GraphPlotOptions(from, to ?? from + (int)Math.Round(settings.Hours * SimTime.SecondsPerHour))
+        {
+            SecondsPerPage = settings.PerPageMinutes * SimTime.SecondsPerMinute,
+            Page = page,
+            Orientation = settings.Horizontal ? GraphOrientation.Horizontal : GraphOrientation.Vertical,
+        };
+        if (options.Problem is { } problem)
+        {
+            await error.WriteLineAsync(problem).ConfigureAwait(false);
+            return 2;
+        }
+
+        byte[] bytes;
+        using (var renderer = new SkiaGraphRenderer())
+        {
+            bytes = renderer.RenderPlot(scene, options);
+        }
+
+        try
+        {
+            await File.WriteAllBytesAsync(settings.Output.FullName, bytes, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            await error.WriteLineAsync($"Cannot write {settings.Output.FullName}: {ex.Message}").ConfigureAwait(false);
+            return 2;
+        }
+
+        await output.WriteLineAsync(
+            $"Wrote {settings.Output.Name} ({page.Name}, {(settings.Horizontal ? "time across" : "time down")}): {corridor.Id} ({corridor.Name}), {options.From}–{options.To}, " +
+            $"{options.PageCount} pages of {settings.PerPageMinutes} min.").ConfigureAwait(false);
         return 0;
     }
 

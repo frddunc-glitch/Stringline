@@ -1,0 +1,37 @@
+<UserControl x:Class="Stringline.App.Controls.BoardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Stringline.App.Controls"
+             xmlns:views="clr-namespace:Stringline.App.Views"
+             xmlns:services="clr-namespace:Stringline.App.Services"
+             views:Help.Topic="{x:Static services:HelpTopics.Boards}">
+  <!-- A board (S21): its own corridor over the graph, which shares the clock, plan and selection with the others. -->
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    <views:NotNullToVisibilityConverter x:Key="NotNull" />
+  </UserControl.Resources>
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="4,2">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="✕" Padding="6,0" Background="Transparent" BorderThickness="0"
+                Command="{Binding CloseCommand}" Visibility="{Binding IsSplit, Converter={StaticResource BoolToVisibility}}"
+                ToolTip="Close the split view (View ▸ Split view ▸ Off)" />
+        <TextBlock Text="Corridor:" VerticalAlignment="Center" Margin="2,0,6,0" Foreground="#616161" />
+        <ComboBox x:Name="CorridorPicker" ItemsSource="{Binding Corridors}" SelectedItem="{Binding Corridor}" DisplayMemberPath="Name"
+                  MinWidth="160" HorizontalAlignment="Left" ToolTip="The corridor this board shows; it keeps time with the main graph" />
+      </DockPanel>
+    </Border>
+    <Grid>
+      <controls:GraphView x:Name="Graph" Scene="{Binding Scene}" Selection="{Binding Selection}" Navigator="{Binding Navigator}"
+                          Ghosts="{Binding Ghosts}" Grips="{Binding Grips}" Draft="{Binding Draft}">
+        <controls:GraphView.InputBindings>
+          <KeyBinding Key="Space" Command="{Binding ToggleFollowCommand}" />
+          <KeyBinding Key="Escape" Command="{Binding ClearSelectionCommand}" />
+        </controls:GraphView.InputBindings>
+      </controls:GraphView>
+      <TextBlock Text="{Binding Placeholder}" Visibility="{Binding Placeholder, Converter={StaticResource NotNull}}"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="15" Foreground="#757575" IsHitTestVisible="False"
+                 TextWrapping="Wrap" TextAlignment="Center" Margin="12" />
+    </Grid>
+  </DockPanel>
+</UserControl>

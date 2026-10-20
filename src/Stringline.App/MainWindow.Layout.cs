@@ -53,9 +53,22 @@ public partial class MainWindow
             detail = DetailRow.ActualHeight - (tabsShown ? 0 : tabs);
         }
 
+        // The split view's shares (S21), from whichever way it is split now.
+        var (mainBoard, splitBoard) = (current.MainBoardSize, current.SplitBoardSize);
+        if (SplitBoardRow.ActualHeight > 0)
+        {
+            (mainBoard, splitBoard) = (MainBoardRow.ActualHeight, SplitBoardRow.ActualHeight);
+        }
+        else if (SplitBoardColumn.ActualWidth > 0)
+        {
+            (mainBoard, splitBoard) = (MainBoardColumn.ActualWidth, SplitBoardColumn.ActualWidth);
+        }
+
         var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, ActualWidth, ActualHeight) : RestoreBounds;
         return current with
         {
+            MainBoardSize = mainBoard,
+            SplitBoardSize = splitBoard,
             TrainListWidth = train,
             GraphWidth = graph,
             SideWidth = side,
@@ -94,6 +107,35 @@ public partial class MainWindow
         TabsRow.Height = layout.ShowTabs ? new GridLength(layout.TabsHeight, GridUnitType.Star) : new GridLength(0);
         DetailRow.Height = new GridLength(layout.DetailHeight + (layout.ShowTabs ? 0 : layout.TabsHeight), GridUnitType.Star);
         ApplySuggestionsHeight();
+        ApplySplit();
+    }
+
+    /// <summary>
+    /// The split view (S21): the second board under the main graph (stacked) or beside it, with a splitter between,
+    /// each keeping its share; or only the main graph.
+    /// </summary>
+    private void ApplySplit()
+    {
+        var layout = Layout.Current;
+        var (stacked, sideBySide) = (Layout.Split == BoardSplit.Stacked, Layout.Split == BoardSplit.SideBySide);
+        var on = stacked || sideBySide;
+        BoardSplitter.Visibility = SplitBoardView.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+
+        MainBoardRow.Height = new GridLength(stacked ? layout.MainBoardSize : 1, GridUnitType.Star);
+        BoardSplitterRow.Height = new GridLength(stacked ? 5 : 0);
+        SplitBoardRow.Height = stacked ? new GridLength(layout.SplitBoardSize, GridUnitType.Star) : new GridLength(0);
+        MainBoardRow.MinHeight = SplitBoardRow.MinHeight = stacked ? WindowLayout.MinBoardSize : 0;
+
+        MainBoardColumn.Width = new GridLength(sideBySide ? layout.MainBoardSize : 1, GridUnitType.Star);
+        BoardSplitterColumn.Width = new GridLength(sideBySide ? 5 : 0);
+        SplitBoardColumn.Width = sideBySide ? new GridLength(layout.SplitBoardSize, GridUnitType.Star) : new GridLength(0);
+        MainBoardColumn.MinWidth = SplitBoardColumn.MinWidth = sideBySide ? WindowLayout.MinBoardSize : 0;
+
+        Grid.SetRow(BoardSplitter, stacked ? 1 : 0);
+        Grid.SetColumn(BoardSplitter, sideBySide ? 1 : 0);
+        BoardSplitter.ResizeDirection = stacked ? GridResizeDirection.Rows : GridResizeDirection.Columns;
+        Grid.SetRow(SplitBoardView, stacked ? 2 : 0);
+        Grid.SetColumn(SplitBoardView, sideBySide ? 2 : 0);
     }
 
     private static void SetColumn(ColumnDefinition column, FrameworkElement panel, bool show, double width, double minWidth)
@@ -112,7 +154,8 @@ public partial class MainWindow
 
     private void OnLayoutChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(LayoutViewModel.ShowTrainList) or nameof(LayoutViewModel.ShowSidePanel) or nameof(LayoutViewModel.ShowTabs))
+        if (e.PropertyName is nameof(LayoutViewModel.ShowTrainList) or nameof(LayoutViewModel.ShowSidePanel) or nameof(LayoutViewModel.ShowTabs)
+            or nameof(LayoutViewModel.Split))
         {
             // The sizes as shown until now (no panel has hidden or shown yet), then the new switches.
             CaptureLayout();
@@ -171,7 +214,7 @@ public partial class MainWindow
     /// Every screen's work area in device-independent pixels, the primary first. Scaled by the system DPI, which is
     /// what WPF places a window by before it is shown.
     /// </summary>
-    private static List<ScreenArea> WorkAreas()
+    internal static List<ScreenArea> WorkAreas()
     {
         var areas = new List<(ScreenArea Area, bool Primary)>();
         var dpi = VisualTreeHelper.GetDpi(new DrawingVisual());

@@ -3,8 +3,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using Stringline.Core;
-using Stringline.Graph;
-using Stringline.Network.Profiles;
 using Stringline.Planning;
 
 namespace Stringline.App.ViewModels;
@@ -182,15 +180,15 @@ internal sealed partial class MainViewModel
         var version = Snapshot.PlanVersion;
         _previewId = null;
         _previewShown = false;
-        Ghosts = PreviewPaths(row);
+        SetGhosts(PreviewPlans(row));
         var result = await ExecuteAsync(row.Command);
-        if (result.Applied && Ghosts is not null)
+        if (result.Applied && _ghostPlans is not null)
         {
             _ghostUntil = version + 1;
         }
         else
         {
-            Ghosts = null;
+            SetGhosts(null);
         }
 
         if (result.Applied && row.Replan is { } replan)
@@ -199,7 +197,7 @@ internal sealed partial class MainViewModel
         }
     }
 
-    /// <summary>Show the previewed suggestion's ghosts on the corridor shown, or clear them if it has gone.</summary>
+    /// <summary>Show the previewed suggestion's ghosts on every board, or clear them if it has gone.</summary>
     private void UpdateSuggestionPreview()
     {
         var row = _previewId is null ? null : SuggestionPanel.Rows.FirstOrDefault(r => r.Id == _previewId);
@@ -216,12 +214,12 @@ internal sealed partial class MainViewModel
 
         if (row is not null)
         {
-            Ghosts = PreviewPaths(row);
+            SetGhosts(PreviewPlans(row));
             _previewShown = true;
         }
         else if (_previewShown)
         {
-            Ghosts = null;
+            SetGhosts(null);
             _previewShown = false;
         }
     }
@@ -239,31 +237,15 @@ internal sealed partial class MainViewModel
             _previewShown = false;
             if (_drag is null)
             {
-                Ghosts = null;
+                SetGhosts(null);
             }
         }
     }
 
-    /// <summary>The plans a suggestion (or re-plan) changes, on the corridor shown, as ghosts.</summary>
-    private List<GraphPath>? PreviewPaths(SuggestionRowViewModel row)
-    {
-        if (SelectedCorridor is not { } tab || row.Plan is not { } plan)
-        {
-            return null;
-        }
-
-        var paths = new List<GraphPath>();
-        foreach (var id in row.Changed)
-        {
-            if (plan.Find(id) is { Cancelled: false } train)
-            {
-                var colour = Profile?.StyleFor(train.CategoryId).Colour ?? CategoryStyle.Fallback.Colour;
-                paths.AddRange(GraphSceneBuilder.PlanPaths(tab.Corridor, train, colour, $"ghost:{id}"));
-            }
-        }
-
-        return paths;
-    }
+    /// <summary>The plans a suggestion (or re-plan) changes, as ghosts for every board.</summary>
+    private static List<GhostPlan>? PreviewPlans(SuggestionRowViewModel row) =>
+        row.Plan is not { } plan ? null
+        : [.. row.Changed.Select(id => plan.Find(id)).OfType<TrainPlan>().Where(t => !t.Cancelled).Select(t => new GhostPlan(t, $"ghost:{t.Id}"))];
 
     /// <summary>Close the re-plan shown in the suggestions panel.</summary>
     [RelayCommand]

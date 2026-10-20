@@ -1684,7 +1684,7 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - **Blocks and runs planned too fast** stay with their suggestions: they are about one train, not the order of trains.
 
 ### Next
-- S21 (multi-corridor views) remains optional; S29 when Fred's multiplayer recording is ready.
+- S21 (multi-corridor views) remains optional; S29 when Fred's multiplayer recording is ready. *(S21 done next.)*
 - Perhaps: polish the optimiser's plan with the rules for what is left; line changes; a deterministic time limit for repeatable plans.
 
 ### Known issues
@@ -1695,6 +1695,64 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Questions for Fred
 - 23. **Re-plan on your sims.** Do the re-plans look like what a signaller would do? Is clearing more conflicts at the cost of more delay the right way round, or should delay weigh more?
 - 24. **Download size.** The solver adds about 23 MB to the zip. Acceptable, or should the optimiser be an optional download?
+
+## 2026-10-20 — S21: Boards and plots (GR-8, GR-10)
+
+### Done
+- **Fred's choices** (asked at the start):
+  - split panes **and** board windows;
+  - locked in time;
+  - full editing on every board;
+  - a multi-page plot, time running down.
+- **Graph** (portable):
+  - `GraphTimeLink` with `GraphNavigator.MatchTime`: a change of time range or follow mode on one navigator is matched by the rest. Each keeps its own corridor range, size and orientation.
+  - `GraphPlot`, `GraphPlotOptions` and `GraphPlotPage`: a time range at a fixed number of minutes a page, laid out on pages at one scale. The last page is cut short. Problems are reported (end before start, under 5 min a page, more than 100 pages).
+  - `SkiaGraphRenderer.RenderPlot` writes the multi-page PDF, each page headed "… — 08:00–10:00 — page 2 of 3".
+  - `PdfPage.A3Portrait`, `A4Portrait` and `Paper`.
+- **App** (`05-…md` §16):
+  - `GraphBoardViewModel`: a board's corridor, navigator, scene, ghosts, grips, draft, selection and placeholder. `MainViewModel.Boards` holds them: `MainBoard`, `SplitBoard`, `BoardWindows`, `ActiveBoard`.
+  - `Scene`, `Navigator`, `Ghosts`, `Grips` and `DraftDisruption` now pass through to the main board. The editing code works on the active board through a per-board `BoardEditor`.
+  - Ghosts are plans (`GhostPlan`) drawn on every board whose corridor the train runs on. Grips are worked out per board.
+  - View ▸ Split view ▸ Off / One above the other / Side by side (`LayoutViewModel.Split`). The second board has a corridor box and a ✕; the splitter between the two keeps their shares.
+  - View ▸ New board window and Close board windows (`BoardWindow`, `BoardView`). Board windows have undo, redo and export shortcuts.
+  - Remembered: the split, its shares and corridor, and each board window's corridor and place (`WindowLayout`, now with value equality). Board windows reopen when the main window is shown.
+  - File ▸ Export ▸ Plot (multi-page PDF)… asks for the corridor, times, minutes a page, paper and direction, and remembers the choices (`AppSettings.Plot`).
+  - Picking a conflict centres the active board, else another board that shows it, else the main one switches corridor. Exports and Whole corridor act on the active board.
+- **Tools:** `render-png --plot [--from] [--to] [--per-page] [--horizontal]`. `--page` takes `a3p` and `a4p`, and a vertical plot defaults to A3 portrait.
+- **Docs:**
+  - the guide: "Boards: split view and board windows" (also its F1 topic), "Plotting a train control diagram", keyboard and mouse, glossary (Board, Plot) and contents;
+  - design docs: `05-…md` §1 and new §16; `01-…md` GR-8 and GR-10; `02-…md`; `00-…md` §3; the plan;
+  - `CLAUDE.md` and the README.
+- **Tests:**
+  - `GraphTimeLinkTests` (4) and `GraphPlotTests` (8), both in Graph;
+  - `RenderPngCommandTests`: the plot;
+  - `BoardTests` (5, App):
+    - the split view: corridor, time lock, orientation, close and come back;
+    - board windows: shared selection, remembered and restored;
+    - a grip drag on the split board, with its ghost on both boards;
+    - exports and Whole corridor on the active board;
+    - the plot and its refusal;
+  - `BoardWindowTests` (1, WPF): the split laid out both ways, and a board window opened and closed, with no binding errors.
+- Totals: 1 616 (Core 263, Architecture 14, Gateway 211, Timetable 166, Network 161, Planning 238, Persistence 12, Graph 271, Optimiser 22, Tools 71, App 187). Green on Windows (Debug). Linux was not run this session; nothing portable uses Windows.
+
+### Decisions
+- **One active board.** Editing state (a drag, a B+drag, the picked grip) belongs to the board it started on. The board last pressed, wheeled or typed on is the one exports and Whole corridor use; it goes back to the main board when its window closes.
+- **The main board keeps the toolbar's tabs.** The other boards each have their own corridor box. A new board opens on the first corridor no board shows.
+- **Board windows are owned by the main window**, so they close and minimise with it. They can still go on any monitor.
+- **A plot has no selection** (nothing is dimmed), and it shows the layers that are on. The now line is drawn where it falls.
+- **Reset layout keeps the split and board windows**, and gives the split equal shares.
+
+### Next
+- S29: the multiplayer investigation, when Fred's recording is ready.
+- Perhaps: guide pictures of the split view and a plot page (`guide-shots.ps1`).
+
+### Known issues
+- **Not tried by hand.** 👤 Fred: on a replay, turn on the split view both ways, open a board window on a second monitor, drag a train on it, close and restart the app, and print a plot of an afternoon on A3.
+- Every board builds its own scene on each snapshot. Three or four boards at Waterloo should be fine, but this is not measured.
+
+### Questions for Fred
+- 25. **Plot scale.** Is two hours a page on A3 portrait (about 3 mm a minute) a good default? Would you rather choose millimetres a minute, or have the plot fit the time onto a set number of pages?
+- 26. **Boards.** Do the board windows need their own toolbar (layers, 1h/3h/6h, Follow), or are the main window's enough, since the boards are locked in time?
 
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:

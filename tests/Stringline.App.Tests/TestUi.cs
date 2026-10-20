@@ -221,6 +221,11 @@ internal sealed class ScriptedDialogs : IDialogService
     public Func<SettingsViewModel, bool>? Settings { get; set; }
 
     public bool ShowSettings(SettingsViewModel viewModel) => Settings is { } answer && answer(viewModel) && viewModel.TryAccept();
+
+    /// <summary>Every board window opened (S21).</summary>
+    public List<GraphBoardViewModel> BoardsShown { get; } = [];
+
+    public void ShowBoard(GraphBoardViewModel board) => BoardsShown.Add(board);
 }
 
 /// <summary>A main view model wired as the app wires it, with files under a temporary folder.</summary>

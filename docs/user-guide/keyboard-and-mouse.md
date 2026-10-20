@@ -17,7 +17,9 @@
 | Ctrl+1 … Ctrl+9 | Show the first to ninth corridor |
 | Alt+F4 | File ▸ Exit |
 
-With the graph focused (click it first):
+Ctrl+Z, Ctrl+Y, Ctrl+E and Ctrl+P also work in [board windows](reading-the-graph.md#boards-split-view-and-board-windows).
+
+With the graph (or any board) focused (click it first):
 
 | Key | Does |
 |---|---|
@@ -56,5 +58,7 @@ With the graph focused (click it first):
 | Click | A row in the train list, Conflicts or Delays | Select that train or conflict |
 | Double-click | A row in the train list | Centre the graph on the train's last report |
 | Double-click | A splitter | Hide or show the panel beside it |
+| Drag | The splitter between the two boards of the split view | Share the room between them |
+| Pick | The corridor box above a board | Show that corridor on the board |
 | Double-click | A cell in the train detail's Plat, Line or Plan columns | Edit it |
 | Right-click | A row in the regulation list | Request a route or interpose a description, with [assist](assist.md) on |

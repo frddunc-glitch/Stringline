@@ -50,6 +50,7 @@ public partial class GraphView : UserControl
     private (string Key, int Vertex)? _tipFor;
     private string? _annotationTip;
     private GraphHitIndex? _hitIndex;
+    private Action<GraphHit?>? _clicked;
 
     public GraphView()
     {
@@ -111,6 +112,23 @@ public partial class GraphView : UserControl
 
     /// <summary>Edits trains by dragging and gives the right-click menu; without one, presses only pan.</summary>
     internal IGraphEditor? Editor { get; set; }
+
+    /// <summary>Called when the graph is used (a press, the wheel, a key), so the shell knows which board is in use (S21).</summary>
+    public Action? Activated { get; set; }
+
+    /// <summary>
+    /// Drive this graph from a board (S21): its tooltips, conflict clicks, editing, clicks and use go to the board's
+    /// view model. The board's scene, navigator and marks are bound in XAML.
+    /// </summary>
+    internal void Attach(ViewModels.GraphBoardViewModel board)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        Describer = board.Describer;
+        ConflictClicker = board.ConflictClicker;
+        Editor = board.Editor;
+        Activated = board.Activated;
+        _clicked = board.PathClicker;
+    }
 
     /// <summary>Move the now line (interpolated sim seconds). Redraws only when it moves at least half a pixel.</summary>
     public void SetNow(double? now)
@@ -178,6 +196,7 @@ public partial class GraphView : UserControl
     {
         base.OnMouseLeftButtonDown(e);
         Focus();
+        Activated?.Invoke();
         var p = e.GetPosition(Surface);
         _pressedAt = p;
         _dragged = false;
@@ -301,7 +320,9 @@ public partial class GraphView : UserControl
         }
         else if (wasClick && ConflictClicker?.Invoke(TargetAt(up)) != true)
         {
-            PathClicked?.Invoke(this, HitTest(up));
+            var hit = HitTest(up);
+            PathClicked?.Invoke(this, hit);
+            _clicked?.Invoke(hit);
         }
 
         e.Handled = true;
@@ -314,6 +335,7 @@ public partial class GraphView : UserControl
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
         base.OnPreviewKeyDown(e);
+        Activated?.Invoke();
         if (e.Key == Key.Escape && (_editing || _blocking))
         {
             CancelEdit();
@@ -370,6 +392,7 @@ public partial class GraphView : UserControl
         }
 
         Focus();
+        Activated?.Invoke();
         HideTip();
         var p = e.GetPosition(Surface);
         var items = editor.MenuFor(HitTest(p), new ScreenPoint(p.X, p.Y));
@@ -414,6 +437,7 @@ public partial class GraphView : UserControl
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
+        Activated?.Invoke();
         var p = e.GetPosition(Surface);
         var modifiers = GraphModifiers.None;
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))

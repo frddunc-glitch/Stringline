@@ -17,7 +17,7 @@ In the app, **Help ▸ User guide** opens this guide, and **F1** opens the page 
 
 **Using the graph**
 
-5. [Reading the graph](reading-the-graph.md)
+5. [Reading the graph](reading-the-graph.md): the lines, moving around, and boards (split view and board windows)
 6. [Re-planning](re-planning.md): grips, nudges, the right-click menu and undo
 7. [Disruptions and notes](disruptions-and-notes.md)
 8. [Conflicts and suggestions](conflicts-and-suggestions.md)
@@ -27,7 +27,7 @@ In the app, **Help ▸ User guide** opens this guide, and **F1** opens the page 
 **Keeping your work**
 
 11. [Sessions, recordings and review](sessions-and-review.md)
-12. [Exports and reports](exports-and-reports.md)
+12. [Exports and reports](exports-and-reports.md): pictures, PDFs, multi-page plots and CSV
 
 **Reference**
 

@@ -63,8 +63,6 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private LoadedTimetable? _timetable;
     private PlanSnapshot? _latestSnapshot;
     private int _snapshotQueued;
-    private bool _building;
-    private bool _sceneDirty;
     private string? _suggestedFor;
     private string? _mismatchWarnedFor;
     private double? _frozenNow;
@@ -96,10 +94,12 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<MainViewModel>();
         InitEditing();
+        InitBoards();
         InitConflicts();
         InitSessions();
         _settings = settingsStore.Load();
         Layout = new LayoutViewModel(_settings.Layout);
+        InitSplit();
         _paths = paths.WithFolders(_settings);
         InitSuggestions();
         InitReports();
@@ -125,7 +125,8 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         UpdatePlaceholder();
     }
 
-    public GraphNavigator Navigator { get; } = new();
+    /// <summary>The main graph's navigator; the other boards are locked to it in time (S21).</summary>
+    public GraphNavigator Navigator => MainBoard.Navigator;
 
     /// <summary>The window's panels and splitters (#9).</summary>
     public LayoutViewModel Layout { get; }
@@ -146,8 +147,8 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty]
     public partial PlanSnapshot Snapshot { get; private set; }
 
-    [ObservableProperty]
-    public partial GraphScene? Scene { get; private set; }
+    /// <summary>The main graph's scene (each board has its own, S21).</summary>
+    public GraphScene? Scene => MainBoard.Scene;
 
     [ObservableProperty]
     public partial GraphSelection? Selection { get; private set; }
@@ -266,19 +267,20 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     partial void OnSelectedCorridorChanged(CorridorTab? value)
     {
+        MainBoard.Corridor = value;
         UpdateSuggestionPreview();
         if (KeepsViewOnTabChange(value))
         {
             if (value is not null)
             {
-                RequestScene();
+                RequestScene(MainBoard);
             }
 
             return;
         }
 
         Navigator.ShowFullCorridor();
-        RequestScene();
+        RequestScene(MainBoard);
     }
 
     partial void OnShowWttChanged(bool value) => RequestScene();
@@ -303,7 +305,11 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     partial void OnIsVerticalChanged(bool value)
     {
-        Navigator.SetOrientation(value ? GraphOrientation.Vertical : GraphOrientation.Horizontal);
+        foreach (var board in Boards)
+        {
+            board.Navigator.SetOrientation(value ? GraphOrientation.Vertical : GraphOrientation.Horizontal);
+        }
+
         SaveViewSettings();
     }
 
@@ -319,7 +325,16 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         NowSeconds = now;
         if (now is { } seconds)
         {
-            Navigator.Tick(seconds);
+            // Locked in time (S21): ticking one moves them all, so the rest find nothing to do.
+            foreach (var board in Boards)
+            {
+                board.Navigator.Tick(seconds);
+            }
+        }
+
+        foreach (var board in Boards)
+        {
+            board.MoveNow(now);
         }
 
         ClockText = StatusText.Clock(clock, new SimTime((int)Math.Floor(now ?? 0)));
@@ -344,7 +359,11 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     /// The tooltip for what is under the mouse (#12): a line, a conflict (with its top suggestion once worked out), a
     /// block or speed restriction, a note or a label.
     /// </summary>
-    public HoverInfo? Describe(GraphTarget target) => Scene is { } scene ? GraphHover.Describe(target, scene, Snapshot, TopSuggestionFor) : null;
+    public HoverInfo? Describe(GraphTarget target) => Describe(MainBoard, target);
+
+    /// <summary>The tooltip for what is under the mouse on a board.</summary>
+    private HoverInfo? Describe(GraphBoardViewModel board, GraphTarget target) =>
+        board.Scene is { } scene ? GraphHover.Describe(target, scene, Snapshot, TopSuggestionFor) : null;
 
     /// <summary>A click on the graph: select the train hit, or clear the selection on the background.</summary>
     public void SelectPath(GraphHit? hit)
@@ -567,8 +586,9 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
+    /// <summary>Corridor ▸ Whole corridor: on the board last used (S21).</summary>
     [RelayCommand]
-    private void ShowFullCorridor() => Navigator.ShowFullCorridor();
+    private void ShowFullCorridor() => ActiveBoard.Navigator.ShowFullCorridor();
 
     /// <summary>Show a corridor by its number in tab order (Ctrl+1 to Ctrl+9); a number past the last does nothing.</summary>
     [RelayCommand]
@@ -601,12 +621,13 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     /// <summary>
     /// Save the graph as shown (GR-10, Fred: the current view) to a PNG the user picks: the same time and corridor
-    /// range, orientation, colours and selection, at the graph's size times the parameter (1 or 2).
+    /// range, orientation, colours and selection, at the graph's size times the parameter (1 or 2). The graph is the
+    /// board last used (S21).
     /// </summary>
     [RelayCommand]
     private void ExportPng(string? scale)
     {
-        if (Scene is not { } scene)
+        if (ActiveBoard.Scene is not { } scene)
         {
             ShowInfo(InfoSeverity.Warning, "There is no graph to export yet.");
             return;
@@ -614,7 +635,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
         var factor = double.TryParse(scale, NumberStyles.Float, CultureInfo.InvariantCulture, out var s) ? Math.Clamp(s, 1, 4) : 1;
         var now = NowSeconds is { } seconds ? new SimTime((int)Math.Floor(seconds)) : scene.Now;
-        var viewport = Navigator.Viewport;
+        var viewport = ActiveBoard.Navigator.Viewport;
         var selection = Selection;
         SaveExport("Export the graph as PNG", FileFilters.Png, ExportName(scene.CorridorId, now, ".png"), "the graph", path =>
         {
@@ -626,9 +647,10 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Remember the window's layout (<see cref="Layout"/>) for next time; the window calls this as it closes.</summary>
     public void SaveLayout()
     {
-        if (_settings.Layout != Layout.Current)
+        var layout = BoardsLayout(Layout.Current);
+        if (_settings.Layout != layout)
         {
-            _settings = _settings with { Layout = Layout.Current };
+            _settings = _settings with { Layout = layout };
             _settingsStore.Save(_settings);
         }
     }
@@ -681,6 +703,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
 
         SelectedCorridor = Corridors.FirstOrDefault(c => c.Id == previous) ?? Corridors.FirstOrDefault();
+        RefreshBoardCorridors();
         Regulation.SetLocations(loaded.Profile);
         var warnings = loaded.Import.Warnings.Count;
         var message = $"Loaded {(loaded.Timetable.Header.Name.Length > 0 ? loaded.Timetable.Header.Name : Path.GetFileName(path))}: {loaded.Timetable.Trains.Count} trains, {Corridors.Count} corridors"
@@ -890,22 +913,73 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
+    /// <summary>Build the scene again for every board.</summary>
     private void RequestScene()
     {
-        if (_building)
+        foreach (var board in Boards)
         {
-            _sceneDirty = true;
+            RequestScene(board);
+        }
+    }
+
+    /// <summary>Build a board's scene off the UI thread; one asked for while another builds follows it.</summary>
+    private void RequestScene(GraphBoardViewModel board)
+    {
+        if (board.Building)
+        {
+            board.SceneDirty = true;
             return;
         }
 
-        if (Profile is not { } profile || SelectedCorridor is not { } tab)
+        if (Profile is not { } profile || board.Corridor is not { } tab)
         {
-            Scene = null;
+            board.Scene = null;
             UpdatePlaceholder();
             return;
         }
 
-        var request = GraphSceneRequest.For(profile, tab.Corridor, Snapshot) with
+        var request = SceneRequest(profile, tab);
+        board.Building = true;
+        board.SceneDirty = false;
+        var planVersion = Snapshot.PlanVersion;
+        _ = Task.Run(() =>
+        {
+            var scene = GraphSceneBuilder.Build(request);
+            return (Scene: scene, LabelRoom: GraphLabels.RoomFor(scene.Locations));
+        }).ContinueWith(
+            t => _ui.Post(() =>
+            {
+                board.Building = false;
+                if (!Boards.Contains(board))
+                {
+                    return; // closed meanwhile
+                }
+
+                if (t.IsCompletedSuccessfully)
+                {
+                    board.Navigator.FitLabels(t.Result.LabelRoom);
+                    board.Scene = t.Result.Scene;
+                    SceneBuiltFor(board, planVersion);
+                }
+                else if (t.Exception is { } ex)
+                {
+                    LogSceneFailed(ex.GetBaseException());
+                }
+
+                UpdatePlaceholder();
+                if (board.SceneDirty)
+                {
+                    RequestScene(board);
+                }
+            }),
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
+    }
+
+    /// <summary>What a corridor's scene is built from: the snapshot, the layers shown and the colours.</summary>
+    private GraphSceneRequest SceneRequest(StringlineProfile profile, CorridorTab tab) =>
+        GraphSceneRequest.For(profile, tab.Corridor, Snapshot) with
         {
             Timetable = _timetable?.Timetable,
             ShowWtt = ShowWtt,
@@ -916,38 +990,6 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             ColourMode = ColourMode,
             SimTitle = CurrentSimTitle(),
         };
-        _building = true;
-        _sceneDirty = false;
-        var planVersion = Snapshot.PlanVersion;
-        _ = Task.Run(() =>
-        {
-            var scene = GraphSceneBuilder.Build(request);
-            return (Scene: scene, LabelRoom: GraphLabels.RoomFor(scene.Locations));
-        }).ContinueWith(
-            t => _ui.Post(() =>
-            {
-                _building = false;
-                if (t.IsCompletedSuccessfully)
-                {
-                    Navigator.FitLabels(t.Result.LabelRoom);
-                    Scene = t.Result.Scene;
-                    SceneBuiltFor(planVersion);
-                }
-                else if (t.Exception is { } ex)
-                {
-                    LogSceneFailed(ex.GetBaseException());
-                }
-
-                UpdatePlaceholder();
-                if (_sceneDirty)
-                {
-                    RequestScene();
-                }
-            }),
-            CancellationToken.None,
-            TaskContinuationOptions.None,
-            TaskScheduler.Default);
-    }
 
     private void OnTrainRowSelected(TrainRowViewModel? row)
     {
@@ -1013,10 +1055,17 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         return Profile is null && header is null && area is null ? null : SimTitle.From(Profile?.Name, area, header, IsReviewing);
     }
 
-    private void UpdatePlaceholder() => Placeholder =
-        Profile is null ? (_session is null ? "Connect to SimSig or open a replay to begin (Session menu)." : "Load the sim's timetable to draw the graph.")
-        : Corridors.Count == 0 ? "This timetable gave no corridors to draw."
-        : null;
+    private void UpdatePlaceholder()
+    {
+        Placeholder =
+            Profile is null ? (_session is null ? "Connect to SimSig or open a replay to begin (Session menu)." : "Load the sim's timetable to draw the graph.")
+            : Corridors.Count == 0 ? "This timetable gave no corridors to draw."
+            : null;
+        foreach (var board in Boards)
+        {
+            board.Placeholder = Placeholder ?? (board.Corridor is null ? "Choose a corridor for this board." : null);
+        }
+    }
 
     private void ShowInfo(InfoSeverity severity, string message, bool suggestions = false, bool hasWarnings = false)
     {

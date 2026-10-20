@@ -26,10 +26,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         _viewModel = viewModel;
         DataContext = viewModel;
-        Graph.Describer = viewModel.Describe;
-        Graph.ConflictClicker = viewModel.ClickConflict;
-        Graph.Editor = viewModel;
-        Graph.PathClicked += (_, hit) => viewModel.SelectPath(hit);
+        Graph.Attach(viewModel.MainBoard);
         viewModel.History.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(EditHistoryViewModel.Latest) && viewModel.History.Latest is { } latest)
@@ -59,6 +56,7 @@ public partial class MainWindow : Window
         {
             _timer.Start();
             Graph.Focus();
+            viewModel.RestoreBoards();
         };
     }
 

@@ -1,4 +1,18 @@
+using System.Text.Json.Serialization;
+
 namespace Stringline.App.Services;
+
+/// <summary>The main window's split view (S21): one graph, two one above the other, or two side by side.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<BoardSplit>))]
+internal enum BoardSplit
+{
+    None,
+    Stacked,
+    SideBySide,
+}
+
+/// <summary>A board window to open again at the next start (S21): its corridor and where it was.</summary>
+internal sealed record BoardLayout(string? CorridorId, WindowPlacement? Window);
 
 /// <summary>
 /// The main window's layout (#9), remembered between runs: the share each column and row has, which panels are shown,
@@ -24,6 +38,12 @@ internal sealed record WindowLayout
     public const double MinSuggestionsHeight = 60;
     public const double DefaultSuggestionsHeight = 200;
 
+    /// <summary>The least width or height of each graph in the split view (S21).</summary>
+    public const double MinBoardSize = 150;
+
+    /// <summary>The most board windows opened again at a start, so a damaged file cannot open hundreds.</summary>
+    public const int MaxBoards = 8;
+
     public double TrainListWidth { get; init; } = DefaultTrainListWidth;
 
     public double GraphWidth { get; init; } = DefaultGraphWidth;
@@ -48,6 +68,31 @@ internal sealed record WindowLayout
     /// <summary>Where the window was, in device-independent pixels; null the first time.</summary>
     public WindowPlacement? Window { get; init; }
 
+    /// <summary>The split view (S21), off at first.</summary>
+    public BoardSplit Split { get; init; }
+
+    /// <summary>The main graph's share of the split (its size last seen, in pixels).</summary>
+    public double MainBoardSize { get; init; } = 1;
+
+    /// <summary>The split view's second graph's share.</summary>
+    public double SplitBoardSize { get; init; } = 1;
+
+    /// <summary>The corridor the split view's second graph last showed.</summary>
+    public string? SplitCorridor { get; init; }
+
+    /// <summary>The board windows open when the app closed (S21).</summary>
+    public IReadOnlyList<BoardLayout> Boards { get; init; } = [];
+
+    /// <summary>Equal when every value is, the board windows compared one by one rather than as lists.</summary>
+    public bool Equals(WindowLayout? other) =>
+        other is not null && Values == other.Values && Boards.SequenceEqual(other.Boards);
+
+    public override int GetHashCode() => HashCode.Combine(Values, Boards.Count);
+
+    private (double, double, double, double, double, double, bool, bool, bool, WindowPlacement?, BoardSplit, (double, double, string?)) Values =>
+        (TrainListWidth, GraphWidth, SideWidth, DetailHeight, TabsHeight, SuggestionsHeight, ShowTrainList, ShowSidePanel, ShowTabs, Window, Split,
+            (MainBoardSize, SplitBoardSize, SplitCorridor));
+
     /// <summary>The same layout with nonsense (from a hand-edited or damaged file) put back to the defaults.</summary>
     public WindowLayout Checked()
     {
@@ -61,6 +106,10 @@ internal sealed record WindowLayout
             TabsHeight = Positive(TabsHeight, defaults.TabsHeight),
             SuggestionsHeight = Math.Max(MinSuggestionsHeight, Positive(SuggestionsHeight, defaults.SuggestionsHeight)),
             Window = Window is { IsUsable: true } ? Window : null,
+            Split = Enum.IsDefined(Split) ? Split : BoardSplit.None,
+            MainBoardSize = Positive(MainBoardSize, defaults.MainBoardSize),
+            SplitBoardSize = Positive(SplitBoardSize, defaults.SplitBoardSize),
+            Boards = [.. (Boards ?? []).Where(b => b is not null).Take(MaxBoards).Select(b => b with { Window = b.Window is { IsUsable: true } ? b.Window : null })],
         };
     }
 

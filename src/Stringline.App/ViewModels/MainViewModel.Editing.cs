@@ -64,18 +64,10 @@ internal sealed partial class MainViewModel : IGraphEditor
 
     public EditHistoryViewModel History { get; } = new();
 
-    /// <summary>The preview of a drag edit: where the train would run. Null when not dragging.</summary>
-    [ObservableProperty]
-    public partial IReadOnlyList<GraphPath>? Ghosts { get; private set; }
-
     /// <summary>For the status bar: what a drag edit does or why it cannot, and the last edit made.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EditStatusText))]
     public partial string EditStatus { get; private set; } = string.Empty;
-
-    /// <summary>The grips on the selected train (S26), with the one under the mouse, the one picked and the one dragged.</summary>
-    [ObservableProperty]
-    public partial GraphGrips? Grips { get; private set; }
 
     /// <summary>What the grip or line under the mouse would do (S26); shown in the status bar over <see cref="EditStatus"/>.</summary>
     [ObservableProperty]
@@ -205,7 +197,7 @@ internal sealed partial class MainViewModel : IGraphEditor
             return false;
         }
 
-        var drag = PlanDrag.Begin(hit, Snapshot, Navigator.Viewport, at, NowTime, fromVertex, out var refusal);
+        var drag = PlanDrag.Begin(hit, Snapshot, ActiveBoard.Navigator.Viewport, at, NowTime, fromVertex, out var refusal);
         if (drag is null)
         {
             if (refusal is not null)
@@ -217,7 +209,7 @@ internal sealed partial class MainViewModel : IGraphEditor
         }
 
         // The time label goes where the line was pressed, as if a grip were there.
-        var (time, axis) = Navigator.Viewport.ToWorld(at);
+        var (time, axis) = ActiveBoard.Navigator.Viewport.ToWorld(at);
         var kind = drag.Kind switch
         {
             PlanDragKind.Dwell => GraphGripKind.Dwell,
@@ -231,19 +223,19 @@ internal sealed partial class MainViewModel : IGraphEditor
 
     // ---- Grips (S26, #10) --------------------------------------------------------------------
 
-    public GraphGrip? GripAt(ScreenPoint at) => Grips?.HitTest(Navigator.Viewport, at);
+    public GraphGrip? GripAt(ScreenPoint at) => ActiveBoard.Grips?.HitTest(ActiveBoard.Navigator.Viewport, at);
 
-    public GraphHit? SelectedLineAt(ScreenPoint at) => Grips?.LineAt(Navigator.Viewport, at);
+    public GraphHit? SelectedLineAt(ScreenPoint at) => ActiveBoard.Grips?.LineAt(ActiveBoard.Navigator.Viewport, at);
 
     public void HoverGrip(GraphGrip? grip, bool overLine)
     {
-        if (Grips is not { } grips || _drag is not null)
+        if (ActiveBoard.Grips is not { } grips || _drag is not null)
         {
             GripHint = null;
             return;
         }
 
-        Grips = grips.WithHot(grip);
+        ActiveBoard.Grips = grips.WithHot(grip);
         var headcode = Snapshot.Plan.Find(grips.Train)?.Headcode.ToString() ?? grips.Train.ToString();
         GripHint = grip is { LockReason: { } reason } ? $"Locked: {reason}"
             : grip is not null ? $"{grip.Action}. Shift: 1 s steps; Esc cancels."
@@ -251,7 +243,7 @@ internal sealed partial class MainViewModel : IGraphEditor
             : null;
     }
 
-    public HoverInfo DescribeGrip(GraphGrip grip) => GraphGrips.Describe(grip, Navigator.Viewport.IsVertical);
+    public HoverInfo DescribeGrip(GraphGrip grip) => GraphGrips.Describe(grip, ActiveBoard.Navigator.Viewport.IsVertical);
 
     public bool BeginGrip(GraphGrip grip, ScreenPoint at)
     {
@@ -267,7 +259,7 @@ internal sealed partial class MainViewModel : IGraphEditor
             return false;
         }
 
-        if (PlanDrag.Begin(grip, Snapshot, Navigator.Viewport, at, NowTime, out var refusal) is not { } drag)
+        if (PlanDrag.Begin(grip, Snapshot, ActiveBoard.Navigator.Viewport, at, NowTime, out var refusal) is not { } drag)
         {
             EditStatus = refusal ?? "It cannot be moved.";
             return false;
@@ -280,20 +272,20 @@ internal sealed partial class MainViewModel : IGraphEditor
     public void SelectGrip(GraphGrip grip)
     {
         ArgumentNullException.ThrowIfNull(grip);
-        if (Grips is not { } grips)
+        if (ActiveBoard.Grips is not { } grips)
         {
             return;
         }
 
         if (grip.LockReason is { } reason)
         {
-            Grips = grips.WithSelected(null);
+            ActiveBoard.Grips = grips.WithSelected(null);
             EditStatus = $"Locked: {reason}";
             return;
         }
 
-        Grips = grips.WithSelected(grip);
-        var keys = Navigator.Viewport.IsVertical ? "↑/↓" : "←/→";
+        ActiveBoard.Grips = grips.WithSelected(grip);
+        var keys = ActiveBoard.Navigator.Viewport.IsVertical ? "↑/↓" : "←/→";
         EditStatus = $"{grip.Action}, or nudge it with {keys} (15 s; Shift: 1 min).";
     }
 
@@ -303,7 +295,7 @@ internal sealed partial class MainViewModel : IGraphEditor
     /// </summary>
     public bool Nudge(int seconds)
     {
-        if (Grips?.Selected is not { IsLocked: false } || _drag is not null)
+        if (ActiveBoard.Grips?.Selected is not { IsLocked: false } || _drag is not null)
         {
             return false;
         }
@@ -329,7 +321,7 @@ internal sealed partial class MainViewModel : IGraphEditor
         _nudging = true;
         try
         {
-            while (_pendingNudge != 0 && Grips?.Selected is { } grip)
+            while (_pendingNudge != 0 && ActiveBoard.Grips?.Selected is { } grip)
             {
                 var seconds = _pendingNudge;
                 _pendingNudge = 0;
@@ -365,21 +357,9 @@ internal sealed partial class MainViewModel : IGraphEditor
         _ghostUntil = null;
         GripHint = null;
         EditStatus = drag.Preview.Status;
-        Ghosts = null;
-        Grips = Grips?.WithHot(null).WithDrag(new GraphGripDrag(grip, grip.At, drag.Preview.Label, false));
+        SetGhosts(null);
+        ActiveBoard.Grips = ActiveBoard.Grips?.WithHot(null).WithDrag(new GraphGripDrag(grip, grip.At, drag.Preview.Label, false));
         UpdateEditCommands();
-    }
-
-    /// <summary>The grips for the selected train in the scene now, keeping the grip picked, and the one dragged.</summary>
-    private void UpdateGrips()
-    {
-        var grips = Scene is { } scene ? GraphGrips.For(scene, Snapshot, Selection) : null;
-        if (grips is not null && Grips is { } old && old.Train == grips.Train)
-        {
-            grips = grips.WithSelected(old.Selected is { } picked ? grips.Find(picked) : null).WithDrag(old.Drag);
-        }
-
-        Grips = grips;
     }
 
     public void MoveEdit(ScreenPoint at, bool fine)
@@ -389,13 +369,12 @@ internal sealed partial class MainViewModel : IGraphEditor
             return;
         }
 
-        var preview = drag.Update(Navigator.Viewport, at, fine);
+        var preview = drag.Update(ActiveBoard.Navigator.Viewport, at, fine);
         EditStatus = preview.Status;
-        Ghosts = preview.Command is null || SelectedCorridor is not { } tab ? null
-            : GraphSceneBuilder.PlanPaths(tab.Corridor, preview.Train, Profile?.StyleFor(preview.Train.CategoryId).Colour ?? Network.Profiles.CategoryStyle.Fallback.Colour, "ghost");
+        SetGhosts(preview.Command is null ? null : [new GhostPlan(preview.Train, "ghost")]);
         if (_dragGrip is { } grip)
         {
-            Grips = Grips?.WithDrag(new GraphGripDrag(grip, grip.At with { Time = grip.At.Time + preview.DeltaSeconds }, preview.Label, preview.Limited));
+            ActiveBoard.Grips = ActiveBoard.Grips?.WithDrag(new GraphGripDrag(grip, grip.At with { Time = grip.At.Time + preview.DeltaSeconds }, preview.Label, preview.Limited));
         }
     }
 
@@ -410,31 +389,31 @@ internal sealed partial class MainViewModel : IGraphEditor
         _drag = null;
         var grip = _dragGrip;
         _dragGrip = null;
-        Grips = Grips?.WithDrag(null);
+        ActiveBoard.Grips = ActiveBoard.Grips?.WithDrag(null);
         UpdateEditCommands();
-        if (commit && drag.Preview.Command is not null && grip is not null && Grips?.Find(grip) is { IsLocked: false } kept && grip.Kind != GraphGripKind.Body)
+        if (commit && drag.Preview.Command is not null && grip is not null && ActiveBoard.Grips?.Find(grip) is { IsLocked: false } kept && grip.Kind != GraphGripKind.Body)
         {
             // The grip dragged stays picked, so the arrow keys can fine-tune it.
-            Grips = Grips.WithSelected(kept);
+            ActiveBoard.Grips = ActiveBoard.Grips.WithSelected(kept);
         }
 
         if (!commit || drag.Preview.Command is not { } command)
         {
-            Ghosts = null;
+            SetGhosts(null);
             EditStatus = commit || drag.Preview.Command is null ? string.Empty : "Edit cancelled.";
             return;
         }
 
         var version = Snapshot.PlanVersion;
         var result = await ExecuteAsync(command);
-        if (result.Applied && Ghosts is not null)
+        if (result.Applied && _ghostPlans is not null)
         {
             // Keep the ghost until a scene drawn from the edited plan replaces it, so the line does not flick back.
             _ghostUntil = version + 1;
         }
         else
         {
-            Ghosts = null;
+            SetGhosts(null);
         }
     }
 
@@ -544,7 +523,7 @@ internal sealed partial class MainViewModel : IGraphEditor
         }
 
         var axis = hit.Vertex.Axis;
-        var location = SelectedCorridor?.Corridor.Locations.FirstOrDefault(l => Math.Abs(l.AxisPosition - axis) < 1e-9)?.Tiploc;
+        var location = ActiveBoard.Corridor?.Corridor.Locations.FirstOrDefault(l => Math.Abs(l.AxisPosition - axis) < 1e-9)?.Tiploc;
         return plan.Points
             .Where(p => p.Location == location && p.FirstTime is not null)
             .OrderBy(p => Math.Abs(p.FirstTime!.Value.Seconds - hit.Vertex.Time))
@@ -776,15 +755,20 @@ internal sealed partial class MainViewModel : IGraphEditor
     /// <summary>The detail panel's cancel button: "Cancel train" or "Reinstate".</summary>
     public string CancelSelectedText => Detail.Schedule?.Plan is { } p && (p.Cancelled || p.TerminatesAt is not null) ? "Reinstate" : "Cancel train";
 
-    /// <summary>A scene has been built from a snapshot with this plan version: drop a ghost kept for an edit it now shows.</summary>
-    partial void OnSceneChanged(GraphScene? value) => UpdateGrips();
-
-    private void SceneBuiltFor(long planVersion)
+    /// <summary>
+    /// A board's scene has been built from a snapshot with this plan version: drop the ghost it showed for an edit it
+    /// now draws. Once no board shows one, the ghost is gone.
+    /// </summary>
+    private void SceneBuiltFor(GraphBoardViewModel board, long planVersion)
     {
         if (_ghostUntil is { } until && planVersion >= until && _drag is null)
         {
-            _ghostUntil = null;
-            Ghosts = null;
+            board.Ghosts = null;
+            if (Boards.All(b => b.Ghosts is not { Count: > 0 }))
+            {
+                _ghostUntil = null;
+                SetGhosts(null);
+            }
         }
     }
 

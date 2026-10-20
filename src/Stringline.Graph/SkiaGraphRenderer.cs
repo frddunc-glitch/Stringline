@@ -125,6 +125,40 @@ public sealed class SkiaGraphRenderer : IDisposable
         return stream.ToArray();
     }
 
+    /// <summary>
+    /// Renders a plot (S21) to a vector PDF of as many pages as <see cref="GraphPlot.Layout"/> gives: each page the
+    /// whole corridor over its share of the time, at one scale, headed with the scene's title, its times and its number.
+    /// No train is selected, so none is dimmed.
+    /// </summary>
+    /// <param name="title">The document title in the PDF's properties, if any.</param>
+    public byte[] RenderPlot(GraphScene scene, GraphPlotOptions options, string? title = null)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(options);
+        var pages = GraphPlot.Layout(scene, options);
+        var metadata = SKDocumentPdfMetadata.Default;
+        metadata.Title = title ?? scene.Title;
+        metadata.Creator = "Stringline";
+        metadata.Producer = "Stringline (SkiaSharp)";
+        using var stream = new MemoryStream();
+        using (var document = SKDocument.CreatePdf(stream, metadata) ?? throw new InvalidOperationException("Cannot create a PDF document."))
+        {
+            foreach (var page in pages)
+            {
+                var canvas = document.BeginPage(options.Page.Width, options.Page.Height);
+                canvas.Clear(ToSk(Theme.Background));
+                canvas.Translate(options.Page.Margin, options.Page.Margin);
+                canvas.ClipRect(new SKRect(0, 0, page.Viewport.Width, page.Viewport.Height));
+                Render(canvas, scene with { Title = page.Heading(scene.Title) }, page.Viewport, selection: null, tiles: false);
+                document.EndPage();
+            }
+
+            document.Close();
+        }
+
+        return stream.ToArray();
+    }
+
     /// <param name="selection">A selected train to draw heavier while the rest dims, if any.</param>
     /// <param name="ghosts">
     /// Paths to draw over everything as a translucent preview, such as where a train being dragged would run (S12).

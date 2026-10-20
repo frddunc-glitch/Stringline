@@ -195,5 +195,29 @@ public sealed class RenderPngCommandTests : IDisposable
         error.Should().Contain("--page 'letter' is not a page");
     }
 
+    [Fact]
+    public async Task Plots_a_time_range_over_pages_time_down_on_A3_portrait()
+    {
+        var (exit, output, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo4x), "--plot", "--from", "06:00", "--to", "09:30", Out("plot.pdf"));
+
+        exit.Should().Be(0, error);
+        output.Should().StartWith("Wrote plot.pdf (A3 portrait, time down): main ").And.Contain("06:00:00–09:30:00, 2 pages of 120 min.");
+        var pdf = System.Text.Encoding.Latin1.GetString(File.ReadAllBytes(Out("plot.pdf")));
+        pdf.Should().StartWith("%PDF-").And.Contain("/MediaBox [0 0 842 1191]");
+        System.Text.RegularExpressions.Regex.Matches(pdf, @"/Type\s*/Page\b(?!s)").Should().HaveCount(2);
+
+        (exit, output, error) = await Run("--wtt", Waterloo, "--plot", "--horizontal", "--per-page", "60", "--from", "07:00", "--hours", "2", Out("across.pdf"));
+        exit.Should().Be(0, error);
+        output.Should().StartWith("Wrote across.pdf (A3 landscape, time across): ").And.Contain("2 pages of 60 min.");
+
+        (exit, _, error) = await Run("--wtt", Waterloo, "--plot", Out("plot.png"));
+        exit.Should().Be(2);
+        error.Should().Contain("--plot writes a PDF");
+
+        (exit, _, error) = await Run("--wtt", Waterloo, "--plot", "--from", "09:00", "--to", "08:00", Out("bad.pdf"));
+        exit.Should().Be(2);
+        error.Should().Contain("must end after it starts");
+    }
+
     public void Dispose() => _dir.Delete(recursive: true);
 }

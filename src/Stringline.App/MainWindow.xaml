@@ -112,6 +112,8 @@
             <MenuItem Header="Graph as PDF (_A3 landscape)…" InputGestureText="Ctrl+P" Command="{Binding ExportPdfCommand}" CommandParameter="a3" />
             <MenuItem Header="Graph as PDF (A_4 landscape)…" Command="{Binding ExportPdfCommand}" CommandParameter="a4" />
             <MenuItem Header="Graph as PDF (_view size)…" Command="{Binding ExportPdfCommand}" CommandParameter="view" />
+            <MenuItem Header="P_lot (multi-page PDF)…" Command="{Binding ExportPlotCommand}"
+                      ToolTip="A corridor over a stretch of time at one scale, across as many pages as it takes, time running down as on a printed train control diagram" />
             <Separator />
             <MenuItem Header="_Delay table as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="points" />
             <MenuItem Header="_Train delays as CSV…" Command="{Binding ExportDelaysCommand}" CommandParameter="trains" />
@@ -153,6 +155,21 @@
           </MenuItem>
           <MenuItem Header="R_eset layout" Command="{Binding Layout.ResetLayoutCommand}"
                     ToolTip="Show every panel again at its first size" />
+          <Separator />
+          <!-- Boards (S21): a second graph in this window, and graphs in windows of their own, all on one clock -->
+          <MenuItem Header="Spl_it view">
+            <MenuItem Header="_Off" IsCheckable="False" IsChecked="{Binding Layout.IsSplitOff, Mode=OneWay}"
+                      Command="{Binding Layout.SetSplitCommand}" CommandParameter="None" />
+            <MenuItem Header="One _above the other" IsCheckable="False" IsChecked="{Binding Layout.IsSplitStacked, Mode=OneWay}"
+                      Command="{Binding Layout.SetSplitCommand}" CommandParameter="Stacked"
+                      ToolTip="A second graph under the main one, with its own corridor and the same time" />
+            <MenuItem Header="_Side by side" IsCheckable="False" IsChecked="{Binding Layout.IsSplitSideBySide, Mode=OneWay}"
+                      Command="{Binding Layout.SetSplitCommand}" CommandParameter="SideBySide"
+                      ToolTip="A second graph beside the main one, with its own corridor and the same time" />
+          </MenuItem>
+          <MenuItem Header="New _board window" Command="{Binding NewBoardWindowCommand}"
+                    ToolTip="A graph in a window of its own, e.g. for another monitor: its own corridor, the same time" />
+          <MenuItem Header="_Close board windows" Command="{Binding CloseBoardWindowsCommand}" />
         </MenuItem>
         <!-- Every corridor (filled in by MainWindow from CorridorMenuItems), then the whole corridor's zoom -->
         <MenuItem x:Name="CorridorMenu" Header="_Corridor">
@@ -394,16 +411,32 @@
                     ToolTip="Drag to resize the train list; double-click to hide or show it"
                     MouseDoubleClick="OnSplitterDoubleClick" DragCompleted="OnSplitterDragCompleted" />
 
-      <Grid Grid.Column="2" views:Help.Topic="{x:Static services:HelpTopics.Graph}">
-        <controls:GraphView x:Name="Graph" Scene="{Binding Scene}" Selection="{Binding Selection}" Navigator="{Binding Navigator}" Ghosts="{Binding Ghosts}" Grips="{Binding Grips}" Draft="{Binding DraftDisruption}">
-          <controls:GraphView.InputBindings>
-            <KeyBinding Key="Space" Command="{Binding ToggleFollowCommand}" />
-            <KeyBinding Key="Escape" Command="{Binding ClearSelectionCommand}" />
-          </controls:GraphView.InputBindings>
-        </controls:GraphView>
-        <TextBlock Text="{Binding Placeholder}" Visibility="{Binding Placeholder, Converter={StaticResource NotNull}}"
-                   HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="15" Foreground="#757575" IsHitTestVisible="False"
-                   TextWrapping="Wrap" TextAlignment="Center" Margin="12" />
+      <!-- The main graph and, with View ▸ Split view on, a second board under or beside it (S21; placed in MainWindow.Layout.cs) -->
+      <Grid x:Name="BoardsArea" Grid.Column="2">
+        <Grid.RowDefinitions>
+          <RowDefinition x:Name="MainBoardRow" Height="*" />
+          <RowDefinition x:Name="BoardSplitterRow" Height="0" />
+          <RowDefinition x:Name="SplitBoardRow" Height="0" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition x:Name="MainBoardColumn" Width="*" />
+          <ColumnDefinition x:Name="BoardSplitterColumn" Width="0" />
+          <ColumnDefinition x:Name="SplitBoardColumn" Width="0" />
+        </Grid.ColumnDefinitions>
+        <Grid x:Name="MainBoardPane" views:Help.Topic="{x:Static services:HelpTopics.Graph}">
+          <controls:GraphView x:Name="Graph" Scene="{Binding Scene}" Selection="{Binding Selection}" Navigator="{Binding Navigator}" Ghosts="{Binding Ghosts}" Grips="{Binding Grips}" Draft="{Binding DraftDisruption}">
+            <controls:GraphView.InputBindings>
+              <KeyBinding Key="Space" Command="{Binding ToggleFollowCommand}" />
+              <KeyBinding Key="Escape" Command="{Binding ClearSelectionCommand}" />
+            </controls:GraphView.InputBindings>
+          </controls:GraphView>
+          <TextBlock Text="{Binding Placeholder}" Visibility="{Binding Placeholder, Converter={StaticResource NotNull}}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="15" Foreground="#757575" IsHitTestVisible="False"
+                     TextWrapping="Wrap" TextAlignment="Center" Margin="12" />
+        </Grid>
+        <GridSplitter x:Name="BoardSplitter" Background="#EEEEEE" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Visibility="Collapsed"
+                      ToolTip="Drag to share the room between the two graphs" DragCompleted="OnSplitterDragCompleted" />
+        <controls:BoardView x:Name="SplitBoardView" DataContext="{Binding SplitBoard}" Visibility="Collapsed" />
       </Grid>
 
       <GridSplitter x:Name="SideSplitter" DragStarted="OnSplitterDragStarted" Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="#EEEEEE"

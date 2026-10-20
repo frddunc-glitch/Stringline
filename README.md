@@ -154,7 +154,7 @@ Without `--profile`, corridors come from the WTT (`corridors` lists them).
 - `--vertical` runs time down the image.
 - `--colour delay` colours the actual running by delay band: green on time or early, amber 1–5 min late, orange 6–15, red over 15.
 
-An output ending in `.pdf` writes a PDF (`--page a3|a4|view`). `report` writes the delay table as CSV. `replan` re-plans the hour ahead of a point in a recording, with the optimiser or (`--rules`) the suggestion rules, and lists the conflicts before and after and what it changes.
+An output ending in `.pdf` writes a PDF (`--page a3|a4|a3p|a4p|view`); with `--plot` it is a multi-page plot of `--from` to `--to` at `--per-page` minutes a page, time running down A3 portrait pages unless `--horizontal`. `report` writes the delay table as CSV. `replan` re-plans the hour ahead of a point in a recording, with the optimiser or (`--rules`) the suggestion rules, and lists the conflicts before and after and what it changes.
 
 ### The user guide
 

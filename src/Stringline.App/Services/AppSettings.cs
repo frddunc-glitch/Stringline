@@ -88,6 +88,9 @@ internal sealed record AppSettings
     /// <summary>The main window's panels, splitters and place (#9).</summary>
     public WindowLayout Layout { get; init; } = new();
 
+    /// <summary>The last plot's choices (S21), offered again.</summary>
+    public PlotSettings Plot { get; init; } = new();
+
     /// <summary>Saved sessions last saved more than this many days ago are deleted at start-up; never when null.</summary>
     public int? DeleteSessionsAfterDays { get; init; }
 
@@ -110,6 +113,21 @@ internal sealed record AppSettings
         var map = new Dictionary<string, string>(TimetableByArea, StringComparer.Ordinal) { [areaId.Trim().ToLowerInvariant()] = path };
         return this with { TimetableByArea = map, LastTimetablePath = path };
     }
+}
+
+/// <summary>
+/// File ▸ Export ▸ Plot's choices (S21), remembered: how many hours, the minutes a page, the paper by name
+/// (<see cref="Graph.PdfPage.Paper"/>) and whether time runs across the pages rather than down.
+/// </summary>
+internal sealed record PlotSettings
+{
+    public double Hours { get; init; } = 6;
+
+    public int MinutesPerPage { get; init; } = Graph.GraphPlotOptions.DefaultSecondsPerPage / Core.SimTime.SecondsPerMinute;
+
+    public string Paper { get; init; } = Graph.PdfPage.A3Portrait.Name;
+
+    public bool Across { get; init; }
 }
 
 /// <summary>How big the toolbar's sim clock is (#13).</summary>

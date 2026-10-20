@@ -17,6 +17,7 @@ internal sealed partial class LayoutViewModel : ObservableObject
         ShowTrainList = Current.ShowTrainList;
         ShowSidePanel = Current.ShowSidePanel;
         ShowTabs = Current.ShowTabs;
+        Split = Current.Split;
     }
 
     /// <summary>Raised when the whole layout changes at once (Reset layout), for the window to apply it again.</summary>
@@ -37,6 +38,38 @@ internal sealed partial class LayoutViewModel : ObservableObject
     [ObservableProperty]
     public partial bool ShowTabs { get; set; }
 
+    /// <summary>The split view (S21): View ▸ Split view ▸ Off, One above the other, or Side by side.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSplitOff), nameof(IsSplitStacked), nameof(IsSplitSideBySide))]
+    public partial BoardSplit Split { get; set; }
+
+    public bool IsSplitOff => Split == BoardSplit.None;
+
+    public bool IsSplitStacked => Split == BoardSplit.Stacked;
+
+    public bool IsSplitSideBySide => Split == BoardSplit.SideBySide;
+
+    partial void OnSplitChanged(BoardSplit value) => Current = Current with { Split = value };
+
+    /// <summary>The split view's corridor, kept when it closes so it comes back with it.</summary>
+    public void RememberSplitCorridor(string? corridorId)
+    {
+        if (corridorId is not null)
+        {
+            Current = Current with { SplitCorridor = corridorId };
+        }
+    }
+
+    /// <summary>View ▸ Split view: the parameter is <c>None</c>, <c>Stacked</c> or <c>SideBySide</c>.</summary>
+    [RelayCommand]
+    private void SetSplit(string? split)
+    {
+        if (Enum.TryParse<BoardSplit>(split, out var value))
+        {
+            Split = value;
+        }
+    }
+
     partial void OnShowTrainListChanged(bool value) => Current = Current with { ShowTrainList = value };
 
     partial void OnShowSidePanelChanged(bool value) => Current = Current with { ShowSidePanel = value };
@@ -50,7 +83,7 @@ internal sealed partial class LayoutViewModel : ObservableObject
     public void Update(WindowLayout seen)
     {
         ArgumentNullException.ThrowIfNull(seen);
-        Current = seen.Checked() with { ShowTrainList = ShowTrainList, ShowSidePanel = ShowSidePanel, ShowTabs = ShowTabs };
+        Current = seen.Checked() with { ShowTrainList = ShowTrainList, ShowSidePanel = ShowSidePanel, ShowTabs = ShowTabs, Split = Split };
     }
 
     /// <summary>A double-click on the splitter beside the train list.</summary>
@@ -65,11 +98,14 @@ internal sealed partial class LayoutViewModel : ObservableObject
     [RelayCommand]
     private void ToggleTabs() => ShowTabs = !ShowTabs;
 
-    /// <summary>View ▸ Reset layout: every panel shown at its first size. The window stays where it is.</summary>
+    /// <summary>
+    /// View ▸ Reset layout: every panel shown at its first size. The window stays where it is, and the split view and
+    /// board windows stay as they are, the split's two graphs taking equal shares (S21).
+    /// </summary>
     [RelayCommand]
     private void ResetLayout()
     {
-        Current = new WindowLayout { Window = Current.Window };
+        Current = new WindowLayout { Window = Current.Window, Split = Split, SplitCorridor = Current.SplitCorridor, Boards = Current.Boards };
         ShowTrainList = ShowSidePanel = ShowTabs = true;
         Reset?.Invoke(this, EventArgs.Empty);
     }

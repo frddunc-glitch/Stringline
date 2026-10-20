@@ -41,9 +41,9 @@ IDs are referenced from the implementation plan. Priority: **M** = MVP, **S** = 
 | GR-5 | Headcode labels along paths with collision avoidance | M |
 | GR-6 | Hover tooltip: headcode, location, planned/actual/forecast time, delay | M |
 | GR-7 | Colour by category or by delay band (selectable) | S |
-| GR-8 | Multiple corridor tabs; split view of two corridors | S |
+| GR-8 | Multiple corridor tabs; split view of two corridors (S21: and board windows, locked in time) | S |
 | GR-9 | Smooth at 500 trains over 6 h window (≥ 30 fps while panning) | M |
-| GR-10 | Export PNG/PDF of current view | S |
+| GR-10 | Export PNG/PDF of current view (S21: and a multi-page plot, time down) | S |
 
 ## Re-planning
 | ID | Requirement | P |

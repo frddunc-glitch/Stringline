@@ -67,6 +67,16 @@ Lateness is always said as the railway says it: "On time", "3 min late" or "1 mi
 
 Panning in time stops the graph following now; press **Follow** (or Space) to go back.
 
+## Boards: split view and board windows
+
+You can watch more than one corridor at once. Each graph is a **board**, with its own corridor, and all boards keep the **same time**: panning, zooming, the 1h/3h/6h buttons and **Follow** on any board move them all, while each keeps its own zoom along its corridor.
+
+- **View ▸ Split view ▸ One above the other** or **Side by side** puts a second board in the main window, with a splitter between the two. Pick its corridor in the box above it. **✕** (or **View ▸ Split view ▸ Off**) closes it; it comes back with the same corridor.
+- **View ▸ New board window** opens a board in a window of its own, for example on a second monitor. Open as many as you like; **View ▸ Close board windows** closes them all.
+- Every board works like the main graph: hover, click to select (the selection is the same on every board), drag [grips](re-planning.md#grips), right-click menus and B+drag. A train being dragged, or a suggestion being previewed, shows its ghost on every board whose corridor it runs on.
+- The board you used last is the one that **File ▸ Export** and **Corridor ▸ Whole corridor** act on. Ctrl+Z, Ctrl+Y, Ctrl+E and Ctrl+P work in board windows too.
+- Stringline remembers the split view and the board windows (their corridors and places) and opens them again at the next start. **View ▸ Reset layout** gives the two halves of the split view equal room.
+
 ## Hovering
 
 Hover over anything for its details:

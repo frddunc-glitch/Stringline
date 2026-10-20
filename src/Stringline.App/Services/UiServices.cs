@@ -52,6 +52,9 @@ internal interface IDialogService
 
     /// <summary>Shows the settings window; true if OK was pressed (the values have then passed its checks).</summary>
     bool ShowSettings(ViewModels.SettingsViewModel viewModel);
+
+    /// <summary>Opens a board window (S21) for the board, without waiting; it closes when the board asks it to.</summary>
+    void ShowBoard(ViewModels.GraphBoardViewModel board);
 }
 
 /// <summary>The real dialogs, owned by the main window.</summary>
@@ -145,6 +148,9 @@ internal sealed class WpfDialogService : IDialogService
 
     public bool ShowSettings(ViewModels.SettingsViewModel viewModel) =>
         new Views.SettingsWindow(viewModel) { Owner = Owner }.ShowDialog() == true;
+
+    public void ShowBoard(ViewModels.GraphBoardViewModel board) =>
+        new Views.BoardWindow(board) { Owner = Application.Current?.MainWindow is { IsLoaded: true } main ? main : null }.Show();
 
     public string? OpenInShell(string path)
     {

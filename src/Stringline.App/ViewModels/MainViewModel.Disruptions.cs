@@ -22,10 +22,6 @@ internal sealed partial class MainViewModel
 
     private GraphSpan? _blockSpan;
 
-    /// <summary>The block being drawn with B+drag; null when not drawing one.</summary>
-    [ObservableProperty]
-    public partial GraphDisruption? DraftDisruption { get; private set; }
-
     /// <summary>Show the plan's blocks, speed restrictions and notes on the graph.</summary>
     [ObservableProperty]
     public partial bool ShowDisruptions { get; set; } = true;
@@ -37,7 +33,7 @@ internal sealed partial class MainViewModel
     /// disruption, or a location's label in the margin (its full name and TIPLOC, #3).
     /// </summary>
     public HoverInfo? DescribeAt(ScreenPoint at) =>
-        Scene is { } scene && GraphHitTester.TargetAt(scene, Navigator.Viewport, at) is { } target ? Describe(target) : null;
+        ActiveBoard.Scene is { } scene && GraphHitTester.TargetAt(scene, ActiveBoard.Navigator.Viewport, at) is { } target ? Describe(ActiveBoard, target) : null;
 
     /// <summary>
     /// The right-click menu at a point: a note's, else the train line's (<see cref="MenuFor(GraphHit?)"/>), else the
@@ -46,12 +42,12 @@ internal sealed partial class MainViewModel
     /// </summary>
     public IReadOnlyList<PlanMenuItem> MenuFor(GraphHit? hit, ScreenPoint at)
     {
-        if (_drag is not null || _blockFrom is not null || Scene is not { } scene || SelectedCorridor is null)
+        if (_drag is not null || _blockFrom is not null || ActiveBoard.Scene is not { } scene || ActiveBoard.Corridor is null)
         {
             return [];
         }
 
-        var view = Navigator.Viewport;
+        var view = ActiveBoard.Navigator.Viewport;
         if (GraphAnnotations.NoteAt(scene, view, at) is { } note)
         {
             var id = note.Id;
@@ -102,7 +98,7 @@ internal sealed partial class MainViewModel
     /// <summary>A press with B held: start drawing a block. False if there is no graph to draw on, or another edit is under way.</summary>
     public bool BeginBlock(ScreenPoint at)
     {
-        if (Scene is null || SelectedCorridor is null || _drag is not null || _blockFrom is not null)
+        if (ActiveBoard.Scene is null || ActiveBoard.Corridor is null || _drag is not null || _blockFrom is not null)
         {
             return false;
         }
@@ -113,7 +109,7 @@ internal sealed partial class MainViewModel
             return false;
         }
 
-        var view = Navigator.Viewport;
+        var view = ActiveBoard.Navigator.Viewport;
         _blockFrom = (view.PixelToTime(view.TimePixelOf(at)), view.PixelToAxis(view.AxisPixelOf(at)));
         MoveBlock(at);
         return true;
@@ -122,21 +118,21 @@ internal sealed partial class MainViewModel
     /// <summary>The mouse moves while drawing a block: the draft spans the locations and five-minute steps between the press and here.</summary>
     public void MoveBlock(ScreenPoint at)
     {
-        if (_blockFrom is not { } from || Scene is not { } scene)
+        if (_blockFrom is not { } from || ActiveBoard.Scene is not { } scene)
         {
             return;
         }
 
-        var view = Navigator.Viewport;
+        var view = ActiveBoard.Navigator.Viewport;
         _blockSpan = GraphAnnotations.SpanBetween(scene, view, view.ToScreen(from.Time, from.Axis), at);
         if (_blockSpan is not { } span)
         {
-            DraftDisruption = null;
+            ActiveBoard.Draft = null;
             return;
         }
 
         var draft = new Disruption("draft", DisruptionKind.Block, span.From.Tiploc, span.To.Tiploc, null, span.Start, span.End);
-        DraftDisruption = GraphDisruption.For(draft, span.From.Axis, span.To.Axis, isDraft: true);
+        ActiveBoard.Draft = GraphDisruption.For(draft, span.From.Axis, span.To.Axis, isDraft: true);
         EditStatus = $"Block {Where(span.From.Tiploc, span.To.Tiploc)} {PlanInput.Format(span.Start)}–{PlanInput.Format(span.End)}: release to set it up, Esc to cancel.";
     }
 
@@ -151,7 +147,7 @@ internal sealed partial class MainViewModel
         var span = _blockSpan;
         _blockFrom = null;
         _blockSpan = null;
-        DraftDisruption = null;
+        ActiveBoard.Draft = null;
         EditStatus = commit ? string.Empty : "Block cancelled.";
         if (commit && span is { } s)
         {
@@ -179,7 +175,7 @@ internal sealed partial class MainViewModel
     /// </summary>
     private Disruption? AskDisruption(Disruption d, bool isNew)
     {
-        if (SelectedCorridor?.Corridor is not { } corridor)
+        if (ActiveBoard.Corridor?.Corridor is not { } corridor)
         {
             return null;
         }
@@ -284,7 +280,7 @@ internal sealed partial class MainViewModel
 
     private PlanNote? AskNote(PlanNote n, bool isNew)
     {
-        if (SelectedCorridor?.Corridor is not { } corridor)
+        if (ActiveBoard.Corridor?.Corridor is not { } corridor)
         {
             return null;
         }

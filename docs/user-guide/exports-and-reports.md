@@ -26,7 +26,21 @@ Delays are in whole minutes against the WTT (against the plan for an ad-hoc trai
 | Graph as PDF (A4 landscape)… | The same on A4 |
 | Graph as PDF (view size)… | A PDF page the size of the graph on screen |
 
-The PNG and PDF have a title band naming the sim, timetable, corridor and time. To print, open the PDF and print it from your PDF reader.
+The PNG and PDF have a title band naming the sim, timetable, corridor and time. To print, open the PDF and print it from your PDF reader. With the [split view or board windows](reading-the-graph.md#boards-split-view-and-board-windows), the graph exported is the board you used last.
+
+## Plotting a train control diagram
+
+**File ▸ Export ▸ Plot (multi-page PDF)…** prints a corridor over a stretch of time as a printed train control diagram: at **one scale on every page**, time running **down** the page, with the location names across the top of each page. Choose:
+
+| Box | What |
+|---|---|
+| Corridor | Which corridor (the board you used last at first) |
+| From, To | The stretch of time, such as 06:00 to 18:00. A time after midnight takes the next day, or add `+1` |
+| Minutes a page | How much time each page covers. Two hours a page gives about 3 mm a minute on A3 |
+| Paper | A3 or A4, portrait or landscape |
+| Time runs | Down the page (the usual way for a printed diagram), or across |
+
+It makes as many pages as the time needs (up to 100), each headed with the sim, corridor, its times and "page 2 of 6"; the last page is cut short rather than stretched, so the scale never changes. The plot shows the layers you have turned on, with no train selected. Stringline remembers your choices for next time.
 
 Exports are offered in `Documents\Stringline\exports` at first, then in the folder you last used.
 
@@ -41,4 +55,4 @@ They hold the trains the Delays tab lists. The first line names the sim, timetab
 
 ## From the command line
 
-Stringline's source includes a command-line tool, `stringline`, which can draw a graph to PNG or PDF (`render-png`) and write the delay CSV (`report`) from a recording or a saved session, without the app. It needs the .NET SDK; see the [README](https://github.com/frddunc-glitch/Stringline#for-developers).
+Stringline's source includes a command-line tool, `stringline`, which can draw a graph to PNG or PDF (`render-png`, and a multi-page plot with `--plot`) and write the delay CSV (`report`) from a recording or a saved session, without the app. It needs the .NET SDK; see the [README](https://github.com/frddunc-glitch/Stringline#for-developers).

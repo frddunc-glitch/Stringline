@@ -1,0 +1,13 @@
+<Window x:Class="Stringline.App.Views.BoardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:Stringline.App.Controls"
+        xmlns:views="clr-namespace:Stringline.App.Views"
+        xmlns:services="clr-namespace:Stringline.App.Services"
+        views:Help.Topic="{x:Static services:HelpTopics.Boards}"
+        Title="{Binding Title}" Icon="pack://application:,,,/Stringline;component/Assets/stringline.ico"
+        Width="1000" Height="640" MinWidth="420" MinHeight="300"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display" WindowStartupLocation="CenterOwner">
+  <!-- A board window (S21): one corridor's graph, e.g. on another monitor, locked in time to the main window's. -->
+  <controls:BoardView x:Name="Board" />
+</Window>

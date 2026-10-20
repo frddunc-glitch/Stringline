@@ -119,7 +119,7 @@ Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fi
 | #6 | Sim/timetable identification | S22 |
 | #7 | Review headway conflict calculations | S27 |
 | #8 | Settings menu | S25 |
-| #9 | Window resizing behaviour | S23 (S21 keeps split views) |
+| #9 | Window resizing behaviour | S23 (split views: S21) |
 | #10 | Dragging a train path to re-plan | S26 |
 | #11 | Right time wording | S24 |
 | #12 | Infrastructure and conflict red boxes (tooltips) | S24 |
@@ -280,6 +280,7 @@ Fred raised 13 issues on 2026-10-19 after using the S18 build. These sessions fi
 - **S20** Optimiser (`IReplanner` using OR-Tools CP-SAT) for a rolling horizon.
   - *Built in S20:* Fred chose OR-Tools CP-SAT in its own project (`Stringline.Optimiser`, about 20 MB more in the download), holds and platform changes, Plan ▸ Re-plan over the whole horizon shown in the suggestions panel, and 60 min and 5 s in Options. The rules (one conflict at a time) are the other `IReplanner`. `stringline replan` tries either on a recording. See `06-…md` §5 and `05-…md` §15.
 - **S21** Split-view multiple corridors / multi-board layout; vertical TCD print plotting.
+  - *Built in S21:* Fred chose split panes (one above the other or side by side) **and** board windows, all locked in time, full editing on every board, and a multi-page plot (File ▸ Export ▸ Plot…; `render-png --plot`), time down on A3 portrait by default. See `05-…md` §16.
 
 ## Dependencies
 ```
