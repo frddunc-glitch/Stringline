@@ -22,7 +22,8 @@ public sealed class ReplanCommandTests
     [InlineData("rules")]
     public async Task Re_plans_the_hour_ahead_of_a_point_in_a_recording(string method)
     {
-        string[] args = ["--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.WaterlooFailure)];
+        // Longer than the default 5 s: the rules are deterministic only if they finish, and a slow CI runner may not.
+        string[] args = ["--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.WaterlooFailure), "--seconds", "60"];
         var (exit, output, error) = await Run(method == "rules" ? [.. args, "--rules"] : args);
 
         exit.Should().Be(0, error);

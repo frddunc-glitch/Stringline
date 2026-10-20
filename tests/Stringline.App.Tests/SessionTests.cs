@@ -110,12 +110,14 @@ public sealed class SessionTests : IDisposable
         var vm = await ReplayToEnd(app);
         var cancelled = await Cancel(app);
 
+        // Flat out, the restarted replay may be finished again before it is looked at: wait for its new transport.
+        var finished = await app.Ui.Run(() => vm.Transport!);
         await app.Ui.Run(() =>
         {
-            vm.Transport!.Position = vm.Transport.Minimum + 600;
-            vm.Transport.CommitSeek();
+            finished.Position = finished.Minimum + 600;
+            finished.CommitSeek();
         });
-        await app.Ui.WaitUntil(() => vm.Transport?.IsFinished == false && vm.Snapshot.Clock.HasTime, "the replay started again");
+        await app.Ui.WaitUntil(() => vm.Transport is { } t && t != finished && vm.Snapshot.Clock.HasTime, "the replay started again");
         await Task.Delay(200);
 
         (await app.Ui.Run(() => vm.Snapshot.Plan.Get(cancelled).Cancelled)).Should().BeTrue();
