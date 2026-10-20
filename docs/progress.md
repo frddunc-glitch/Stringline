@@ -1759,10 +1759,10 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Done
 - Went through every open question (1–26) and open GitHub issues #1, #5 and #14 with Fred. Four new sessions went into `07-implementation-plan.md` as **Phase 4b (S30–S33)**.
 - **Answered and closed:**
-  - 13/15 (#1, code signing): signing with `signtool` and a PFX is built (S22). **Move to SignPath** once downloads grow enough to support an application (Fred's comment on #1). Until then #1 stays open and the README's SmartScreen note stays.
+  - 13/15 (#1, code signing): signing with `signtool` and a PFX is built (S22). **Move to SignPath** once downloads grow enough to support an application (Fred's comment on #1, confirmed in the review). Until then #1 stays open and the README's SmartScreen note stays.
   - 14/20 (Loader wording): the README and guide match SimSig's Loader.
   - 18 (S25 naming): all kept.
-  - 21 (release 0.1.1): overtaken. v0.2.0 is released, with its files.
+  - 21 (release 0.1.1): closed (Fred). v0.2.0 replaces it, and V0.1.0 stays as it is.
   - 23 (re-plan): conflicts first stays.
   - 24 (download size): the 23 MB solver stays bundled.
   - 25 (plot scale): two hours a page stays; `--per-page` is enough.
