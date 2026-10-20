@@ -218,7 +218,7 @@
       <TabItem Header="Categories">
         <DockPanel Margin="8">
           <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}"
-                     Text="How each WTT category is drawn, and how much its trains matter when regulating (priority 0–100, higher first). Colours are #RRGGBB. Dashed and dotted styles apply to the WTT, plan and actual lines; forecasts keep their own dashes." />
+                     Text="How each WTT category is drawn, and how much its trains matter when regulating (priority 0–100, higher first). Colours are #RRGGBB. Dashed and dotted styles apply to the WTT, plan and actual lines; forecasts are always dash-dot." />
           <DataGrid ItemsSource="{Binding Categories}">
             <DataGrid.Columns>
               <DataGridTextColumn Header="ID" Binding="{Binding Id, Mode=OneWay}" IsReadOnly="True" Width="70" />

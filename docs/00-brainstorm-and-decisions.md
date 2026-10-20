@@ -60,7 +60,7 @@ Out of scope: consists, yards, incidents, train notices distribution, GPS.
 3. **Actuals** — what SimSig reports.
 4. **Forecast** — projection from each train's latest actual along the working plan, respecting minimum running times, dwells, disruptions and other trains.
 
-Drawn as: WTT faint/thin, working plan thin solid, actual bold solid, forecast dashed.
+Drawn as: WTT faint/thin, working plan thin solid, actual bold solid, forecast dashed (dash-dot from S31, so it is not taken for a dashed category).
 
 ### 4.3 Distance axis — derived by default, real distances optional
 SimSig publishes no mileages.

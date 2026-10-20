@@ -17,7 +17,7 @@ Railway words are used as SimSig uses them.
 | **Delay** | How late a train is against the WTT, in whole minutes. "On time" is within the minute either way. |
 | **Down**, **Up** | The two directions of running. By convention Up is towards London (or the main centre). On the graph, the corridor's Up end is at the top. |
 | **Dwell** | How long a train stands at a stop. |
-| **Forecast** | Where a running train is expected to go from here, worked out from its latest report and the plan. Drawn dashed. |
+| **Forecast** | Where a running train is expected to go from here, worked out from its latest report and the plan. Drawn dash-dot (a dash, then a dot). |
 | **Grip** | A handle on the selected train's line, dragged to re-plan it. See [Grips](re-planning.md#grips). |
 | **Headcode** | A train's four-character reporting number, for example `1A23`. |
 | **Headway** | The least time between two trains following each other on the same track. See [Headways](timetables-and-profiles.md#headways). |

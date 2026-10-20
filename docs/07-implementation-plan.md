@@ -311,6 +311,7 @@ Fred went through the open questions on 2026-10-20 (answers in `progress.md`, "O
   - In `SimTitle` (or where the sim name is chosen), treat a profile sim name equal (ignoring case and spaces) to **any** WTT title recorded for that sim as unset, and fall back to the gateway's area ID. Keep the titles of timetables the profile was made or refreshed from in the profile (a small `ProfileJson` addition, round-tripped), and include the loaded WTT's title too.
   - A name the user typed in the profile editor is always kept, even if it matches a title. Mark it hand-set, as headways are.
 - **Tests:** the formatter with a stale title, a typed name, and no name; `ProfileJson` round trip; the renderer's dash-dot.
+- *Built in S31:* the forecast is dash-dot (7–4–dot–4). Fred chose to settle names from before S31 by reading the titles of the sim's other `.wtt` files in the loaded WTT's folder: a match counts as a title, any other name is kept as typed.
 
 ### S32 — WTT rules in the forecast (Q5, Q7)
 - **Q5 first:** check that rule `Time` is in seconds. Find a recording where a ruled train enters (Waterloo 331, "X appears after Y leaves") and compare the entry with Y's event. Write the result in `04-…md` and `03-…md` §6.

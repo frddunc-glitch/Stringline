@@ -45,7 +45,7 @@ public readonly record struct GraphVertex(double Time, double Axis);
 /// </param>
 /// <param name="IsCancelled">A cancelled train on the plan layer: drawn thin and grey with crosses at its ends (S12).</param>
 /// <param name="Style">
-/// The category's line style (S14a) on the WTT, plan and actual layers. The forecast layer keeps its own dash, so it
+/// The category's line style (S14a) on the WTT, plan and actual layers. The forecast layer keeps its own dash-dot, so it
 /// is always <see cref="LineStyle.Solid"/> there.
 /// </param>
 /// <remarks>The bounds are worked out once, when the path is made; do not copy a path <c>with</c> new vertices.</remarks>

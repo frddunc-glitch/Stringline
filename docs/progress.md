@@ -1819,6 +1819,38 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Questions for Fred
 - 27. **Privacy wording.** Is `PRIVACY.md` what you want people to read? In particular the note that a multiplayer login crosses the network unencrypted (SimSig's gateway has no TLS).
 
+## 2026-10-21 — S31: Small fixes from the review (Q10, Q17)
+
+### Done
+- **Fred's choice** (asked at the start): a sim name in a profile saved before S31 is settled by reading the titles of the sim's other `.wtt` files in the loaded WTT's folder.
+- **Q10: the forecast is dash-dot.** `LayerStyle.Dashed` became `DashDot`; `GraphTheme.Forecast` is 1.5 px dash-dot. `SkiaGraphRenderer.ForecastPattern` (7, 4, dot, 4) and `CategoryPattern(style, width)` (dashed 12–7, dotted round caps two widths apart) are public so a test can compare them. The B+drag draft keeps the old 6–4 dash. PNG, PDF and plot use the same renderer, so they changed with it.
+  - Text: the Forecast layer tooltip, the profile editor's category hint, README, the guide's reading-the-graph table and glossary, `05-…md` §2 and `00-…md`.
+  - `build/guide-shots.ps1` run: every picture remade (graph pictures show dash-dot; Options now shows the Connection tab from S30).
+- **Q17: a sim name that is only a WTT title counts as unset.**
+  - `StringlineProfile.TimetableTitles` (titles of the WTTs it was made or refreshed from; `Create` and `Refresh` add them) and `NameByHand` (written only when true). Older Stringlines ignore both, so the version stays 2.
+  - `SimName(header)` drops a name equal, ignoring case and spaces (`SimTitle.SameTitle`), to the loaded WTT's title or any remembered title, unless `NameByHand`. `Title(areaId, header, review)` builds the `SimTitle` (with the new `keepName`, so a typed name equal to the current title is kept).
+  - `ProfileEdits.WithName` (the editor) marks a name hand-set; blank clears both.
+  - Pre-S31 names: `HasUnsettledName` (set, not hand-set, not a known title). `SimNames.Settle` (Network) reads the headers of the sim's `.wtt` files in the loaded WTT's folder and below (`WttCatalogue.FindForArea`): a match is remembered as a title, otherwise the name is marked hand-set. So each profile is searched at most once. `TimetableLoader` settles after refreshing a saved profile.
+  - Callers: the main window title and status bar, the graph title band, sessions (they now save the resolved name) and `report` use the profile's `Title`/`SimName`.
+- **Tests:** Core +7 (`SameTitle`, a spaced title, `keepName`); Network +9 (`SimNameTests`: titles remembered, stale title, loaded title, typed name, no name, JSON round trip, a pre-S31 file, settling, reading a folder); Graph +4 (no category pattern equals the forecast's at any layer width; forecast drawn dash-dot, dashed and dotted not, by measuring ink runs) and the forecast snapshot changed once; App +1 (a pre-S22 profile named after timetable A, loading B from a folder holding both, then typing B's title in the editor).
+- Totals: 1 645 (Core 270, Architecture 14, Gateway 211, Timetable 166, Network 170, Planning 238, Persistence 12, Graph 275, Optimiser 22, Tools 71, App 196). Green on Windows (Debug), see the known issue below. Linux not run.
+
+### Decisions
+- **Dash-dot pattern** 7–4–dot–4 at 1.5 px with round caps: a 8.5 px dash and a 1.5 px dot, 2.5 px gaps. Shorter than a dashed category's 12–7, and unlike dots it has dashes.
+- **The draft's 6–4 dash stays**: it is a box border, not a train line.
+- **A name that matches no sibling title becomes hand-set**, so the folder is not searched again on every load. If the old WTT has been deleted or is in another folder, that name stays; clearing it in the profile editor fixes it.
+- **A saved session's own sim name** still goes through `SimTitle`'s old check against its timetable's title (sessions from before S31 may hold a stale name). So a typed name that is exactly the session's timetable title shows as the area ID when reviewing it from the session list or the `report --session` title. Rare; not worth a session-format change.
+
+### Next
+- S32 (WTT rules in the forecast), then S33.
+
+### Known issues
+- `ReplannerFixtureTests.Re_plan_the_next_hour_part_way_through_a_recording` (Waterloo, part 0.5, optimiser) failed once in the full parallel run and passed three times alone. It is time-limited, so it seems to be machine load; nothing in S31 touches the optimiser. Watch it on CI.
+- 👤 Fred: look at the forecast's dash-dot on a replay, next to a dashed and a dotted category; and load another timetable of a sim whose profile still has an old title as its name.
+
+### Questions for Fred
+- 28. **Dash-dot.** Is 7–4–dot–4 at 1.5 px clear enough on your screen, or would you like a longer dash?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
@@ -1854,4 +1886,4 @@ New from S18:
 13. ~~**Code signing:** unsigned downloads get a SmartScreen warning. Is that acceptable for now, or should releases be signed (a certificate costs money; SignPath offers free signing for open-source projects)?~~ Signtool + PFX built in S22; SignPath once downloads grow (Fred, #1).
 14. ~~Does the README's "Turn on the Interface Gateway" step match what SimSig's Loader calls it now?~~ Matches (Fred, 2026-10-20).
 
-Since S22 the questions are numbered in each session's notes (15–27); see "Open-question review" above for which are still open.
+Since S22 the questions are numbered in each session's notes (15–28); see "Open-question review" above for which are still open.

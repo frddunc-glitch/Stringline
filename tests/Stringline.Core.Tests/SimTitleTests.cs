@@ -36,6 +36,25 @@ public sealed class SimTitleTests
     }
 
     [Fact]
+    public void A_title_with_other_spacing_still_counts_as_no_name_unless_kept()
+    {
+        SimTitle.From(" Timetable  B2012 ", "llangollen", Header()).Sim.Should().Be("Llangollen", "case and spaces are ignored (S31)");
+        SimTitle.From("Timetable B 2012", "llangollen", Header(), keepName: true).Sim.Should().Be("Timetable B 2012", "a name typed by hand is kept");
+    }
+
+    [Theory]
+    [InlineData("Timetable B 2012", "timetable b 2012", true)]
+    [InlineData("Timetable B 2012", " Timetable\tB2012 ", true)]
+    [InlineData("Timetable B 2012", "Timetable B 2013", false)]
+    [InlineData("Timetable B", "Timetable B 2012", false)]
+    [InlineData(" ", " ", false)]
+    [InlineData(null, null, false)]
+    public void Titles_compare_ignoring_case_and_spaces(string? a, string? b, bool same)
+    {
+        SimTitle.SameTitle(a, b).Should().Be(same);
+    }
+
+    [Fact]
     public void Leaves_out_a_version_that_is_missing_or_already_in_the_name()
     {
         SimTitle.From(null, "x", Header(version: null)).Timetable.Should().Be("Timetable B 2012");

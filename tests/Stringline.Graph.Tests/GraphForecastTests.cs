@@ -7,7 +7,7 @@ using static Stringline.Graph.Tests.TestData;
 
 namespace Stringline.Graph.Tests;
 
-/// <summary>The forecast layer (S11): dashed lines on from each running train's latest actual.</summary>
+/// <summary>The forecast layer (S11; dash-dot from S31): lines on from each running train's latest actual.</summary>
 public sealed class GraphForecastTests
 {
     private const double Third = 1.0 / 3, TwoThirds = 2.0 / 3;

@@ -269,7 +269,7 @@ internal sealed partial class MainViewModel
             TimetableName = _timetable?.Timetable.Header.Name,
             TimetableVersion = _timetable?.Timetable.Header.TimetableVersion,
             AreaId = _timetable?.Timetable.AreaId is { Length: > 0 } area ? area : null,
-            SimName = Profile?.Name,
+            SimName = Profile?.SimName(_timetable?.Timetable.Header),
         }, logger: _loggerFactory.CreateLogger<SessionWriter>()));
     }
 

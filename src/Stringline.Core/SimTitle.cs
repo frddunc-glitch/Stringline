@@ -9,8 +9,9 @@ namespace Stringline.Core;
 /// </summary>
 /// <remarks>
 /// The sim is the profile's name, then the gateway's or the WTT's area ID tidied (<c>waterloo</c> → <c>Waterloo</c>),
-/// then <see cref="UnknownSim"/>. A profile name that is only the timetable's title (as profiles made before S22 have)
-/// counts as no name. The timetable is the WTT header's name with its version, e.g. <c>Timetable B 2012 (v1.0.0)</c>.
+/// then <see cref="UnknownSim"/>. A name that is only the timetable's title (as profiles made before S22 have) counts
+/// as no name, unless the caller says to keep it (a name typed in the profile editor, S31). The profile also drops a
+/// name equal to any other title of the sim's timetables (<c>StringlineProfile.SimName</c>). The timetable is the WTT header's name with its version, e.g. <c>Timetable B 2012 (v1.0.0)</c>.
 /// </remarks>
 /// <param name="Sim">The sim's display name; never empty.</param>
 /// <param name="Timetable">The timetable's name and version, or null when none is loaded.</param>
@@ -27,11 +28,12 @@ public sealed record SimTitle(string Sim, string? Timetable = null, bool Review 
     /// <param name="areaId">The sim's area ID, from the timetable or the gateway's clock.</param>
     /// <param name="timetableName">The WTT header's name.</param>
     /// <param name="timetableVersion">The WTT header's version, e.g. <c>1.0.2</c>.</param>
-    public static SimTitle From(string? simName, string? areaId, string? timetableName = null, string? timetableVersion = null, bool review = false)
+    /// <param name="keepName">Show <paramref name="simName"/> even when it is the timetable's title.</param>
+    public static SimTitle From(string? simName, string? areaId, string? timetableName = null, string? timetableVersion = null, bool review = false, bool keepName = false)
     {
         var name = Clean(timetableName);
         var version = Clean(timetableVersion);
-        var sim = Clean(simName) is { } given && !string.Equals(given, name, StringComparison.OrdinalIgnoreCase) ? given
+        var sim = Clean(simName) is { } given && (keepName || !SameTitle(given, name)) ? given
             : TidyAreaId(areaId) ?? UnknownSim;
         string? timetable = name is null ? null
             : version is null || name.Contains(version, StringComparison.OrdinalIgnoreCase) ? name
@@ -43,8 +45,44 @@ public sealed record SimTitle(string Sim, string? Timetable = null, bool Review 
     /// The title for a sim running this timetable. Its header gives the name and version, and the area ID when
     /// <paramref name="areaId"/> (from the gateway) is not known.
     /// </summary>
-    public static SimTitle From(string? simName, string? areaId, TimetableHeader? header, bool review = false) =>
-        From(simName, Clean(areaId) ?? header?.AreaId, header?.Name, header?.TimetableVersion, review);
+    public static SimTitle From(string? simName, string? areaId, TimetableHeader? header, bool review = false, bool keepName = false) =>
+        From(simName, Clean(areaId) ?? header?.AreaId, header?.Name, header?.TimetableVersion, review, keepName);
+
+    /// <summary>
+    /// Whether two titles are the same, ignoring case and white space (<c>Timetable B  2012</c> is
+    /// <c>timetable b 2012</c>). Blank is never a title.
+    /// </summary>
+    public static bool SameTitle(string? a, string? b)
+    {
+        if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
+        {
+            return false;
+        }
+
+        var (i, j) = (0, 0);
+        while (true)
+        {
+            while (i < a.Length && char.IsWhiteSpace(a[i]))
+            {
+                i++;
+            }
+
+            while (j < b.Length && char.IsWhiteSpace(b[j]))
+            {
+                j++;
+            }
+
+            if (i == a.Length || j == b.Length)
+            {
+                return i == a.Length && j == b.Length;
+            }
+
+            if (char.ToUpperInvariant(a[i++]) != char.ToUpperInvariant(b[j++]))
+            {
+                return false;
+            }
+        }
+    }
 
     /// <summary>
     /// An area ID made readable: each word (split at <c>_</c>, <c>-</c> or a space) starts with a capital letter, e.g.

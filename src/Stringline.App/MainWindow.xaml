@@ -236,7 +236,7 @@
           <CheckBox Style="{StaticResource LayerBox}" Content="WTT" IsChecked="{Binding ShowWtt}" ToolTip="The working timetable as booked (View ▸ Show WTT)" />
           <CheckBox Style="{StaticResource LayerBox}" Content="Actual" IsChecked="{Binding ShowActual}" ToolTip="Where the trains have run (View ▸ Show actual)" />
           <CheckBox Style="{StaticResource LayerBox}" Content="Forecast" IsChecked="{Binding ShowForecast}"
-                    ToolTip="Dashed lines: where each running train is expected to go" />
+                    ToolTip="Dash-dot lines: where each running train is expected to go" />
           <CheckBox Style="{StaticResource LayerBox}" Content="Disruptions" IsChecked="{Binding ShowDisruptions}"
                     ToolTip="Blocks, speed restrictions and notes. Right-click the graph to add one, or hold B and drag to draw a block." />
           <CheckBox Style="{StaticResource LayerBox}" Content="Conflicts" IsChecked="{Binding ShowConflicts}"

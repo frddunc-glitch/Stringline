@@ -37,7 +37,7 @@ The profile is saved in `%APPDATA%\Stringline\profiles` under the sim's name, an
 
 **General**
 
-- The sim's ID (from the timetable or the gateway; you can type one only when neither gives it) and its name.
+- The sim's ID (from the timetable or the gateway; you can type one only when neither gives it) and its name. Leave the name blank to show the sim's ID, tidied (`waterloo` → Waterloo). A name you type is always shown. An older profile that took a timetable's title as its name shows the sim's ID instead, whichever of that sim's timetables you load.
 - Every location's **display name**, with the corridors it is on. **Import names from CSV…** reads a list of TIPLOCs and names.
 - The profile's **Default headway**: see [Headways](#headways).
 
@@ -52,7 +52,7 @@ The profile is saved in `%APPDATA%\Stringline\profiles` under the sim's name, an
 
 **Categories**
 
-Each category's name, colour (`#RRGGBB`), line style (solid, dashed or dotted), priority and number of trains. The graph draws each train in its category's colour.
+Each category's name, colour (`#RRGGBB`), line style (solid, dashed or dotted; forecasts are always dash-dot, so they are never mistaken for a category), priority and number of trains. The graph draws each train in its category's colour.
 
 ### The other profile commands
 

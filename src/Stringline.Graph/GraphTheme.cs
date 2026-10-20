@@ -4,8 +4,10 @@ namespace Stringline.Graph;
 
 /// <summary>How one layer's lines are drawn (<c>05-…md</c> §2, line styles).</summary>
 /// <param name="Opacity">Multiplies the category colour's alpha.</param>
-/// <param name="Dashed">Dashed rather than solid.</param>
-public sealed record LayerStyle(float Width, double Opacity, bool Dashed = false);
+/// <param name="DashDot">
+/// Dash-dot rather than solid (<see cref="SkiaGraphRenderer.ForecastPattern"/>), a pattern no category line style uses.
+/// </param>
+public sealed record LayerStyle(float Width, double Opacity, bool DashDot = false);
 
 /// <summary>Colours and line weights for the graph. <see cref="Light"/> is the only theme so far.</summary>
 public sealed record GraphTheme
@@ -43,7 +45,8 @@ public sealed record GraphTheme
 
     public LayerStyle Actual { get; init; } = new(2.5f, 1);
 
-    public LayerStyle Forecast { get; init; } = new(1.5f, 1, Dashed: true);
+    /// <summary>The forecast: dash-dot (S31), so it is never taken for a dashed or dotted category.</summary>
+    public LayerStyle Forecast { get; init; } = new(1.5f, 1, DashDot: true);
 
     /// <summary>A cancelled train on the plan layer: thin, in <see cref="GraphSceneBuilder.CancelledColour"/>, with crosses at its ends.</summary>
     public LayerStyle Cancelled { get; init; } = new(1f, 1);

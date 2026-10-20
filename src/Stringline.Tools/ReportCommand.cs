@@ -172,7 +172,7 @@ internal static class ReportCommand
         var clock = state.Clock.HasTime ? SimClockReading.None with { HasTime = true, LastReported = now ?? state.Clock.LastReported, AreaId = state.Clock.AreaId } : SimClockReading.None;
         var snapshot = new PlanSnapshot(1, tt, live, clock, state.Summarise(), state.Version, state.SessionStart, plan, Forecast: forecast);
         var report = DelayReport.For(snapshot, settings.All ? DelayReportFilter.All : DelayReportFilter.Seen);
-        var title = SimTitle.From(saved?.Info.SimName ?? profile.Name, state.Clock.AreaId, tt.Header);
+        var title = saved?.Info.SimName is { } savedName ? SimTitle.From(savedName, state.Clock.AreaId, tt.Header) : profile.Title(state.Clock.AreaId, tt.Header);
 
         try
         {

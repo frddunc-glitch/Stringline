@@ -18,7 +18,7 @@ internal sealed record LoadedTimetable(string Path, WttImportResult Import, Stri
 
 /// <summary>
 /// Reads a WTT and brings its sim's profile up to date (<c>progress.md</c> S6 notes): load the saved profile and
-/// refresh it against the timetable, or create one; then save it. A damaged profile file is left alone and a
+/// refresh it against the timetable (settling a sim name saved before S31, <see cref="SimNames"/>), or create one; then save it. A damaged profile file is left alone and a
 /// generated profile is used for this session. A timetable with no sim ID uses the name the user gave it, if any.
 /// </summary>
 internal sealed partial class TimetableLoader(ProfileStore profiles, ILoggerFactory loggerFactory)
@@ -48,7 +48,7 @@ internal sealed partial class TimetableLoader(ProfileStore profiles, ILoggerFact
         string? note = null;
         try
         {
-            profile = profiles.Load(area) is { } saved ? saved.Refresh(tt) : StringlineProfile.Create(tt) with { AreaId = area };
+            profile = profiles.Load(area) is { } saved ? SimNames.Settle(saved.Refresh(tt), path) : StringlineProfile.Create(tt) with { AreaId = area };
         }
         catch (ProfileFormatException ex)
         {

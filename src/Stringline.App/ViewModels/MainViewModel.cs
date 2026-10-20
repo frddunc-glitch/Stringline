@@ -162,7 +162,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty]
     public partial bool ShowActual { get; set; } = true;
 
-    /// <summary>Show the forecast layer (dashed lines on from each running train). Not remembered, like the other layers.</summary>
+    /// <summary>Show the forecast layer (dash-dot lines on from each running train). Not remembered, like the other layers.</summary>
     [ObservableProperty]
     public partial bool ShowForecast { get; set; } = true;
 
@@ -687,7 +687,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _timetable = loaded;
         HasTimetable = true;
         _engine.SetTimetable(loaded.Timetable);
-        Store?.SetTimetable(loaded.Path, loaded.Timetable.Header.Name, loaded.Timetable.AreaId, loaded.Profile.Name, loaded.Timetable.Header.TimetableVersion);
+        Store?.SetTimetable(loaded.Path, loaded.Timetable.Header.Name, loaded.Timetable.AreaId, loaded.Profile.SimName(loaded.Timetable.Header), loaded.Timetable.Header.TimetableVersion);
         _engine.SetForecast(await Task.Run(() => ForecastNetwork.For(loaded.Profile, loaded.Timetable)));
         var area = loaded.Timetable.AreaId;
         if (area.Length > 0)
@@ -1046,15 +1046,16 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     }
 
     /// <summary>
-    /// The sim and timetable as every place shows them (#6): the profile's name, then the gateway's area ID, then the
-    /// timetable's; null while none of them is known.
+    /// The sim and timetable as every place shows them (#6): the profile's name (unless it is only a timetable's title,
+    /// S31), then the gateway's area ID, then the timetable's; null while none of them is known.
     /// </summary>
     private SimTitle? CurrentSimTitle()
     {
         var header = _timetable?.Timetable.Header;
         var area = Snapshot.AreaId is { Length: > 0 } live ? live
             : Profile?.AreaId is { Length: > 0 } own && own != TimetableLoader.UnnamedSim ? own : null;
-        return Profile is null && header is null && area is null ? null : SimTitle.From(Profile?.Name, area, header, IsReviewing);
+        return Profile is { } profile ? profile.Title(area, header, IsReviewing)
+            : header is null && area is null ? null : SimTitle.From(null, area, header, IsReviewing);
     }
 
     private void UpdatePlaceholder()

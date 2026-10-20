@@ -25,11 +25,14 @@ public static class ProfileEdits
     /// <summary>The fewest locations a corridor may have.</summary>
     public const int MinLocations = 2;
 
-    /// <summary>The sim's display name; blank clears it.</summary>
+    /// <summary>
+    /// The sim's display name, typed by the user, so it is kept even when it matches a timetable's title
+    /// (<see cref="StringlineProfile.NameByHand"/>); blank clears it.
+    /// </summary>
     public static StringlineProfile WithName(this StringlineProfile profile, string? name)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        return profile with { Name = string.IsNullOrWhiteSpace(name) ? null : name.Trim() };
+        return string.IsNullOrWhiteSpace(name) ? profile with { Name = null, NameByHand = false } : profile with { Name = name.Trim(), NameByHand = true };
     }
 
     /// <summary>The profile under another sim ID, for a timetable that has none.</summary>

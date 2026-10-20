@@ -40,7 +40,8 @@ public sealed class SkiaGraphRenderer : IDisposable
     private readonly SKFont _titleFont;
     private readonly SKFont _annotationFont;
     private SKPaint? _draftBorder;
-    private readonly SKPathEffect _dash = SKPathEffect.CreateDash([6, 4], 0);
+    private readonly SKPathEffect _draftDash = SKPathEffect.CreateDash([6, 4], 0);
+    private readonly SKPathEffect _forecastDash = SKPathEffect.CreateDash([.. ForecastPattern], 0);
     private readonly Dictionary<(LineStyle Style, float Width), SKPathEffect> _categoryDashes = [];
 
     public SkiaGraphRenderer(GraphTheme? theme = null)
@@ -434,7 +435,7 @@ public sealed class SkiaGraphRenderer : IDisposable
         SKPaint border;
         if (disruption.IsDraft)
         {
-            border = _draftBorder ??= new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f, PathEffect = _dash };
+            border = _draftBorder ??= new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f, PathEffect = _draftDash };
             border.Color = ToSk(colour);
         }
         else
@@ -860,7 +861,7 @@ public sealed class SkiaGraphRenderer : IDisposable
                 StrokeJoin = SKStrokeJoin.Round,
                 StrokeCap = SKStrokeCap.Round,
                 Color = ToSk(colour with { A = (byte)Math.Round(colour.A * style.Opacity * (dim ? Theme.DimOpacity : 1)) }),
-                PathEffect = style.Dashed ? _dash : CategoryDash(lineStyle, style.Width),
+                PathEffect = style.DashDot ? _forecastDash : CategoryDash(lineStyle, style.Width),
             };
             _pathPaints[(colour, layer, dim, cancelled, lineStyle)] = paint;
         }
@@ -869,10 +870,24 @@ public sealed class SkiaGraphRenderer : IDisposable
     }
 
     /// <summary>
-    /// A category's dashes (S14a): 12–7, less the round caps, longer than the forecast's 6–4 dash so a dashed
-    /// category's actual line does not read as a forecast; dots are round caps spaced two widths apart. Kept per
-    /// pattern and width.
+    /// The forecast's dash-dot (S31) as on–off lengths: a 7 px dash, a dot, each with a 4 px gap, before the round
+    /// caps. No category line style (<see cref="CategoryPattern"/>) draws it, so a forecast is not taken for a dashed
+    /// or dotted category.
     /// </summary>
+    public static IReadOnlyList<float> ForecastPattern { get; } = [7, 4, 0.01f, 4];
+
+    /// <summary>
+    /// A category's line style (S14a) as on–off lengths at this width, before the round caps; empty for solid. Dashed
+    /// is 12–7; dotted is round caps spaced two widths apart (at least 3 px).
+    /// </summary>
+    public static IReadOnlyList<float> CategoryPattern(LineStyle lineStyle, float width) => lineStyle switch
+    {
+        LineStyle.Solid => [],
+        LineStyle.Dotted => [0.01f, Math.Max(3f, width * 2)],
+        _ => [12, 7],
+    };
+
+    /// <summary>A category's dashes or dots (<see cref="CategoryPattern"/>), kept per pattern and width.</summary>
     private SKPathEffect? CategoryDash(LineStyle lineStyle, float width)
     {
         if (lineStyle == LineStyle.Solid)
@@ -882,9 +897,7 @@ public sealed class SkiaGraphRenderer : IDisposable
 
         if (!_categoryDashes.TryGetValue((lineStyle, width), out var effect))
         {
-            effect = lineStyle == LineStyle.Dotted
-                ? SKPathEffect.CreateDash([0.01f, Math.Max(3f, width * 2)], 0)
-                : SKPathEffect.CreateDash([12, 7], 0);
+            effect = SKPathEffect.CreateDash([.. CategoryPattern(lineStyle, width)], 0);
             _categoryDashes[(lineStyle, width)] = effect;
         }
 
@@ -943,7 +956,8 @@ public sealed class SkiaGraphRenderer : IDisposable
         _titleFont.Dispose();
         _annotationFont.Dispose();
         _draftBorder?.Dispose();
-        _dash.Dispose();
+        _draftDash.Dispose();
+        _forecastDash.Dispose();
         foreach (var effect in _categoryDashes.Values)
         {
             effect.Dispose();

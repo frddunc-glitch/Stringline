@@ -24,9 +24,29 @@ public sealed record StringlineProfile
 
     /// <summary>
     /// The sim's name for display, set by the user. Null (the default) shows the area ID tidied (<see cref="SimTitle"/>).
-    /// Profiles made before S22 have the timetable's title here, which <see cref="SimTitle"/> takes as no name.
+    /// Profiles made before S22 have a timetable's title here, which counts as no name (<see cref="SimName"/>).
     /// </summary>
     public string? Name { get; init; }
+
+    /// <summary>
+    /// <see cref="Name"/> was typed in the profile editor (S31), or found to be no timetable's title
+    /// (<see cref="SettleName"/>), so it is shown even when it matches a title. Written only when set.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool NameByHand { get; init; }
+
+    /// <summary>
+    /// The titles of the timetables this profile was made or refreshed from (S31), so a sim name that is only one of
+    /// them counts as no name. Profiles from before S31 start with none; an older Stringline ignores them.
+    /// </summary>
+    public IReadOnlyList<string> TimetableTitles { get; init; } = [];
+
+    /// <summary>
+    /// Whether <see cref="Name"/> may be an older timetable's title not yet known (S31): set, neither typed nor settled,
+    /// and none of <see cref="TimetableTitles"/>. Only a profile saved before S31 can be so.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasUnsettledName => Name is { } name && !NameByHand && !IsTimetableTitle(name);
 
     /// <summary>Corridors in tab order.</summary>
     public IReadOnlyList<Corridor> Corridors { get; init; } = [];
@@ -69,6 +89,43 @@ public sealed record StringlineProfile
         return this with { AssistRoutes = [.. AssistRoutes.Where(r => r.Move != route.Move), route] };
     }
 
+    /// <summary>
+    /// The sim's name to show, or null to show the area ID: a name typed by hand always, else the name unless it is
+    /// (ignoring case and spaces) the title of <paramref name="loaded"/> or of any timetable in <see cref="TimetableTitles"/>.
+    /// </summary>
+    public string? SimName(TimetableHeader? loaded = null) =>
+        Name is { } name && (NameByHand || !IsTimetableTitle(name, loaded)) ? name : null;
+
+    /// <summary>The title for this sim running <paramref name="loaded"/> (<see cref="SimTitle"/>), with <see cref="SimName"/>.</summary>
+    /// <param name="areaId">The gateway's area ID, if known; else the timetable's.</param>
+    public SimTitle Title(string? areaId, TimetableHeader? loaded, bool review = false) =>
+        SimTitle.From(SimName(loaded), areaId, loaded, review, keepName: true);
+
+    /// <summary>Whether this is (ignoring case and spaces) the title of <paramref name="loaded"/> or of any timetable in <see cref="TimetableTitles"/>.</summary>
+    public bool IsTimetableTitle(string? text, TimetableHeader? loaded = null) =>
+        SimTitle.SameTitle(text, loaded?.Name) || TimetableTitles.Any(t => SimTitle.SameTitle(t, text));
+
+    /// <summary>The profile remembering a timetable's title (<see cref="TimetableTitles"/>); unchanged if blank or known.</summary>
+    public StringlineProfile WithTimetableTitle(string? title) =>
+        string.IsNullOrWhiteSpace(title) || TimetableTitles.Any(t => SimTitle.SameTitle(t, title)) ? this
+            : this with { TimetableTitles = [.. TimetableTitles, title.Trim()] };
+
+    /// <summary>
+    /// Settles a name saved before S31 (<see cref="HasUnsettledName"/>) against the titles of the sim's other
+    /// timetables: one that matches is remembered, so the name counts as no name; if none does, the name was typed,
+    /// and is marked <see cref="NameByHand"/>. Unchanged when there is nothing to settle.
+    /// </summary>
+    public StringlineProfile SettleName(IEnumerable<string> otherTitles)
+    {
+        ArgumentNullException.ThrowIfNull(otherTitles);
+        if (!HasUnsettledName)
+        {
+            return this;
+        }
+
+        return otherTitles.FirstOrDefault(t => SimTitle.SameTitle(t, Name)) is { } title ? WithTimetableTitle(title) : this with { NameByHand = true };
+    }
+
     public string DisplayName(Tiploc location) =>
         LocationNames.TryGetValue(location, out var name) && !string.IsNullOrWhiteSpace(name) ? name : location.Code;
 
@@ -95,23 +152,23 @@ public sealed record StringlineProfile
             AreaId = timetable.AreaId,
             Corridors = corridors.ToList(),
             Categories = CategoryStyle.CreateDefaults(timetable),
-        };
+        }.WithTimetableTitle(timetable.Header.Name);
     }
 
     /// <summary>
     /// The profile brought up to date with a (possibly re-imported) timetable: every corridor's derived values are
-    /// recomputed, headways not set by hand are worked out again, and categories new to the timetable get default
-    /// styles. User settings are kept.
+    /// recomputed, headways not set by hand are worked out again, categories new to the timetable get default
+    /// styles, and its title is remembered (<see cref="TimetableTitles"/>). User settings are kept.
     /// </summary>
     public StringlineProfile Refresh(WorkingTimetable timetable)
     {
         ArgumentNullException.ThrowIfNull(timetable);
         var known = Categories.Select(c => c.CategoryId).ToHashSet(StringComparer.Ordinal);
-        return this with
+        return (this with
         {
             Corridors = Corridors.Select(c => CorridorBuilder.Refresh(c, timetable, FallbackHeadwaySeconds)).ToList(),
             Categories = [.. Categories, .. CategoryStyle.CreateDefaults(timetable).Where(c => !known.Contains(c.CategoryId))],
-        };
+        }).WithTimetableTitle(timetable.Header.Name);
     }
 
     /// <summary>The profile with this global default headway, and every headway not set by hand worked out again.</summary>

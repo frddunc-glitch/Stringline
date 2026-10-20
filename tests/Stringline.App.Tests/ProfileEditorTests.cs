@@ -405,6 +405,37 @@ public sealed class ProfileEditorTests
     }
 
     [Fact]
+    public async Task An_older_timetables_title_is_no_sim_name_but_a_typed_one_is()
+    {
+        // S31 (Q17): a profile from before S22 named after timetable A, now loading timetable B from a folder that has both.
+        await using var app = new TestApp();
+        var folder = Path.Combine(app.Root, "timetables");
+        Directory.CreateDirectory(folder);
+        var wtt = Path.Combine(folder, Llangollen);
+        File.Copy(Fixtures.Path(Llangollen), wtt);
+        await File.WriteAllTextAsync(Path.Combine(folder, "llangollen 2009 A.wtt"),
+            """<?xml version="1.0" encoding="utf-8"?><SimSigTimetable ID="llangollen" Version="4.5"><Name>Timetable A  2009</Name></SimSigTimetable>""");
+        var store = new ProfileStore(app.Paths.Profiles);
+        store.Save(StringlineProfile.Create(new Timetable.WttReader().Read(wtt).Timetable) with { Name = "Timetable A 2009", TimetableTitles = [] });
+
+        var vm = await Load(app, wtt);
+
+        (await app.Ui.Run(() => vm.SimTitleText)).Should().Be("Llangollen – Timetable B 2012 (v1.0.0)", "not \"Timetable A 2009 – Timetable B 2012\"");
+        var saved = store.Load("llangollen")!;
+        saved.TimetableTitles.Should().Equal("Timetable B 2012", "Timetable A  2009");
+        saved.NameByHand.Should().BeFalse();
+
+        await Edit(app, e =>
+        {
+            e.SimName = "Timetable B 2012";
+            e.OkCommand.Execute(null);
+        });
+
+        (await app.Ui.Run(() => vm.SimTitleText)).Should().Be("Timetable B 2012 – Timetable B 2012 (v1.0.0)", "a name typed in the editor is kept");
+        store.Load("llangollen")!.NameByHand.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task A_timetable_without_a_sim_id_is_named_and_found_again()
     {
         await using var app = new TestApp();

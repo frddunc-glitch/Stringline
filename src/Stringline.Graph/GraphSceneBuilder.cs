@@ -132,7 +132,7 @@ public static class GraphSceneBuilder
             }
         }
 
-        var sim = request.SimTitle ?? SimTitle.From(profile.Name, profile.AreaId, request.Timetable?.Header);
+        var sim = request.SimTitle ?? profile.Title(profile.AreaId, request.Timetable?.Header);
         var title = $"{sim} — {corridor.Name}";
         var scene = new GraphScene(corridor.Id, title, locations, paths, request.Now);
         if (request.ShowDisruptions && request.Plan is { } withDisruptions)

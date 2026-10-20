@@ -110,7 +110,7 @@ public class SkiaGraphRendererTests
         theme.StyleOf(GraphLayer.Wtt).Should().Be(new LayerStyle(1f, 0.3));
         theme.StyleOf(GraphLayer.Plan).Should().Be(new LayerStyle(1.5f, 1));
         theme.StyleOf(GraphLayer.Actual).Should().Be(new LayerStyle(2.5f, 1));
-        theme.StyleOf(GraphLayer.Forecast).Should().Be(new LayerStyle(1.5f, 1, Dashed: true));
+        theme.StyleOf(GraphLayer.Forecast).Should().Be(new LayerStyle(1.5f, 1, DashDot: true));
         var act = () => theme.StyleOf((GraphLayer)99);
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
@@ -169,6 +169,69 @@ public class SkiaGraphRendererTests
         else
         {
             percent.Should().BeGreaterThanOrEqualTo(minGapPercent);
+        }
+    }
+
+    [Fact]
+    public void No_category_line_style_draws_the_forecast_pattern()
+    {
+        var theme = GraphTheme.Light;
+        var widths = new[] { theme.Wtt, theme.Plan, theme.Actual, theme.Forecast, theme.Ghost, theme.Cancelled }.Select(s => s.Width)
+            .Append(theme.SelectedWidth).Append(theme.SelectedWttWidth);
+
+        foreach (var style in Enum.GetValues<LineStyle>())
+        {
+            foreach (var width in widths)
+            {
+                SkiaGraphRenderer.CategoryPattern(style, width).Should().NotEqual(SkiaGraphRenderer.ForecastPattern, $"{style} at {width} px");
+            }
+        }
+
+        SkiaGraphRenderer.ForecastPattern.Should().HaveCount(4, "a dash and a dot");
+    }
+
+    [Theory]
+    [InlineData(GraphLayer.Forecast, LineStyle.Solid, true)]
+    [InlineData(GraphLayer.Plan, LineStyle.Dashed, false)]
+    [InlineData(GraphLayer.Plan, LineStyle.Dotted, false)]
+    public void Forecast_is_drawn_dash_dot_and_categories_are_not(GraphLayer layer, LineStyle style, bool dashDot)
+    {
+        var vertices = new List<GraphVertex> { new(SimTime.FromClock(7, 0).Seconds, 0.5), new(SimTime.FromClock(7, 20).Seconds, 0.5) };
+        var scene = new GraphScene("main", "t", [], [new GraphPath("p", layer, null, new Headcode("1P01"), Express, vertices, Style: style)], null);
+        var view = View();
+
+        using var bitmap = Render(scene, view);
+
+        // The lengths of the inked runs along the line: a dash-dot alternates long dashes and short dots.
+        var y = (int)Math.Round(view.AxisToPixel(0.5));
+        var (from, to) = ((int)view.TimeToPixel(SimTime.FromClock(7, 2).Seconds), (int)view.TimeToPixel(SimTime.FromClock(7, 18).Seconds));
+        var runs = new List<int>();
+        var run = 0;
+        for (var x = from; x < to; x++)
+        {
+            if (bitmap.GetPixel(x, y).Green <= 150)
+            {
+                run++;
+            }
+            else if (run > 0)
+            {
+                runs.Add(run);
+                run = 0;
+            }
+        }
+
+        var inner = runs.Skip(1).ToList(); // the first may be cut short
+        inner.Should().HaveCountGreaterThan(4);
+        var longRuns = inner.Count(r => r >= 6);
+        var shortRuns = inner.Count(r => r <= 3);
+        if (dashDot)
+        {
+            longRuns.Should().BeGreaterThan(1);
+            shortRuns.Should().BeInRange(longRuns - 1, longRuns + 1, "a dot after each dash");
+        }
+        else
+        {
+            (longRuns > 1 && shortRuns > 1).Should().BeFalse("a category is all dashes or all dots");
         }
     }
 

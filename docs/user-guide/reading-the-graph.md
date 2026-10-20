@@ -25,7 +25,7 @@ The location names are on the left, bold for stations with platforms. A long nam
 | Thin, faint line | The **WTT**: the train as booked. |
 | Medium solid line | The **working plan**, where you have re-planned a train away from the WTT. |
 | Heavy solid line | The **actual** running, as the sim reported it. |
-| Dashed line | The **forecast**: where a running train is expected to go from here, and a train not yet started if it is expected a minute or more off its plan. |
+| Dash-dot line (– · – ·) | The **forecast**: where a running train is expected to go from here, and a train not yet started if it is expected a minute or more off its plan. |
 | Thin grey line with crosses at the ends | A **cancelled** train. |
 | Grey heavy line | A live train not matched to the timetable. |
 | Thick line with a halo | The **selected** train. Other trains are dimmed. |
@@ -35,7 +35,7 @@ The location names are on the left, bold for stations with platforms. A long nam
 | Amber band | A [speed restriction](disruptions-and-notes.md). |
 | Small ring with a yellow label | A [note](disruptions-and-notes.md#notes). |
 
-Each train is drawn in its category's colour, and some categories may be dashed or dotted. The headcode is written along the line.
+Each train is drawn in its category's colour, and some categories may be dashed or dotted. A category is never dash-dot, so a dash-dot line is always a forecast. The headcode is written along the line.
 
 The toolbar's **WTT**, **Actual**, **Forecast**, **Disruptions** and **Conflicts** boxes (also in the View menu) show and hide those layers.
 
