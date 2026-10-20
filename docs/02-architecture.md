@@ -7,11 +7,12 @@ Stringline.sln
 ├─ src/
 │  ├─ Stringline.Core/          net10.0   Domain model, sim time, IDs, shared abstractions
 │  ├─ Stringline.Gateway/       net10.0   STOMP client, message parsing, recorder, replay source
-│  ├─ Stringline.Timetable/     net10.0   .wtt import, train matching
+│  ├─ Stringline.Timetable/     net10.0   .wtt import, train matching; lossless WttDocument + writer (S40, planned)
 │  ├─ Stringline.Network/       net10.0   Corridors, sections, profile I/O, auto-generation, distance axis
 │  ├─ Stringline.Planning/      net10.0   Working plan + commands, forecaster, conflicts, suggestions, re-planning (IReplanner, rules)
 │  ├─ Stringline.Optimiser/     net10.0   CP-SAT re-planner (Google OR-Tools, native solver for Windows, Linux and macOS)
 │  ├─ Stringline.Persistence/   net10.0   SQLite session store (Microsoft.Data.Sqlite)
+│  ├─ Stringline.Editing/       net10.0   Timetable editor core: sim knowledge, checks, bulk tools, CSV (S41–S48, planned; 08-…md)
 │  ├─ Stringline.Graph/         net10.0   Graph scene model + Skia renderer (SkiaSharp), hit testing — no WPF
 │  ├─ Stringline.App/           net10.0-windows10.0.19041.0  WPF shell, MVVM, SKElement host, dialogs (SkiaSharp.Views.WPF 4 needs the versioned TFM)
 │  └─ Stringline.Tools/         net10.0   CLI: record, replay-server, wtt-dump, render-png, report, replan…

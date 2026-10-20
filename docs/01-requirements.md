@@ -22,6 +22,20 @@ IDs are referenced from the implementation plan. Priority: **M** = MVP, **S** = 
 | TT-4 | Show unmatched trains (actuals only) and flag them | M |
 | TT-5 | Re-import a WTT mid-session, keeping working-plan edits where trains still match | S |
 
+## Timetable editor (issue #20; `08-timetable-editor.md`, Phase 4d)
+| ID | Requirement | P |
+|---|---|---|
+| TTE-1 | Open, edit and save a `.wtt` losslessly: what the editor does not model is written back untouched; a save with no edits is semantically identical | S |
+| TTE-2 | Edit trains and trips in a keyboard-first grid with SimSig time notation, and undo/redo | S |
+| TTE-3 | Edit activities, rules, seed groups, categories, the header, Decisions, Class of Service, Scenarios and Driving | S |
+| TTE-4 | Check a draft offline with SimSig's Analyser rules and against what the sim's other timetables and recordings show; quick fixes | S |
+| TTE-5 | Show the draft on a graph board with its booked conflicts; drag grips edit the draft | S |
+| TTE-6 | Bulk tools: repeat as pattern, auto-fill timings, multi-train edits, adjust times | S |
+| TTE-7 | CSV export and import of trains | S |
+| TTE-8 | New draft from a session's working plan | C |
+| TTE-9 | Save as a new version (build number up), never overwriting without asking; backups; draft autosave | S |
+| TTE-10 | Timetable test report from a run of the saved timetable in SimSig | C |
+
 ## Corridors and profile
 | ID | Requirement | P |
 |---|---|---|

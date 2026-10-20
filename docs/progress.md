@@ -1875,6 +1875,32 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Questions for Fred
 - 29. **Which sim showed #17?** Name it in the recording's notes, so S36's baseline and S37's gate use it.
 
+## 2026-10-21 — Design: timetable editor (#20)
+
+### Done
+- Researched #20: the SimSig wiki's *Writing Timetables* pages (XML format, F4 timetable editor, Tools 1 Timetable Analyser, rules, seeding, timing codes, file naming and versions) and the forum's spreadsheet-importer workflow. Also looked at the current code: `WttReader` is deliberately lossy, ignoring saved-game state, performance fields and several `Trip` fields, so the editor needs its own lossless document.
+- Wrote **`docs/08-timetable-editor.md`** (design) and **Phase 4d (S40–S48)** in `07-…md`. Added TTE-1…10 to `01-…md`, §4.10 to `00-…md`, and the planned `Stringline.Editing` project to `02-…md`.
+- **Findings:**
+  - SimSig's `.sim` files (in `Public Documents\SimSig\Simulations`) are encrypted zips (`header.dat`, `sim.dat`), so path, platform and line validity can only be learned from the sim's other timetables and from play (`SimKnowledge`). Stringline never reads `.sim` files.
+  - SimSig's naming guidance keeps the version out of the file name, with minor amendments keeping the name. So a save raises `VBuild`, and the first save of a shipped timetable defaults to a new, tagged file name.
+- **Fred's choices:**
+  - grid plus a live graph of the draft;
+  - lossless saves;
+  - every part of the timetable editable;
+  - after Phase 4c, S32 and S33;
+  - a draft from the working plan;
+  - all four bulk tools;
+  - new versions, never overwriting without asking;
+  - editing allowed during a live session, on a separate draft.
+
+### Next
+- Unchanged until Phase 4c, S32 and S33 are done; then S40 (S41 can run alongside).
+- 👤 After S40: load a round-tripped Waterloo and one payware timetable in SimSig and run the Analyser.
+
+### Questions for Fred
+- 30. **Tagged name for a first save:** is `Sim YYYY-MM-DD Stringline.wtt` a good default tag for a new file made from a shipped timetable, or would you rather type one every time?
+- 31. **Ctrl+S** saves the draft in the editor window. Should the main window's Ctrl+S save the session too, or stay unbound?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

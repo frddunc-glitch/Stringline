@@ -466,6 +466,224 @@ Takes over S33's "find out first".
   - `ProfileJson` round trip of the aspect count.
   - Update `06-…md` §3.
 
+## Phase 4d — Timetable editor (GitHub issue #20)
+Fred raised #20 on 2026-10-20: SimSig's editor and outside tools handle timetable editing poorly. Stringline can be a better editor, with SimSig still validating and running the result, because the gateway cannot send a timetable to SimSig. The design is in `08-timetable-editor.md`. In the design review (2026-10-21) Fred chose:
+- a grid plus a live graph of the draft;
+- **lossless** saving: everything the editor does not model is written back untouched;
+- every part of the timetable editable;
+- a draft made from the working plan;
+- all four bulk tools (pattern, auto-fill, multi-train edits, spreadsheet round trip);
+- saves as new versions, never overwriting without asking;
+- editing on a separate draft while a session is live.
+
+**Order:** the phase runs after Phase 4c, S32 and S33. S40 → S41 → S42 → S43 → S44 → S45 → S46 → S47 → S48. S41 can run alongside S40 in a separate worktree. S44 needs S43's workspace, and S46's UI needs S44's preview board. Each session still ends with a green build, tests, `progress.md` and a commit. S48 closes #20 with `Fixes #20`.
+
+| Part of #20 | Session |
+|---|---|
+| Lossless open, edit and save | S40 |
+| Knowing what the sim allows | S41 |
+| Checks before SimSig (the Analyser's, offline) | S42 |
+| Editing trains and trips | S43 |
+| The draft on the graph | S44 |
+| Activities, rules, seed groups, categories, header and the rest | S45 |
+| Bulk tools | S46 |
+| Spreadsheet round trip, plan → draft | S47 |
+| Testing in SimSig, guide | S48 |
+
+**Research notes** (SimSig wiki, *Writing Timetables*, and the forum):
+- The XML format page lists every element. The zip has `SavedTimetable.xml` and `TimetableHeader.xml`, an extract of the `[TH]` fields.
+- F4 ▸ Tools 1's Timetable Analyser has about 30 named checks. Its CSV import is deprecated, but XML stays.
+- Timing notation: `12:30`, `12/34` pass, `d` set down, `t` thru line, `w` dwell wait, `r` request, and `H` for a half minute.
+- Seeding rules: no arrival time at the seed start location, and one train per signal per seed group.
+- Naming and versions: `Sim YYYY-MM-DD [tags].wtt`, with the version never in the name, and `VMajor.VMinor.VBuild` always rising.
+- Spreadsheet writers' loop: import → "no path between timing points" → add timing points → "ambiguous line/path" → set Line.
+- SimSig's `.sim` files are encrypted, so path validity can only be learned from the sim's other timetables and from play (`08-…md` §1, §4).
+
+### S40 — Lossless timetable document and writer (portable)
+- **`WttDocument`** (`Stringline.Timetable.Editing`, `08-…md` §3):
+  - it holds the `XDocument` and the zip's other entries;
+  - typed views (`HeaderNode`, `CategoryNode`, `TrainNode`, `TripNode`, `ActivityNode`, `RuleNode`, `SeedGroupNode`) and generic `ListNode`s read and write through to their elements;
+  - booleans are written in the file's own style, a value back at its default is removed, and new elements go in SimSig's order (from the XML format page and the corpus);
+  - `ToWorkingTimetable()` uses `WttReader`'s import on the in-memory XML.
+- **`TimetableEdit`:** set a field, insert, remove or move a node, and composite, each with apply and undo. A renumber edit updates every activity and rule that names the train.
+- **`WttWriter`:**
+  - writes `SavedTimetable.xml` plus a regenerated `TimetableHeader.xml`, as UTF-8 with no BOM and no declaration;
+  - saves atomically;
+  - sets the version (`VBuild` + 1, or a release bump);
+  - copies a backup to `%LOCALAPPDATA%\Stringline\timetable-backups` before replacing a file (`08-…md` §6).
+- **SimSig time notation** (`SimTimeNotation`, in Core if the grid and CSV both need it):
+  - parse and format `12:30`, `12/34`, `12d34`, `12t34`, `12w34`, `12r34`, `1234`, `1234H`, `13:45H`, `24:01` and `+3`;
+  - day rollover;
+  - half minutes as `SimTime` seconds.
+- **CLI:** `stringline wtt-save in.wtt out.wtt [--bump build|minor|major] [--shift-train 1A23 +5]`. It is a round-trip and smoke tool, not the editor.
+- **Tests:**
+  - **the round trip on the whole corpus:** the XML trees are equal element by element, and the `WttReader` results are equal;
+  - each node's read and write, in both boolean styles;
+  - an edit's undo restoring the exact tree;
+  - a renumber keeping the links;
+  - the header extract;
+  - the notation's parse and format (every code, `H`, past midnight).
+- 👤 **Gate:** Fred loads a round-tripped Waterloo and one payware timetable in SimSig and runs the Analyser. The output must be the same as the original's. If SimSig reads them differently, find out why (element order, a default) before S43.
+
+### S41 — Sim knowledge (portable)
+- **New project `Stringline.Editing`** (`net10.0`; it references Timetable, Network and Planning). Its tests go in `tests/Stringline.Editing.Tests` and in `Stringline.Portable.slnf`, and the architecture tests learn the new layer.
+- **`SimKnowledge`** per area ID (`08-…md` §4), built from:
+  - every `.wtt` for the sim in the timetable folders (`WttCatalogue.FindForArea`);
+  - recordings and sessions (reported TIPLOCs and entry signals);
+  - the profile (S37's signals, track circuits and berths; corridors).
+- **What it holds:**
+  - locations and their roles (entry, seed, station, key, reversing);
+  - the platform, line and path codes seen per location, with counts;
+  - booked links A → B, with line and path, counts and direction, plus skip chains from `LocationGraph`;
+  - least and usual run times per link, by speed band and freight flag, net of allowances (reusing `CorridorMeasurement`'s rules);
+  - usual dwells.
+- **Cache:** `{area}.simdata.json` beside the profile, keyed by the sources' paths and timestamps and rebuilt when one changes. The draft being edited is always left out.
+- **CLI:** `stringline simdata --area waterloo [--folder f] [--location WIMB] [--link WLOO VAUX]`.
+- **Tests:**
+  - Waterloo and Llangollen from `tests/fixtures` (codes, links and run times come back);
+  - the cache's invalidation;
+  - the draft left out;
+  - the corpus: every sim builds in a few seconds, and the time per sim is recorded in `progress.md`.
+
+### S42 — Checks before SimSig (portable)
+- **`TimetableValidator`** (`08-…md` §5) gives `ValidationIssue(Severity, Code, Train?, PointIndex?, Message, Hint, QuickFix?)`. It covers:
+  - the Analyser's offline checks, in SimSig's wording;
+  - sim-knowledge checks: unknown codes and TIPLOCs; "no known path" with an insert-chain fix; "ambiguous line" with a set-line fix; a run shorter than any seen; a stop at a non-station; entry and seed points; unsafe activity locations;
+  - rule checks: unresolved names, cycles, and a location the train does not call at.
+- Quick fixes are `TimetableEdit`s, so S43 applies and undoes them like any edit.
+- **Incremental:** after an edit, only the trains it touches and the trains linked to them are checked again. A full check runs on open and save.
+- **CLI:** `stringline wtt-check t.wtt [--knowledge-folder f] [--severity warning] [--train 1A23]`.
+- **Corpus baseline:** count the issues by code over released timetables and record it in `progress.md`. A check that fires on many released timetables is a false alarm: fix it or demote it to Info. Name the ones left in "Questions for Fred".
+- **Tests:**
+  - each check on a small synthetic timetable (the firing case and its near miss);
+  - each quick fix applied and checked again;
+  - incremental and full checks agree;
+  - Waterloo and Llangollen have no Errors.
+
+### S43 — Editor workspace, trains and trip grid 🪟 (view-model portable)
+- **`TimetableEditor`** (`Stringline.Editing`): the single writer for one draft. It applies edits, keeps undo and redo, and publishes `DraftSnapshot`s (document, `WorkingTimetable`, issues). Drafts autosave to `Documents\Stringline\drafts` (`.wtt` plus `.draft.json` holding the source path and undo history).
+- **Timetable menu** (`08-…md` §7): New draft (from the loaded timetable, from a file, or blank for the sim; "from the working plan" comes in S47), Open draft, Save, Save As, Release version, Close draft and Check timetable. Add it to S25's menu test (unique access keys, every command bound).
+- **Editor workspace:** a board-style window holding:
+  - **Trains:** a list sorted and filtered by headcode, UID, entry, category, seed group and issues, with multi-select;
+  - **Train details**, including `$template` with a preview;
+  - **Trip grid:**
+    - the columns and keys in `08-…md` §7;
+    - completion and code drop-downs from `SimKnowledge`;
+    - SimSig notation in and out;
+    - auto-inserted rows greyed, and issue marks with hover hints;
+  - **Issues panel:** click to go to the train and row, and apply a quick fix (one, or all of a kind);
+  - **Header tab:** name, description, start and finish, version, template.
+- **Saving** follows `08-…md` §6:
+  - the first save of a SimSig timetable asks whether to replace it, defaulting to a new file named by the convention;
+  - Errors are listed in the save dialog;
+  - unsaved changes are asked about on close and on exit.
+- **Live:** opening a draft from the loaded timetable copies it, and the session's WTT and plan are never changed (a test checks this).
+- **Tests:**
+  - App tests driving the view-model on Waterloo: open a draft, change a time by typing `1234H`, insert a point, fill down, undo, save and reopen, and get the same document;
+  - the replace-or-new prompt;
+  - autosave and restore after a simulated crash;
+  - the session's WTT untouched while a draft is edited.
+
+### S44 — The draft on the graph 🪟 (scene portable)
+- **Draft board:** a graph board (S21) whose source is a `DraftSnapshot`, with the profile's corridors.
+  - It shows the booked layer only.
+  - **Booked conflicts** come from the forecaster with no live data (S32's rules included) and S14's detector, so the draft's headway, platform and single-line conflicts show as they will in play.
+  - A train off every corridor is listed in the board's status line.
+- **Shared selection:** a train selected in the grid selects it on the board, and the other way round. A row selects its point.
+- **Grips edit the draft:** abstract S26's drag target, so `PlanDrag` produces plan commands on session boards and `TimetableEdit`s on draft boards.
+  - Retime from here, dwell and shift-path each give one composite edit, rounded to half minutes.
+  - A drag clamps to the learned minimum run time with a warning, and Shift lets it past.
+- **Ghosts** (View ▸ Draft ghosts): the original timetable's path for changed trains, and a recording's actuals (pick a `.sslog`; no session needed).
+- **Exports:** PNG, PDF and the plot work on a draft board, titled "Draft – *name* *version*".
+- **Tests:**
+  - scene tests: the booked layer only, a conflict between two draft trains, ghosts (Graph.Tests);
+  - the drag target giving edits on a draft and commands on a session;
+  - App tests: drag a draft path, see the grid's times change, undo;
+  - the benchmark with a 500-train draft still under 33 ms a frame.
+
+### S45 — Activities, rules, seed groups, categories and the rest 🪟 (edits portable)
+- **Activities**, per trip:
+  - add, edit, delete and reorder;
+  - the associated train chosen from a list at that location and time (by `$UID` where the file uses them);
+  - crew change with arrival and duration;
+  - a link to go to the associated train;
+  - "Formed by" shown on the formed train.
+  - Next must stay last: the edit refuses otherwise and says why.
+- **Rules tab:**
+  - a grid of kind, T, Y, Z (location) and X (minutes, `0H` style);
+  - train pickers;
+  - unresolved and cyclic rules marked (S42);
+  - a filter for "rules about this train".
+- **Seed groups tab:** list, new, edit and delete; "referenced by"; "unassigned"; one seed per signal per group, checked as it is typed. Seed points are offered from `SimKnowledge`, with S37's signals and their places named.
+- **Categories (train types):**
+  - all fields from the XML format page, including the speed class bits as tick boxes, electrification letters, power to weight, caution speed set and dwell times;
+  - "used by n trains";
+  - a refused delete while trains use the category, unless they are moved to another.
+- **Decisions, Class of Service, Scenarios, Driving:** structured list editors over their documented fields. Anything else is shown read-only and preserved.
+- **Tests:**
+  - each editor's edits and undo, against the XML;
+  - Next-last refused;
+  - renaming a category updates its trains;
+  - deleting a seed group moves its trains to the start group after asking;
+  - a round trip of each part on a corpus file that has it (find one with Decisions and with Scenarios).
+
+### S46 — Bulk tools and auto-fill (core portable, UI 🪟)
+Each tool in `08-…md` §8 is one composite `TimetableEdit`, previewed as a list of changes and as ghosts on the draft board before it is applied.
+- **Repeat as pattern:**
+  - every N minutes from–to;
+  - headcode and UID rules;
+  - next workings paired at a terminus by the least turnaround that meets the dwell, with each pairing shown and editable in the preview.
+- **Auto-fill timings:**
+  - fill the points between given times from `SimKnowledge` run times for the train's speed band and freight flag, plus allowances and usual dwells;
+  - report the shortfall when the given times cannot be met;
+  - **insert timing points** (the booked chain between two points, the "no path" fix) and **set line** (the most used line).
+- **Multi-train edits:** shift (all, or from a location), renumber, change category, platform, line or path at a location, set or clear allowances, and find and replace. Links are always kept.
+- **Adjust times** as SimSig does it.
+- **Tests:**
+  - each tool on synthetic timetables, with exact expected XML;
+  - pattern headcodes and pairing;
+  - auto-fill against Waterloo's own booked times (fill a fast train from its first and last times; the result lies within the WTT's own run times);
+  - the "no path" fix clearing S42's warning;
+  - undo of each tool;
+  - App tests of the preview and apply.
+
+### S47 — Spreadsheet round trip and plan → draft (core portable, UI 🪟)
+- **CSV** (`08-…md` §9):
+  - one row per timing point, in a documented column set;
+  - export, and a tolerant import (header aliases, quoting, `H`, SimSig notation);
+  - the import merges by UID, else by headcode and first time, or adds trains;
+  - a diff preview is applied as one edit, with a report of rows it could not read (line numbers).
+  - CLI: `stringline wtt-csv export t.wtt out.csv` and `import t.wtt in.csv out.wtt`.
+  - **`.xlsx`** only if the session has time and the library's licence is GPL-compatible (DocumentFormat.OpenXml, MIT). Check it before adding it to `Directory.Packages.props`. Otherwise leave it as a follow-up issue.
+- **New draft from the working plan:**
+  - copy the loaded WTT;
+  - map each `TrainPlan` against its WTT train into edits: times, platform and line, skipped stops as passes, and terminate short truncating with its next working flagged;
+  - cancellations: remove the train, or keep it, as the user picks in the dialog;
+  - clones become new trains with new UIDs.
+  - Disruptions and notes are listed, not converted.
+  - The checks run at once.
+- **Tests:**
+  - CSV round trip on Waterloo (export then import changes nothing);
+  - the tolerant cases;
+  - merge, with a changed time and a new train;
+  - plan → draft on a saved session (`--session`) with a retime, a platform change, a cancellation and a clone, giving the expected XML and the right S42 issues;
+  - an App test of the dialog.
+
+### S48 — Testing in SimSig, the guide and closing #20
+- **Test in SimSig…** (Timetable menu) gives the steps: save, load in SimSig, run F4 ▸ Tools 1 ▸ Timetable Analyser, start the sim with Stringline connected and recording.
+- **Timetable test report** (`Stringline.Editing`; `stringline report --test --wtt t.wtt --log x.sslog [out.csv]`; and in the app when a session using a draft's timetable ends, or from a recording) lists:
+  - trains that never appeared (`ttsummary` status, or no sighting by their entry time plus a margin);
+  - unmatched workings;
+  - sections where trains always ran slower than booked (with the time to add);
+  - platform clashes and booked conflicts that happened.
+  - It opens in the draft's Issues panel against the trains, and quick fixes add run time where it says so.
+- **Guide** (`docs/user-guide`): pages for the timetable editor, bulk tools, CSV format, from plan to timetable, and testing in SimSig. F1 targets for the editor's panels (`HelpTopics`). Pictures from `build/guide-shots.ps1`, free-sim data only. The wiki follows by its workflow.
+- **Tests:**
+  - the test report on Waterloo's recordings against the WTT (no false "never appeared" for trains of the recording's span), and against a draft with a deliberately too-short run;
+  - the guide's link check and F1 pages.
+- 👤 **Before closing:** Fred writes or changes a few trains on a sim he plays, round trips it through SimSig's Analyser and a run, and raises issues for what is missing.
+- Close #20 with `Fixes #20`.
+
 ## Phase 5 — Optional extensions
 - **S19** Opt-in assist: route-request / TD-interpose for the selected regulation step, with explicit confirmation and per-session enable.
   - *Built in S19:* Fred chose to ask for the route and remember it per move in the profile, to interpose the picked train's description into a chosen berth, a Session menu switch that is off at each new session, and live connections only (`replay-server` counts; file replays never send). The warning names multiplayer, as S29 asked. See `05-…md` §14.
@@ -484,6 +702,8 @@ S8 → S10 → S11 → S12 → S13 → S14 → S14a → S15 → S16 → S17 → 
                                                                     👤 recording → S29
 S21 → S30, S31 → S34, S35 → S36 → S37 → S38 → S39 → S32 → S33
                           👤 longer --td recordings → S37 (S38, S39 and S33 need S37's places)
+S33 → S40 → S42 → S43 → S44 → S45 → S46 → S47 → S48      (Phase 4d, #20)
+      S41 ──┘                                            (S41 alongside S40; 👤 SimSig Analyser gate after S40)
 ```
 S4 and S6 can run in parallel with S2–S3 (separate worktrees/sessions).
 

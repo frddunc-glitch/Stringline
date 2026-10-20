@@ -93,6 +93,9 @@ Headcodes repeat across a day and change at next-working associations. Matcher: 
 - Per-run **session** (SQLite): event log, working-plan command history, disruptions, notes. Supports resume and post-run review.
 - Exports: PNG/PDF graph, CSV actual-vs-plan. No industry interchange formats (e.g. railML) — this is a tool for a game.
 
+### 4.10 Timetable editor (issue #20, decided 2026-10-21)
+The gateway still cannot send a timetable to SimSig, but Stringline can be the place timetables are written and changed, with SimSig validating and running the result. The editor works on the XML document itself, so saving is lossless. It pairs a keyboard-first grid with a graph of the draft, and checks the draft offline with the Analyser's rules and with what the sim's other timetables and recordings show. SimSig's `.sim` files are encrypted and are never read. Drafts are separate from the session's timetable, and saves are new versions. Design: `08-timetable-editor.md`; sessions S40–S48.
+
 ## 5. Open questions (defaults assumed in brackets)
 
 1. **Which sims first?** Ideally one busy two-track main line and one with single-line sections and crossing loops. [One free sim for committed test data plus one payware sim you own, recordings kept local.] **Done for S3:** Waterloo (free, two-track main line, in `tests/fixtures/`) and Penrith (payware, `local-fixtures/`). A single-line sim with crossing loops was added in S4: Llangollen (free, `tests/fixtures/`).
