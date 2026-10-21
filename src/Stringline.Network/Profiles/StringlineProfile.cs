@@ -191,6 +191,20 @@ public sealed record StringlineProfile
     /// <summary>The profile with this global default headway, and every headway not set by hand worked out again.</summary>
     public StringlineProfile WithGlobalHeadway(int seconds) => (this with { GlobalHeadwaySeconds = Math.Max(0, seconds) }).ResolveHeadways();
 
+    /// <summary>
+    /// The profile with each section's block headway measured from its learned places that have
+    /// <paramref name="minSamples"/> samples (S39, <see cref="BlockHeadways"/>), and its headways worked out again.
+    /// </summary>
+    public StringlineProfile WithBlockHeadways(int minSamples = SignallingPlaces.DefaultMinSamples) =>
+        WithBlockHeadways(BlockHeadways.Measure(Corridors, UsablePlaces.Of(Places, minSamples)));
+
+    /// <summary>The profile with these measured block headways, and its headways worked out again.</summary>
+    public StringlineProfile WithBlockHeadways(BlockHeadways blocks)
+    {
+        ArgumentNullException.ThrowIfNull(blocks);
+        return this with { Corridors = blocks.Apply(Corridors, FallbackHeadwaySeconds) };
+    }
+
     /// <summary>Every section's headway not set by hand worked out again (<see cref="Section.ResolveHeadway"/>) against <see cref="FallbackHeadwaySeconds"/>.</summary>
     public StringlineProfile ResolveHeadways()
     {

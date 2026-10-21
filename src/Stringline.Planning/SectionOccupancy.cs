@@ -1,12 +1,23 @@
+using Stringline.Network;
+using Stringline.Network.Profiles;
+
 namespace Stringline.Planning;
 
 /// <summary>One train's time in one section, as forecast (or planned) and as booked in the WTT.</summary>
 /// <param name="Down">The train runs through the section From → To.</param>
 /// <param name="BookedEnter">When the WTT books it into the section, if it is a WTT train booked over the run.</param>
-internal readonly record struct SectionWindow(bool Down, int Enter, int Exit, int? BookedEnter, int? BookedExit)
+/// <param name="Kind">
+/// Whether it starts from a stand at the section's entry or stops at its exit (S39): a starting or stopping train passes
+/// the signals in between at other shares of its time than one running through, so a train running through can catch
+/// it up between the ends.
+/// </param>
+internal readonly record struct SectionWindow(bool Down, int Enter, int Exit, int? BookedEnter, int? BookedExit, RunKind Kind = RunKind.Through)
 {
-    /// <summary>The window of a run leaving at <paramref name="depart"/> and taking <paramref name="run"/> seconds, in one step of its route.</summary>
-    public static SectionWindow Of(RouteStep step, int depart, int run, (int Depart, int Arrive)? booked)
+    /// <summary>
+    /// The window of a run leaving at <paramref name="depart"/> and taking <paramref name="run"/> seconds, in one step of
+    /// its route; <paramref name="kind"/> is how the whole run starts and ends (<see cref="KindOf"/>).
+    /// </summary>
+    public static SectionWindow Of(RouteStep step, int depart, int run, (int Depart, int Arrive)? booked, RunKind kind = RunKind.Through)
     {
         int? bookedEnter = null, bookedExit = null;
         if (booked is { } b)
@@ -16,7 +27,20 @@ internal readonly record struct SectionWindow(bool Down, int Enter, int Exit, in
             bookedExit = b.Depart + (int)Math.Round(bookedRun * step.ExitShare);
         }
 
-        return new SectionWindow(step.Down, depart + (int)Math.Round(run * step.EnterShare), depart + (int)Math.Round(run * step.ExitShare), bookedEnter, bookedExit);
+        var starts = kind is RunKind.Starting or RunKind.StartingAndStopping && step.EnterShare <= 0;
+        var stops = kind is RunKind.Stopping or RunKind.StartingAndStopping && step.ExitShare >= 1;
+        return new SectionWindow(step.Down, depart + (int)Math.Round(run * step.EnterShare), depart + (int)Math.Round(run * step.ExitShare), bookedEnter, bookedExit, SignallingPlaces.RunOf(starts, stops));
+    }
+
+    /// <summary>How a run between two plan points starts and ends: from a stand at a stop, and stopping at one.</summary>
+    public static RunKind KindOf(IReadOnlyList<PlannedPoint> points, int from, int to) => SignallingPlaces.RunOf(!points[from].IsPass, !points[to].IsPass);
+
+    /// <summary>When it passes a placed signal in the section, for its kind of run, as forecast and as booked.</summary>
+    public (int At, int? Booked) At(BlockSignal signal)
+    {
+        var share = signal.ShareFor(Kind);
+        int? booked = BookedEnter is { } be && BookedExit is { } bx ? be + (int)Math.Round((bx - be) * share) : null;
+        return (Enter + (int)Math.Round((Exit - Enter) * share), booked);
     }
 
     public SectionWindow Shifted(int seconds) => this with { Enter = Enter + seconds, Exit = Exit + seconds };
@@ -34,6 +58,9 @@ internal enum SectionClash
     /// <summary>Catching up a train the same way on the same track: getting to the far end before it does.</summary>
     Overtake,
 
+    /// <summary>Following a train the same way on the same track too closely at a placed signal between the ends (S39).</summary>
+    Signal,
+
     /// <summary>Entering a single line an opposing train has not cleared.</summary>
     Opposing,
 }
@@ -43,8 +70,9 @@ internal enum SectionClash
 /// forecaster's interaction pass holds trains with it, and the conflict detector (§3) reports what it would hold.
 /// </summary>
 /// <remarks>
-/// A train following another the same way on the same track must enter and leave at least the headway after it; on a
-/// single line, an opposing train must have left. No pair is held further apart than the WTT books them: when both are
+/// A train following another the same way on the same track must enter and leave at least the headway after it, and
+/// pass each placed signal in between (S39) at least its block headway after it (the section's, unless that comes from
+/// the blocks); on a single line, an opposing train must have left. No pair is held further apart than the WTT books them: when both are
 /// booked through the section in that order, the spacing is the lesser of the headway and their booked spacing.
 /// Opposing trains booked to overlap by up to <see cref="ForecastNetwork.ParallelSeconds"/> (crossing-loop rounding)
 /// keep that overlap.
@@ -93,11 +121,12 @@ internal sealed class SectionOccupancy<T>(ForecastSection section)
 
     /// <summary>
     /// The train most in the way of <paramref name="x"/> on <paramref name="track"/> where it is now: the one that
-    /// needs the longest delay, how it clashes, and that delay. Null if none is in the way.
+    /// needs the longest delay, how it clashes, that delay, and the signal where it clashes if between the ends. Null if
+    /// none is in the way.
     /// </summary>
-    public (SectionReservation<T> Other, SectionClash Clash, int Seconds)? Blocker(SectionWindow x, T owner, int track)
+    public (SectionReservation<T> Other, SectionClash Clash, int Seconds, BlockSignal? Signal)? Blocker(SectionWindow x, T owner, int track)
     {
-        (SectionReservation<T>, SectionClash, int)? worst = null;
+        (SectionReservation<T>, SectionClash, int, BlockSignal?)? worst = null;
         var h = section.HeadwaySeconds;
         foreach (var r in Near(x))
         {
@@ -108,6 +137,7 @@ internal sealed class SectionOccupancy<T>(ForecastSection section)
 
             int shift;
             SectionClash clash;
+            BlockSignal? signal = null;
             if (r.Window.Down == x.Down)
             {
                 if (r.Track != track)
@@ -115,8 +145,8 @@ internal sealed class SectionOccupancy<T>(ForecastSection section)
                     continue;
                 }
 
-                shift = SameWay(r.Window, x, h);
-                clash = x.Enter >= r.Window.Enter && x.Exit < r.Window.Exit ? SectionClash.Overtake : SectionClash.Headway;
+                (shift, signal) = SameWay(r.Window, x, h);
+                clash = x.Enter >= r.Window.Enter && x.Exit < r.Window.Exit ? SectionClash.Overtake : signal is not null ? SectionClash.Signal : SectionClash.Headway;
             }
             else if (section.SingleLine)
             {
@@ -130,7 +160,7 @@ internal sealed class SectionOccupancy<T>(ForecastSection section)
 
             if (shift > 0 && (worst is null || shift > worst.Value.Item3))
             {
-                worst = (r, clash, shift);
+                worst = (r, clash, shift, signal);
             }
         }
 
@@ -156,7 +186,7 @@ internal sealed class SectionOccupancy<T>(ForecastSection section)
                 {
                     if (r.Track == track)
                     {
-                        shift = Math.Max(shift, SameWay(r.Window, w, h));
+                        shift = Math.Max(shift, SameWay(r.Window, w, h).Shift);
                     }
                 }
                 else if (section.SingleLine)
@@ -204,18 +234,41 @@ internal sealed class SectionOccupancy<T>(ForecastSection section)
 
     /// <summary>
     /// Delay needed for <paramref name="x"/> to follow <paramref name="l"/> on the same track: the headway at both
-    /// ends, or the booked spacing if that is less. None if it already runs ahead of it by as much.
+    /// ends, or the booked spacing if that is less, and at each placed signal between (S39) its block headway when the
+    /// section's comes from the blocks, else the section's. None if it already runs ahead of it by as much. The signal is
+    /// where the most delay is needed, if that is between the ends.
     /// </summary>
-    private static int SameWay(SectionWindow l, SectionWindow x, int h)
+    private (int Shift, BlockSignal? Signal) SameWay(SectionWindow l, SectionWindow x, int h)
     {
         if (x.Enter + Gap(x.BookedEnter, l.BookedEnter, h) <= l.Enter && x.Exit + Gap(x.BookedExit, l.BookedExit, h) <= l.Exit)
         {
-            return 0; // x runs ahead of l
+            return (0, null); // x runs ahead of l
         }
 
         var enter = l.Enter + Gap(l.BookedEnter, x.BookedEnter, h) - x.Enter;
         var exit = l.Exit + Gap(l.BookedExit, x.BookedExit, h) - x.Exit;
-        return Math.Max(0, Math.Max(enter, exit));
+        var shift = Math.Max(0, Math.Max(enter, exit));
+        BlockSignal? at = null;
+        var signals = section.SignalsFor(x.Down);
+        var blocks = section.HeadwaySource == HeadwaySource.Blocks;
+
+        // Between the ends both trains' times are shares of their windows, and no signal's block headway is more than the
+        // section's: only a train starting or stopping at an end (passing the signals at other shares) can need more.
+        if (signals.Count > 0 && (x.Kind != RunKind.Through || l.Kind != RunKind.Through))
+        {
+            foreach (var signal in signals)
+            {
+                var (lt, lb) = l.At(signal);
+                var (xt, xb) = x.At(signal);
+                var need = lt + Gap(lb, xb, blocks ? signal.HeadwaySeconds ?? h : h) - xt;
+                if (need > shift)
+                {
+                    (shift, at) = (need, signal);
+                }
+            }
+        }
+
+        return (shift, at);
     }
 
     /// <summary>Delay needed for <paramref name="x"/> to enter a single line only once opposing <paramref name="l"/> has cleared it.</summary>

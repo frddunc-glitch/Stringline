@@ -331,6 +331,21 @@ public static class ProfileEdits
     }
 
     /// <summary>
+    /// The signalling's aspects in section <paramref name="index"/> (2–4), set by hand (S39); null goes back to what
+    /// play has shown. The block headways are measured again, with places that have <paramref name="minSamples"/> samples.
+    /// </summary>
+    public static StringlineProfile WithAspects(this StringlineProfile profile, string id, int index, int? aspects, int minSamples = SignallingPlaces.DefaultMinSamples)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        if (aspects is < 2 or > 4)
+        {
+            throw new ProfileEditException("Aspects must be 2, 3 or 4.");
+        }
+
+        return profile.EditSection(id, index, s => s with { Aspects = aspects }).WithBlockHeadways(minSamples);
+    }
+
+    /// <summary>
     /// The profile's default headway, for sections with neither a hand-set nor a WTT headway; null uses the global one
     /// (Tools ▸ Options). Every headway not set by hand is worked out again.
     /// </summary>

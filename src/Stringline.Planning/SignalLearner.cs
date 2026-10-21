@@ -101,7 +101,7 @@ public sealed class SignalLearner
             switch (e)
             {
                 case TrainLocationEvent { Uid.Length: > 0 } location when !location.Location.IsEmpty:
-                    _reports.Add(new Report(location.Uid, location.Headcode, location.Location, location.Action, location.Time, location.Platform, location.AspectApproach, _reports.Count));
+                    _reports.Add(new Report(location.Uid, location.Headcode, location.Location, location.Action, location.Time, location.Platform, location.AspectApproach, _reports.Count, location.AspectPassed));
                     Seen(location.Time);
                     break;
                 case SignallingStateEvent { ObjectType: SignallingObjectType.Track, Time: { } time } track when track.GetBoolean("clear") is { } clear && track.ObjectId.Trim().Length > 0:
@@ -152,7 +152,7 @@ public sealed class SignalLearner
         }
     }
 
-    private sealed record Report(string Uid, Headcode Headcode, Tiploc Location, TrainLocationAction Action, SimTime Time, string Platform, int? AspectApproach, int Order);
+    private sealed record Report(string Uid, Headcode Headcode, Tiploc Location, TrainLocationAction Action, SimTime Time, string Platform, int? AspectApproach, int Order, int? AspectPassed = null);
 
     private sealed record TrackChange(string Id, SimTime Time, bool Occupied);
 
@@ -255,13 +255,27 @@ public sealed class SignalLearner
 
         private void SignalSamples()
         {
-            foreach (var run in _runs.Values.SelectMany(r => r).Where(r => r.Usable))
+            foreach (var runs in _runs.Values)
             {
-                for (var i = 0; i < run.Between.Count; i++)
+                for (var r = 0; r < runs.Count; r++)
                 {
-                    var s = run.Between[i];
-                    var next = i + 1 < run.Between.Count ? run.Between[i + 1].Location.Code : null; // the signal ahead of it on this train's line (S38)
-                    _samples.Add(new PlaceSample(SignallingKind.Signal, s.Location.Code, run.A.Location, run.B.Location, run.FractionAt(s.Time), run.B.Time, Line: LineOf(run), Run: run.Kind, Next: next));
+                    var run = runs[r];
+                    if (!run.Usable)
+                    {
+                        continue;
+                    }
+
+                    // The signal ahead of each on this train's line (S38); for the last before b, the first the train
+                    // passed after b (S39), so block headways can follow the signals across a timing location.
+                    // The time to it is a block's running time (S39), unless the train stopped at b on the way.
+                    var beyond = r + 1 < runs.Count && ReferenceEquals(runs[r + 1].A, run.B) && runs[r + 1].Between.Count > 0 ? runs[r + 1].Between[0] : null;
+                    for (var i = 0; i < run.Between.Count; i++)
+                    {
+                        var s = run.Between[i];
+                        var next = i + 1 < run.Between.Count ? run.Between[i + 1] : beyond;
+                        int? seconds = next is null || (next == beyond && run.B.Action == TrainLocationAction.Arrive) || next.Time <= s.Time ? null : next.Time - s.Time;
+                        _samples.Add(new PlaceSample(SignallingKind.Signal, s.Location.Code, run.A.Location, run.B.Location, run.FractionAt(s.Time), run.B.Time, Line: LineOf(run), Run: run.Kind, Next: next?.Location.Code, Aspect: s.AspectPassed, NextSeconds: seconds));
+                    }
                 }
             }
         }
@@ -326,8 +340,10 @@ public sealed class SignalLearner
 
                 placed++;
                 SimTime? cleared = clears.TryGetValue(track.Id, out var times) ? FirstFrom(times, track.Time) : null;
-                double? end = cleared is { } c && c <= run.B.Time ? run.FractionAt(c) : null;
-                _samples.Add(new PlaceSample(SignallingKind.TrackCircuit, track.Id, run.A.Location, run.B.Location, run.FractionAt(track.Time), run.B.Time, end, LineOf(run), _timing.Contains(place) ? null : place.Code, run.Kind));
+                var clearedInRun = cleared is { } c && c <= run.B.Time;
+                double? end = clearedInRun ? run.FractionAt(cleared!.Value) : null;
+                int? clearSeconds = clearedInRun && cleared!.Value > track.Time ? cleared.Value - track.Time : null;
+                _samples.Add(new PlaceSample(SignallingKind.TrackCircuit, track.Id, run.A.Location, run.B.Location, run.FractionAt(track.Time), run.B.Time, end, LineOf(run), _timing.Contains(place) ? null : place.Code, run.Kind, ClearSeconds: clearSeconds));
             });
             return new TrackAttribution(occupied.Count, attributed, ambiguous, none, unknown, placed);
         }

@@ -80,7 +80,7 @@ A few rules run through the code:
 | `replay-server` | Plays a recording on port 51515 as a stand-in for SimSig (`--speed`, `--start`; Space pauses, `+`/`-` change speed) |
 | `wtt-dump` | Prints a timetable, one train (`--train`) or its import warnings |
 | `match` | Matches a recording's trains to a timetable and lists the ones it could not |
-| `corridors` | Proposes corridors, sections, run times and headways from a timetable, and can write a starter profile |
+| `corridors` | Proposes corridors, sections, run times and headways from a timetable, and can write a starter profile; `--places` takes a learned profile's signal blocks for each section's block headway (S39) |
 | `render-png` | Draws a corridor's graph to a PNG or PDF with the app's renderer, including multi-page plots (`--plot`) and learned signals on the axis (`--signals`) |
 | `replan` | Re-plans the hour ahead of a point in a recording and lists the conflicts before and after |
 | `report` | Writes the delay table as CSV, from a recording or a saved session |

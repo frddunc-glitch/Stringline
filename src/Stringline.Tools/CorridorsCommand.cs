@@ -24,18 +24,22 @@ internal static class CorridorsCommand
         var force = new Option<bool>("--force") { Description = "Overwrite the --profile file if it exists." };
         var headways = new Option<bool>("--headways") { Description = "Also list each section's headway: where it comes from, and the spacing the WTT books trains at." };
         var log = new Option<FileInfo?>("--log") { Description = "With --headways: a recording (.sslog) made with this timetable, to show the spacing trains actually ran at beside the WTT's (reported only, never applied)." };
+        var places = new Option<FileInfo?>("--places") { Description = "With --headways: a profile with learned signal places (S37) for this sim, to measure each section's block headway (S39)." };
+        var minSamples = new Option<int>("--min-samples") { Description = "With --places: samples a learned place needs to be used.", DefaultValueFactory = _ => SignallingPlaces.DefaultMinSamples };
         var verbose = new Option<bool>("--verbose") { Description = "Debug logging." };
 
         var command = new Command("corridors", "Propose train-graph corridors for a SimSig timetable, with section run times, headways and the derived axis.")
         {
-            file, top, minTrains, edges, profile, force, headways, log, verbose,
+            file, top, minTrains, edges, profile, force, headways, log, places, minSamples, verbose,
         };
 
         command.SetAction((parse, cancellationToken) => RunAsync(
             new Settings(parse.GetValue(file)!, parse.GetValue(top), parse.GetValue(minTrains), parse.GetValue(edges), parse.GetValue(profile), parse.GetValue(force), parse.GetValue(verbose))
             {
-                Headways = parse.GetValue(headways) || parse.GetValue(log) is not null,
+                Headways = parse.GetValue(headways) || parse.GetValue(log) is not null || parse.GetValue(places) is not null,
                 Log = parse.GetValue(log),
+                Places = parse.GetValue(places),
+                MinSamples = parse.GetValue(minSamples),
             },
             parse.InvocationConfiguration.Output,
             parse.InvocationConfiguration.Error,
@@ -50,6 +54,12 @@ internal static class CorridorsCommand
 
         /// <summary>A recording to measure the spacing trains actually ran at.</summary>
         public FileInfo? Log { get; init; }
+
+        /// <summary>A profile whose learned places give block headways (S39); implies <see cref="Headways"/>.</summary>
+        public FileInfo? Places { get; init; }
+
+        /// <summary>Samples a learned place needs to be used.</summary>
+        public int MinSamples { get; init; } = SignallingPlaces.DefaultMinSamples;
     }
 
     /// <returns>0 on success, 2 if the timetable cannot be read or the profile cannot be written.</returns>
@@ -69,6 +79,20 @@ internal static class CorridorsCommand
 
         WttImportResult result;
         WorkingTimetable? observed = null;
+        SignallingPlaces? learned = null;
+        if (settings.Places is { } placesFile)
+        {
+            try
+            {
+                learned = ProfileJson.Deserialize(await File.ReadAllTextAsync(placesFile.FullName, cancellationToken).ConfigureAwait(false)).Places;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ProfileFormatException)
+            {
+                await error.WriteLineAsync($"Cannot read {placesFile.FullName}: {ex.Message}").ConfigureAwait(false);
+                return 2;
+            }
+        }
+
         using (var loggerFactory = ConsoleLogging.Create(settings.Verbose))
         {
             try
@@ -99,6 +123,11 @@ internal static class CorridorsCommand
         var options = new CorridorGeneratorOptions { MaxCorridors = settings.Top, MinTrains = settings.MinTrains };
         var graph = LocationGraph.Build(tt, options.MaxSkipped);
         var candidates = CorridorGenerator.Generate(tt, graph, options);
+        if (learned is not null)
+        {
+            var blocks = BlockHeadways.Measure(candidates.Select(c => c.Corridor), UsablePlaces.Of(learned, settings.MinSamples));
+            candidates = [.. candidates.Select(c => c with { Corridor = blocks.Apply([c.Corridor], Section.StandardHeadwaySeconds)[0] })];
+        }
 
         var text = new StringWriter(CultureInfo.InvariantCulture);
         text.WriteLine($"{settings.File.Name}: sim {tt.AreaId}, {graph.Locations.Count()} locations, {graph.Edges.Count} edges ({graph.Expansions.Count} skip edges expanded).");
@@ -216,6 +245,12 @@ internal static class CorridorsCommand
             ? $"Headways (WTT: {BookedHeadway.Percentile:0}th percentile of booked spacing on a track, at least {BookedHeadway.MinPairs} pairs, used if less than the default):"
             : $"Headways (WTT and observed: {BookedHeadway.Percentile:0}th percentile of spacing on a track; observed is reported only):");
         List<string> header = ["Section", "Headway", "From", "WTT", "Pairs"];
+        var blocks = c.Sections.Any(s => s.BlockHeadwaySeconds is not null || s.Aspects is not null);
+        if (blocks)
+        {
+            header.AddRange(["Blocks", "Signals", "Aspects"]);
+        }
+
         if (seen is not null)
         {
             header.AddRange(["Observed", "Pairs", "Closest"]);
@@ -233,6 +268,11 @@ internal static class CorridorsCommand
                 Duration(s.BookedHeadwaySeconds),
                 s.BookedHeadwayPairs.ToString(CultureInfo.InvariantCulture),
             ];
+            if (blocks)
+            {
+                row.AddRange([Duration(s.BlockHeadwaySeconds), s.BlockSignals > 0 ? s.BlockSignals.ToString(CultureInfo.InvariantCulture) : "", (s.Aspects ?? s.BlockAspects)?.ToString(CultureInfo.InvariantCulture) ?? ""]);
+            }
+
             if (seen is not null)
             {
                 var o = seen.Sections[i].BookedHeadway;

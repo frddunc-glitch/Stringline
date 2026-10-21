@@ -186,7 +186,7 @@
               <DockPanel Grid.Row="2">
                 <StackPanel DockPanel.Dock="Top" Margin="0,4,0,4">
                   <TextBlock Text="Sections" FontWeight="SemiBold" />
-                  <TextBlock Style="{StaticResource Hint}" Text="Pick a layout, or type tracks as Name:Direction, e.g. Up Fast:Up, Up Slow:Up, Down:Down, Relief:Bi. Headway as m:ss: a headway you type is kept, and a blank one goes back to the WTT's or the default." />
+                  <TextBlock Style="{StaticResource Hint}" Text="Pick a layout, or type tracks as Name:Direction, e.g. Up Fast:Up, Up Slow:Up, Down:Down, Relief:Bi. Headway as m:ss: a headway you type is kept, and a blank one goes back to the signal blocks', the WTT's or the default. Aspects (2–4) set the blocks a follower needs clear; blank goes by what play shows." />
                 </StackPanel>
                 <DataGrid ItemsSource="{Binding Sections}">
                   <DataGrid.Columns>
@@ -209,6 +209,13 @@
                       <DataGridTextColumn.CellStyle>
                         <Style TargetType="DataGridCell">
                           <Setter Property="ToolTip" Value="{Binding HeadwayTip}" />
+                        </Style>
+                      </DataGridTextColumn.CellStyle>
+                    </DataGridTextColumn>
+<DataGridTextColumn Header="Aspects" Binding="{Binding Aspects}" Width="60">
+                      <DataGridTextColumn.CellStyle>
+                        <Style TargetType="DataGridCell">
+                          <Setter Property="ToolTip" Value="{Binding AspectsTip}" />
                         </Style>
                       </DataGridTextColumn.CellStyle>
                     </DataGridTextColumn>

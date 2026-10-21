@@ -29,6 +29,14 @@ public sealed record ForecastSection(
     int MinRunUpSeconds,
     HeadwaySource HeadwaySource = HeadwaySource.Default)
 {
+    /// <summary>The placed signals in the section for Down runs, in order (S39): checked between the ends, and its block headways.</summary>
+    public IReadOnlyList<BlockSignal> DownSignals { get; init; } = [];
+
+    /// <summary>The placed signals in the section for Up runs, in order (S39).</summary>
+    public IReadOnlyList<BlockSignal> UpSignals { get; init; } = [];
+
+    public IReadOnlyList<BlockSignal> SignalsFor(bool down) => down ? DownSignals : UpSignals;
+
     public int TracksFor(bool down) => down ? DownTracks : UpTracks;
 
     public int MinRunFor(bool down) => down ? MinRunDownSeconds : MinRunUpSeconds;
@@ -88,6 +96,20 @@ public sealed class ForecastNetwork
         return new ForecastNetwork(_corridors, _sections, Priorities, _graph) { Places = places };
     }
 
+    /// <summary>The network with each section's placed signals each way (S39), checked between its ends.</summary>
+    public ForecastNetwork WithBlocks(BlockHeadways blocks)
+    {
+        ArgumentNullException.ThrowIfNull(blocks);
+        var sections = new Dictionary<LocationPair, ForecastSection>(_sections.Count);
+        foreach (var (pair, section) in _sections)
+        {
+            var found = blocks.Find(section.From, section.To);
+            sections[pair] = section with { DownSignals = found?.SignalsFrom(section.From) ?? [], UpSignals = found?.SignalsFrom(section.To) ?? [] };
+        }
+
+        return new ForecastNetwork(_corridors, sections, Priorities, _graph) { Places = Places };
+    }
+
     /// <summary>
     /// The network of these corridors. With a timetable, the tracks each way are widened to what its trains use at
     /// once; <paramref name="priorities"/> are category priorities (from the profile's category styles).
@@ -127,7 +149,9 @@ public sealed class ForecastNetwork
 
     /// <summary>
     /// The network of a profile's corridors, widened for the timetable, with its category styles' priorities and its
-    /// learned places that have <paramref name="minSamples"/> samples (S38).
+    /// learned places that have <paramref name="minSamples"/> samples (S38), and the signal blocks they measure: each
+    /// section's block headway (S39, <see cref="BlockHeadways"/>, <see cref="StringlineProfile.WithBlockHeadways(int)"/>)
+    /// and its placed signals.
     /// </summary>
     public static ForecastNetwork For(StringlineProfile profile, WorkingTimetable? timetable, int minSamples = SignallingPlaces.DefaultMinSamples)
     {
@@ -138,8 +162,14 @@ public sealed class ForecastNetwork
             priorities.TryAdd(style.CategoryId, style.Priority);
         }
 
-        var network = Build(profile.Corridors, timetable, priorities);
-        return profile.Places.Count == 0 ? network : network.WithPlaces(UsablePlaces.Of(profile.Places, minSamples));
+        if (profile.Places.Count == 0)
+        {
+            return Build(profile.Corridors, timetable, priorities);
+        }
+
+        var places = UsablePlaces.Of(profile.Places, minSamples);
+        var blocks = BlockHeadways.Measure(profile.Corridors, places);
+        return Build(profile.WithBlockHeadways(blocks).Corridors, timetable, priorities).WithPlaces(places).WithBlocks(blocks);
     }
 
     /// <summary>The section between two adjacent corridor locations, in either order, if any.</summary>

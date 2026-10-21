@@ -93,6 +93,34 @@ public sealed class SignalPlacesTests : IDisposable
     }
 
     [Fact]
+    public async Task Learned_blocks_give_headways_in_the_editor_and_aspects_can_be_set_by_hand()
+    {
+        await using var app = new TestApp(root: _root.FullName);
+        var vm = await ReplayToEnd(app);
+        await app.Ui.WaitUntil(() => vm.LoadedTimetable!.Profile.Corridors.SelectMany(c => c.Sections).Any(s => s.HeadwaySource == Network.HeadwaySource.Blocks), "a block headway learned", seconds: 30);
+
+        await app.Ui.Run(() => Edit(app, e =>
+        {
+            var section = e.Sections.First(s => s.HeadwaySource == "Blocks");
+            section.HeadwayTip.Should().StartWith("From the signal blocks learned from play").And.Contain("-aspect");
+            section.Aspects.Should().BeEmpty("learned, not set by hand");
+            section.AspectsTip.Should().StartWith("Learned: ");
+            var learned = section.Headway;
+
+            section.Aspects = "3";
+            e.Error.Should().BeNull();
+            section.Aspects.Should().Be("3");
+            section.AspectsTip.Should().StartWith("Set by hand: 3-aspect");
+            section.HeadwaySource.Should().Be("Blocks");
+            section.Aspects = "";
+            section.Headway.Should().Be(learned, "back to what play showed");
+            section.Aspects = "7";
+            e.Error.Should().Contain("Aspects must be 2, 3 or 4");
+            e.CancelCommand.Execute(null);
+        }));
+    }
+
+    [Fact]
     public async Task Reviewing_a_session_already_learned_from_learns_nothing_new()
     {
         string file;
@@ -100,6 +128,7 @@ public sealed class SignalPlacesTests : IDisposable
         await using (var first = new TestApp(root: _root.FullName))
         {
             var vm = await ReplayToEnd(first);
+            await first.Ui.WaitUntil(() => vm.Snapshot.Timetable is not null, "the plan's snapshot");
             var train = await first.Ui.Run(() => vm.Snapshot.Timetable!.Trains[0].Id);
             (await (await first.Ui.Run(() => vm.ExecuteAsync(new Planning.CancelTrain(train))))).Applied.Should().BeTrue();
             await first.Ui.WaitUntil(() => vm.SessionPath is not null && Places(vm).Signals.Count > 0, "the session file and the learned places", seconds: 30);

@@ -54,7 +54,7 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
         _dialogs = dialogs;
         _apply = apply;
         _applied = profile;
-        Draft = profile;
+        Draft = profile.WithBlockHeadways(minSamples);
         NeedsSimId = needsSimId;
         SimId = needsSimId ? suggestedSimId ?? string.Empty : profile.AreaId;
         _generated = CorridorGenerator.Generate(timetable);
@@ -459,7 +459,7 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
     {
         var titleChanged = next.Name != Draft.Name || next.AreaId != Draft.AreaId;
         var headwayChanged = next.DefaultHeadwaySeconds != Draft.DefaultHeadwaySeconds;
-        Draft = next;
+        Draft = next.WithBlockHeadways(MinSamples); // places, corridors or aspects may have changed (S39)
         IsDirty = true;
         Sync();
         if (titleChanged)

@@ -53,7 +53,10 @@ public static class SignalLearning
     /// <summary>A live session, by when its session file was made (so resuming and reviewing it are the same session).</summary>
     public static string SessionId(DateTimeOffset created) => "session " + Stamp(created);
 
-    /// <summary>The profile with the session's samples pooled into its places (<see cref="SignallingPlaces.Learn"/>).</summary>
+    /// <summary>
+    /// The profile with the session's samples pooled into its places (<see cref="SignallingPlaces.Learn"/>), and its
+    /// block headways measured from them again (S39, <see cref="StringlineProfile.WithBlockHeadways(int)"/>).
+    /// </summary>
     public static LearnOutcome Apply(StringlineProfile profile, LearnedPlaces learned, string sessionId, int minSamples = SignallingPlaces.DefaultMinSamples)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -66,7 +69,7 @@ public static class SignalLearning
         }
 
         return new LearnOutcome(
-            profile.WithPlaces(places),
+            profile.WithPlaces(places).WithBlockHeadways(minSamples),
             added,
             PlaceCounts.Of(places.Signals, minSamples),
             PlaceCounts.Of(places.TrackCircuits, minSamples),

@@ -169,6 +169,8 @@ internal sealed class SectionRow(ProfileEditorViewModel editor, string corridorI
     private string _headway = string.Empty;
     private string _headwaySource = string.Empty;
     private string _headwayTip = string.Empty;
+    private string _aspects = string.Empty;
+    private string _aspectsTip = string.Empty;
     private string _minRun = string.Empty;
 
     public int Index { get; } = index;
@@ -202,7 +204,7 @@ internal sealed class SectionRow(ProfileEditorViewModel editor, string corridorI
             TrackLayouts.TryParse(value, out var tracks, out var error) ? tracks : throw new ProfileEditException(error!)));
     }
 
-    /// <summary>The headway as <c>m:ss</c>. Typing one sets it by hand; clearing it goes back to the WTT's or the default.</summary>
+    /// <summary>The headway as <c>m:ss</c>. Typing one sets it by hand; clearing it goes back to the blocks', the WTT's or the default.</summary>
     public string Headway
     {
         get => _headway;
@@ -210,8 +212,22 @@ internal sealed class SectionRow(ProfileEditorViewModel editor, string corridorI
             corridorId, Index, string.IsNullOrWhiteSpace(value) ? null : ProfileEditorText.ParseDuration(value, "headway")));
     }
 
-    /// <summary>Where the headway comes from: "Hand", "WTT" or "Default" (#7).</summary>
+    /// <summary>Where the headway comes from: "Hand", "Blocks", "WTT" or "Default" (#7, S39).</summary>
     public string HeadwaySource => _headwaySource;
+
+    /// <summary>
+    /// The signalling's aspects (2–4) set by hand (S39), for the block headway; blank goes by what play has shown
+    /// (<see cref="AspectsTip"/>).
+    /// </summary>
+    public string Aspects
+    {
+        get => _aspects;
+        set => Edit(value?.Trim() ?? string.Empty, _aspects, nameof(Aspects), p => p.WithAspects(
+            corridorId, Index, string.IsNullOrWhiteSpace(value) ? null : ProfileEditorText.ParseCount(value, "aspects"), Editor.MinSamples));
+    }
+
+    /// <summary>What play has shown of the aspects, for the column's tooltip.</summary>
+    public string AspectsTip => _aspectsTip;
 
     /// <summary>Why the section has its headway, and what the WTT books there, for the source's tooltip.</summary>
     public string HeadwayTip => _headwayTip;
@@ -229,6 +245,8 @@ internal sealed class SectionRow(ProfileEditorViewModel editor, string corridorI
         Show(ref _headway, ProfileEditorText.FormatDuration(section.DefaultHeadwaySeconds), nameof(Headway));
         Show(ref _headwaySource, HeadwaySources.Name(section.HeadwaySource), nameof(HeadwaySource));
         Show(ref _headwayTip, ProfileEditorText.HeadwayTip(section, profile), nameof(HeadwayTip));
+        Show(ref _aspects, section.Aspects?.ToString(CultureInfo.CurrentCulture) ?? string.Empty, nameof(Aspects));
+        Show(ref _aspectsTip, ProfileEditorText.AspectsTip(section), nameof(AspectsTip));
         var runs = section.Samples == 1 ? "1 run" : $"{section.Samples} runs";
         Show(ref _minRun, $"{ProfileEditorText.FormatDuration(section.MinRunSeconds)} ({runs})", nameof(MinRun));
         if (IsSingleLine != section.IsSingleLine)
@@ -364,12 +382,26 @@ internal static class ProfileEditorText
             ? string.Create(CultureInfo.InvariantCulture, $"The WTT books trains here {FormatDuration(b)} apart ({BookedHeadway.Percentile:0}th percentile of {section.BookedHeadwayPairs} pairs).")
             : string.Create(CultureInfo.InvariantCulture, $"Too few trains follow each other here in the WTT to tell ({section.BookedHeadwayPairs} pairs; {BookedHeadway.MinPairs} needed).");
         var fallback = profile.DefaultHeadwaySeconds is { } own ? $"the profile's default, {FormatDuration(own)}" : $"the global default, {FormatDuration(profile.GlobalHeadwaySeconds)}";
+        var blocks = section.BlockHeadwaySeconds is { } k
+            ? string.Create(CultureInfo.InvariantCulture, $"The signal blocks need {FormatDuration(k)} ({section.BlockSignals} placed {(section.BlockSignals == 1 ? "signal" : "signals")} timed, {section.BlockAspects}-aspect). ")
+            : string.Empty;
         return section.HeadwaySource switch
         {
-            Network.HeadwaySource.Hand => $"Set by hand: clear it to go back to the WTT's or the default. {booked}",
+            Network.HeadwaySource.Hand => $"Set by hand: clear it to go back to the blocks', the WTT's or the default. {blocks}{booked}",
+            Network.HeadwaySource.Blocks => string.Create(CultureInfo.InvariantCulture, $"From the signal blocks learned from play: the time a train takes to clear the blocks a follower needs clear to run on green, and the overlap, at the slowest of its {section.BlockSignals} placed {(section.BlockSignals == 1 ? "signal" : "signals")} timed here ({section.BlockAspects}-aspect). {booked}"),
             Network.HeadwaySource.Wtt => $"From the WTT, being less than {fallback}. {booked}",
             _ => section.BookedHeadwaySeconds is null ? $"{Capital(fallback)}. {booked}" : $"{Capital(fallback)}: the WTT books trains here no closer. {booked}",
         };
+    }
+
+    /// <summary>What play has shown of a section's aspects, e.g. "Learned: 4-aspect (a double yellow was seen on the corridor)".</summary>
+    public static string AspectsTip(Section section)
+    {
+        ArgumentNullException.ThrowIfNull(section);
+        var learned = section.BlockAspects is { } a && section.Aspects is null
+            ? string.Create(CultureInfo.InvariantCulture, $"Learned: {a}-aspect{(a >= 4 ? " (a double yellow was seen on the corridor, or none was reported)" : " (no double yellow was seen on the corridor)")}.")
+            : section.Aspects is { } own ? string.Create(CultureInfo.InvariantCulture, $"Set by hand: {own}-aspect. Clear it to go by what play shows.") : "No placed signals are timed here yet.";
+        return $"{learned} A follower needs one block more than the aspects less two clear ahead, and the overlap, to run on green: three for four-aspect, two for three-aspect.";
     }
 
     private static string Capital(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];

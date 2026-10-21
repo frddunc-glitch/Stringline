@@ -69,6 +69,12 @@ public sealed record Conflict(string Id, ConflictKind Kind, TrainId A, TrainId? 
     /// <summary>Where <see cref="HeadwaySeconds"/> comes from, when it is set.</summary>
     public HeadwaySource? HeadwaySource { get; init; }
 
+    /// <summary>
+    /// The placed signal between the section's ends where a headway conflict is worst (S39): a train starting or stopping
+    /// at an end passes it at another share of its run, so a train running through catches it there. Null at the ends.
+    /// </summary>
+    public string? Signal { get; init; }
+
     /// <summary>The block's ID, for a disruption conflict.</summary>
     public string? DisruptionId { get; init; }
 
@@ -84,6 +90,7 @@ public sealed record Conflict(string Id, ConflictKind Kind, TrainId A, TrainId? 
     /// <summary>A one-line description, e.g. "2S01 too close behind 1F01".</summary>
     public string Summary => Kind switch
     {
+        ConflictKind.Headway when Signal is { } signal => $"{HeadcodeA} catches {Other} at {signal}",
         ConflictKind.Headway => $"{HeadcodeA} too close behind {Other}",
         ConflictKind.Overtake => $"{HeadcodeA} catches up {Other}",
         ConflictKind.SingleLine => $"{HeadcodeA} meets {Other} on the single line",

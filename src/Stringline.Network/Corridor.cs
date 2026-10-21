@@ -128,7 +128,7 @@ public sealed record CorridorLocation(
 /// <param name="MinRunDownSeconds">Fastest booked time from <see cref="From"/> to <see cref="To"/>, if any train is timed that way.</param>
 /// <param name="MinRunUpSeconds">Fastest booked time from <see cref="To"/> to <see cref="From"/>, if any train is timed that way.</param>
 /// <param name="DefaultHeadwaySeconds">
-/// The headway used here: set by hand, from the WTT, or the default, as <see cref="HeadwaySource"/> says (see
+/// The headway used here: set by hand, from the signal blocks, from the WTT, or the default, as <see cref="HeadwaySource"/> says (see
 /// <see cref="ResolveHeadway"/>). The name is kept from profiles made before S27.
 /// </param>
 /// <param name="Samples">How many timed runs over the section the minimums come from.</param>
@@ -164,6 +164,29 @@ public sealed record Section(
     [JsonIgnore]
     public bool IsSingleLine => Tracks.Count == 1 && Tracks[0].Direction == TrackDirection.BiDirectional;
 
+    /// <summary>
+    /// The signalling's aspects here, set by hand in the profile (3 or 4; S39), or null to go by what play has shown
+    /// (<see cref="BlockAspects"/>). A follower needs one block more than the aspects less two clear ahead of it, plus
+    /// the overlap, to run on green.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Aspects { get; init; }
+
+    /// <summary>
+    /// The headway measured from the learned signal blocks (S39, <c>BlockHeadways</c>), or null if too few signals are
+    /// placed here. Used ahead of the WTT's and the default (<see cref="ResolveHeadway"/>); measured.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BlockHeadwaySeconds { get; init; }
+
+    /// <summary>How many placed signals <see cref="BlockHeadwaySeconds"/> was measured at; measured.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int BlockSignals { get; init; }
+
+    /// <summary>The aspects <see cref="BlockHeadwaySeconds"/> was measured with: <see cref="Aspects"/>, else learned; measured.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BlockAspects { get; init; }
+
     /// <summary>The minimum run time in this direction, falling back to <see cref="MinRunSeconds"/>.</summary>
     public int MinRunFor(TrackDirection direction) => direction switch
     {
@@ -174,11 +197,12 @@ public sealed record Section(
 
     /// <summary>
     /// The section with its headway worked out (<c>06-…md</c> §3), in order of preference: the one set by hand; the
-    /// WTT's, if it is less than <paramref name="fallbackSeconds"/>; else <paramref name="fallbackSeconds"/> (the
-    /// profile's default headway, or the global one).
+    /// signal blocks' (S39), above or below the default; the WTT's, if it is less than <paramref name="fallbackSeconds"/>;
+    /// else <paramref name="fallbackSeconds"/> (the profile's default headway, or the global one).
     /// </summary>
     public Section ResolveHeadway(int fallbackSeconds) =>
         HeadwaySource == HeadwaySource.Hand ? this
+        : BlockHeadwaySeconds is { } blocks ? this with { DefaultHeadwaySeconds = blocks, HeadwaySource = HeadwaySource.Blocks }
         : BookedHeadwaySeconds is { } booked && booked < fallbackSeconds ? this with { DefaultHeadwaySeconds = booked, HeadwaySource = HeadwaySource.Wtt }
         : this with { DefaultHeadwaySeconds = fallbackSeconds, HeadwaySource = HeadwaySource.Default };
 

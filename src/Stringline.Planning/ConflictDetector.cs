@@ -1,5 +1,6 @@
 using Stringline.Core;
 using Stringline.Core.Timetables;
+using Stringline.Network;
 
 namespace Stringline.Planning;
 
@@ -203,6 +204,7 @@ public static class ConflictDetector
                 }
 
                 var booked = Booked(t, run.From, run.To);
+                var kind = SectionWindow.KindOf(t.Points, run.From, run.To);
                 foreach (var step in route)
                 {
                     if (!bySection.TryGetValue(step.Section.Id, out var list))
@@ -210,7 +212,7 @@ public static class ConflictDetector
                         bySection[step.Section.Id] = list = [];
                     }
 
-                    list.Add(new Passage(t, run, SectionWindow.Of(step, run.Depart, run.Arrive - run.Depart, booked), step.Section));
+                    list.Add(new Passage(t, run, SectionWindow.Of(step, run.Depart, run.Arrive - run.Depart, booked, kind), step.Section));
                 }
             }
         }
@@ -244,8 +246,9 @@ public static class ConflictDetector
                             Start = new SimTime(Math.Min(x.Window.Enter, l.Window.Enter)),
                             End = new SimTime(Math.Max(x.Window.Exit, l.Window.Exit)),
                             PointIndex = x.Run.From,
-                            HeadwaySeconds = x.Section.HeadwaySeconds,
+                            HeadwaySeconds = blocker.Signal is { HeadwaySeconds: { } own } && x.Section.HeadwaySource == HeadwaySource.Blocks ? own : x.Section.HeadwaySeconds,
                             HeadwaySource = x.Section.HeadwaySource,
+                            Signal = blocker.Signal?.Id,
                         };
                         raw.Add((conflict, x));
                     }
@@ -278,6 +281,7 @@ public static class ConflictDetector
                         SeveritySeconds = Math.Max(current.SeveritySeconds, c.SeveritySeconds),
                         HeadwaySeconds = c.SeveritySeconds > current.SeveritySeconds ? c.HeadwaySeconds : current.HeadwaySeconds,
                         HeadwaySource = c.SeveritySeconds > current.SeveritySeconds ? c.HeadwaySource : current.HeadwaySource,
+                        Signal = c.SeveritySeconds > current.SeveritySeconds ? c.Signal : current.Signal,
                         Start = c.Start < current.Start ? c.Start : current.Start,
                         End = c.End > current.End ? c.End : current.End,
                     };

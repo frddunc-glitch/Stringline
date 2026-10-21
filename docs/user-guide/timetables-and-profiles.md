@@ -64,7 +64,8 @@ The profile is saved in `%APPDATA%\Stringline\profiles` under the sim's name, an
   - **Minor** makes a location a faint row on the graph, with no grid line and its name only when zoomed in. Use it for a timing location the corridor left out, so trains reporting it show their progress there. A location added between two others splits their section, and both halves keep its tracks (a single line stays single);
   - **Tracks**, as a layout or as text;
   - **Headway**, as minutes and seconds (`2:30`);
-  - **From**: where the headway comes from (Hand, WTT or Default). Its tooltip explains it;
+  - **From**: where the headway comes from (Hand, Blocks, WTT or Default). Its tooltip explains it;
+  - **Aspects**: the signalling's aspects (2, 3 or 4) for the section's block headway. Leave it blank to go by what play shows; its tooltip says what that is;
   - the WTT's least running time through the section.
 
 **Signals**
@@ -89,8 +90,9 @@ In the **Tools** menu:
 A **headway** is the least time between two trains following each other on the same track through a section. Stringline uses it to find [headway conflicts](conflicts-and-suggestions.md#kinds-of-conflict), and in the forecast to hold a train behind the one in front. SimSig itself works by signalling, not headways, so Stringline works one out for each section, in this order:
 
 1. **Hand:** a headway you typed in the profile editor. It is always kept.
-2. **WTT:** what the timetable books. Where the WTT books trains closer together than the default (5% of the booked pairs of trains closer, from at least ten pairs), its figure is used. A WTT figure is used only to make a headway shorter, never longer.
-3. **Default:** the profile's default headway if it has one, else the one in [Tools ▸ Options ▸ Forecast and conflicts](settings.md#forecast-and-conflicts) (3 minutes unless you change it).
+2. **Blocks:** worked out from the [signals learned from play](signal-places.md): the time a train takes to clear the signal sections ahead that a train behind needs clear to run on green (three on four-aspect lines, two on three-aspect), and the overlap past the last signal, at the slowest signal in the section. It needs placed signals in a row, so it appears once Stringline has seen enough trains there. A line is taken as four-aspect once a train has passed a double yellow anywhere on its corridor; set **Aspects** in the editor if that is wrong. It may be longer or shorter than the default.
+3. **WTT:** what the timetable books. Where the WTT books trains closer together than the default (5% of the booked pairs of trains closer, from at least ten pairs), its figure is used. A WTT figure is used only to make a headway shorter, never longer.
+4. **Default:** the profile's default headway if it has one, else the one in [Tools ▸ Options ▸ Forecast and conflicts](settings.md#forecast-and-conflicts) (3 minutes unless you change it).
 
 Clear a headway in the editor to go back to the automatic one. The conflict tooltip says which headway it used and where it came from.
 

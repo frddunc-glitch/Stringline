@@ -816,6 +816,7 @@ public static class Forecaster
             var plannedRun = Math.Max(0, plannedArrive - plannedDepart);
             var route = _interaction ? _request.Network.Route(points[c].Location, points[n].Location) : null;
             var booked = route is null ? null : Booked(r, c, n);
+            var kind = SectionWindow.KindOf(points, c, n);
 
             var d = r.Departure;
             int run = plannedRun;
@@ -837,7 +838,7 @@ public static class Forecaster
 
                 if (moved == d && route is not null)
                 {
-                    moved = d + Hold(route, r, booked, d, run);
+                    moved = d + Hold(route, r, booked, d, run, kind);
                 }
 
                 if (moved == d)
@@ -861,7 +862,7 @@ public static class Forecaster
 
             if (route is not null)
             {
-                Reserve(route, r, booked, d, arrive - d);
+                Reserve(route, r, booked, d, arrive - d, kind);
             }
 
             if (d != r.Departure)
@@ -1018,7 +1019,7 @@ public static class Forecaster
         }
 
         /// <summary>How much later than <paramref name="d"/> the run must leave to clear every train already through its sections.</summary>
-        private int Hold(RouteStep[] route, Runner r, (int Depart, int Arrive)? booked, int d, int run)
+        private int Hold(RouteStep[] route, Runner r, (int Depart, int Arrive)? booked, int d, int run, RunKind kind)
         {
             var total = 0;
             for (var settle = 0; settle < MaxSettle; settle++)
@@ -1026,7 +1027,7 @@ public static class Forecaster
                 var shift = 0;
                 foreach (var step in route)
                 {
-                    var x = SectionWindow.Of(step, d + total, run, booked);
+                    var x = SectionWindow.Of(step, d + total, run, booked, kind);
                     shift = Math.Max(shift, OccupancyOf(step.Section).Shift(x, r, out _));
                 }
 
@@ -1041,11 +1042,11 @@ public static class Forecaster
             return total;
         }
 
-        private void Reserve(RouteStep[] route, Runner r, (int Depart, int Arrive)? booked, int d, int run)
+        private void Reserve(RouteStep[] route, Runner r, (int Depart, int Arrive)? booked, int d, int run, RunKind kind)
         {
             foreach (var step in route)
             {
-                var x = SectionWindow.Of(step, d, run, booked);
+                var x = SectionWindow.Of(step, d, run, booked, kind);
                 var occupancy = OccupancyOf(step.Section);
                 occupancy.Shift(x, r, out var track);
                 occupancy.Add(new SectionReservation<Runner>(r, x, track));

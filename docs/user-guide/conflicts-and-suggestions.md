@@ -33,7 +33,9 @@ Very small conflicts are not shown: the least is set in [Tools ▸ Options ▸ F
 
 ## Headways
 
-A headway conflict's tooltip names the headway it used and where it came from, for example "2 min 30 s (from the WTT)". Each section's headway is set by hand in the profile, taken from the WTT where it books trains closer, or the default. See [Headways](timetables-and-profiles.md#headways).
+A headway conflict's tooltip names the headway it used and where it came from, for example "2 min 30 s (from the WTT)". Each section's headway is set by hand in the profile, worked out from the learned signals, taken from the WTT where it books trains closer, or the default. See [Headways](timetables-and-profiles.md#headways).
+
+Where signals are placed, Stringline also checks trains at each signal between timing points. A train starting from a stand is slow at first, so a train running through behind it can catch it up before the next timing point even when they are far enough apart at both. The conflict names the signal: "1F01 catches 2S01 at S457", and its tooltip says "1 min 45 s (from signal blocks, at S457)".
 
 If headway conflicts appear where the sim's signalling clearly lets trains run closer, set that section's headway by hand in the profile editor, or lower the default.
 

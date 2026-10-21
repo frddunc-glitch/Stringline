@@ -174,6 +174,47 @@ public sealed class SignalLearnerTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Block_and_clearing_times_and_aspects_passed_are_learned()
+    {
+        var places = Places(Fed([.. RunWithTrack("1", 0), .. RunWithTrack("2", 10), .. RunWithTrack("3", 20)]).Learn(Tt));
+
+        places.Signals[0].NextSeconds.Should().BeEquivalentTo(new Dictionary<string, int> { ["S2"] = 35 }, "S1 at 40 s, S2 at 75 s");
+        places.Signals[0].Aspects.Should().Equal(Core.Live.SignalAspects.Green);
+        places.TrackCircuits.Single().ClearSeconds.Should().Be(25, "occupied at 50 s, clear at 75 s");
+    }
+
+    [Fact]
+    public void The_signal_next_past_a_timing_location_is_learned_with_its_time_unless_the_train_stopped_there()
+    {
+        var tt = Of(Train("1A01", points: [Call("A", null, "06:00"), Pass("B", "06:10"), Pass("C", "06:20")]));
+        IEnumerable<GatewayEvent> Through(string uid, int start, bool stops)
+        {
+            var t0 = SimTime.FromClock(6, start);
+            yield return Location(uid, "1A01", "A", t0.ToString());
+            yield return Signal(uid, "1A01", "S1", (t0 + 40).ToString());
+            yield return Signal(uid, "1A01", "S2", (t0 + 75).ToString());
+            if (stops)
+            {
+                yield return Location(uid, "1A01", "B", (t0 + 100).ToString(), TrainLocationAction.Arrive);
+                yield return Location(uid, "1A01", "B", (t0 + 160).ToString(), TrainLocationAction.Depart);
+            }
+            else
+            {
+                yield return Location(uid, "1A01", "B", (t0 + 100).ToString());
+            }
+
+            yield return Signal(uid, "1A01", "S3", (t0 + 200).ToString());
+            yield return Location(uid, "1A01", "C", (t0 + 240).ToString());
+        }
+
+        var learner = Fed([.. Through("1", 0, stops: false), .. Through("2", 10, stops: true)]);
+        var s2 = Places(learner.Learn(tt)).Signals.Where(p => p.Id == "S2").ToList();
+        s2.Single(p => p.Run == RunKind.Through).Next.Should().BeEquivalentTo(new Dictionary<string, int> { ["S3"] = 1 }, "S3 is past B");
+        s2.Single(p => p.Run == RunKind.Through).NextSeconds.Should().BeEquivalentTo(new Dictionary<string, int> { ["S3"] = 125 });
+        s2.Single(p => p.Run == RunKind.Stopping).NextSeconds.Should().BeNull("the train stopped at B on the way");
+    }
+
+    [Fact]
     public void A_track_circuit_with_two_trains_near_is_skipped()
     {
         // Uids 1 and 2 pass S1 together (as on two parallel lines); the occupation could be either.

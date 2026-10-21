@@ -14,24 +14,32 @@ public enum HeadwaySource
 
     /// <summary>Set by hand in the profile editor; kept when the corridor is refreshed or regenerated.</summary>
     Hand,
+
+    /// <summary>
+    /// Measured from the signal blocks learned from play (S39, #19; <c>BlockHeadways</c>): above or below the default,
+    /// and used ahead of the WTT's.
+    /// </summary>
+    Blocks,
 }
 
 /// <summary>Wording for <see cref="HeadwaySource"/>.</summary>
 public static class HeadwaySources
 {
-    /// <summary>"set by hand", "from the WTT", "default": for "Headway: 2 min (from the WTT)".</summary>
+    /// <summary>"set by hand", "from the WTT", "from signal blocks", "default": for "Headway: 2 min (from the WTT)".</summary>
     public static string Describe(HeadwaySource source) => source switch
     {
         HeadwaySource.Hand => "set by hand",
         HeadwaySource.Wtt => "from the WTT",
+        HeadwaySource.Blocks => "from signal blocks",
         _ => "default",
     };
 
-    /// <summary>"Hand", "WTT", "Default": for a column.</summary>
+    /// <summary>"Hand", "WTT", "Blocks", "Default": for a column.</summary>
     public static string Name(HeadwaySource source) => source switch
     {
         HeadwaySource.Hand => "Hand",
         HeadwaySource.Wtt => "WTT",
+        HeadwaySource.Blocks => "Blocks",
         _ => "Default",
     };
 }

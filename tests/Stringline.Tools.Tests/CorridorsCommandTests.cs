@@ -99,6 +99,23 @@ public sealed class CorridorsCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Lists_block_headways_from_a_profile_with_learned_places()
+    {
+        var learned = Path.Combine(_dir, "learned.json");
+        var root = new RootCommand { LearnCommand.Create() };
+        (await root.Parse(["learn", "--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo1x), "--out", learned]).InvokeAsync(new InvocationConfiguration { Output = new StringWriter(), Error = new StringWriter() })).Should().Be(0);
+
+        var (exit, lines, error) = await Run(Waterloo, "--top", "1", "--places", learned);
+
+        exit.Should().Be(0, error);
+        lines.Should().Contain(l => l.StartsWith("Section ", StringComparison.Ordinal) && l.EndsWith("Blocks  Signals  Aspects", StringComparison.Ordinal), "--places implies --headways");
+        lines.Should().Contain("INTJN–VAUX       1:32     Blocks  2:31  1612   1:32    4        3", "the short 1× recording shows no double yellow");
+        lines.Should().Contain("WLOO–INTJN       2:54     WTT     2:54  1610", "too few signals timed near Waterloo in it");
+        lines.Should().ContainMatch("2  INTJN *1:32     Blocks");
+        (await Run(Waterloo, "--top", "1", "--places", Path.Combine(_dir, "missing.json"))).Exit.Should().Be(2);
+    }
+
+    [Fact]
     public async Task Reports_an_unreadable_recording()
     {
         var (exit, _, error) = await Run(Llangollen, "--log", Path.Combine(_dir, "none.sslog"));

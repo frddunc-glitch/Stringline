@@ -149,8 +149,9 @@ public static class GraphConflicts
         };
         if (c.HeadwaySeconds is { } headway)
         {
-            // #7: the headway the clash was judged by, and where it came from.
-            lines.Add(new HoverLine("Headway", $"{PlanText.Duration(headway)} ({HeadwaySources.Describe(c.HeadwaySource ?? HeadwaySource.Default)})"));
+            // #7: the headway the clash was judged by, and where it came from; S39: the signal between the ends it is judged at.
+            var at = c.Signal is { } signal ? $", at {signal}" : string.Empty;
+            lines.Add(new HoverLine("Headway", $"{PlanText.Duration(headway)} ({HeadwaySources.Describe(c.HeadwaySource ?? HeadwaySource.Default)}{at})"));
         }
 
         lines.Add(new HoverLine("Resolve", $"delay {c.HeadcodeA} {PlanText.Duration(c.SeveritySeconds)}"));

@@ -132,7 +132,15 @@ public static class SignalAspects
 {
     public const int Red = 0;
 
+    public const int Shunt = 1;
+
     public const int SingleYellow = 2;
+
+    public const int FlashingYellow = 3;
+
+    public const int DoubleYellow = 4;
+
+    public const int FlashingDoubleYellow = 5;
 
     public const int Green = 6;
 

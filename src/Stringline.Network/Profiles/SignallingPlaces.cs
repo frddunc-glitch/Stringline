@@ -96,12 +96,29 @@ public sealed record SignallingPlace
     public string? Signal { get; init; }
 
     /// <summary>
-    /// A signal: the signals trains passed next after it on the way to <see cref="To"/>, with how many (S38), so the
-    /// signal ahead of a train is the one on its line, not a parallel one at a similar place. Null if none was seen
-    /// (the last signal before <see cref="To"/>, or a place learned before S38).
+    /// A signal: the signals trains passed next after it, with how many (S38), so the signal ahead of a train is the one
+    /// on its line, not a parallel one at a similar place. For the last signal before <see cref="To"/>, the first after
+    /// it (S39, so block headways follow the line across a timing location). Null if none was seen (a place learned
+    /// before S38).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, int>? Next { get; init; }
+
+    /// <summary>
+    /// A signal: the aspects trains passed it at (<c>aspPass</c>: 0 red, 2 single yellow, 4 double yellow, 6 green), in
+    /// order (S39). A double yellow says the line is four-aspect (<see cref="BlockHeadways"/>). Null if none was reported
+    /// (a track circuit or berth, or a signal learned before S39).
+    /// </summary>
+    public IReadOnlyList<int>? Aspects { get; init; }
+
+    /// <summary>
+    /// A signal: the fastest seconds trains took from passing it to passing each signal in <see cref="Next"/> (S39), the
+    /// block's running time unchecked, from runs not checked on the way. Null if none was timed.
+    /// </summary>
+    public IReadOnlyDictionary<string, int>? NextSeconds { get; init; }
+
+    /// <summary>A track circuit: the fastest seconds from its occupation to its clearing behind the train (S39); null if none was timed.</summary>
+    public int? ClearSeconds { get; init; }
 
     /// <summary>The latest samples (0–1), oldest first.</summary>
     public IReadOnlyList<double> Samples { get; init; } = [];
@@ -149,8 +166,14 @@ public sealed record LearnedSession(string Id, SimTime UpTo);
 /// <param name="At">When the run it came from reached <paramref name="To"/>.</param>
 /// <param name="End">A track circuit's end, if it cleared before the train reached <paramref name="To"/>.</param>
 /// <param name="Line">The line or platform reported at <paramref name="From"/>, if any.</param>
-/// <param name="Next">A signal: the signal the train passed next before reaching <paramref name="To"/>, if any (S38).</param>
-public sealed record PlaceSample(SignallingKind Kind, string Id, Tiploc From, Tiploc To, double Fraction, SimTime At, double? End = null, string? Line = null, string? Signal = null, RunKind Run = RunKind.Through, string? Next = null);
+/// <param name="Next">
+/// A signal: the signal the train passed next (S38), before reaching <paramref name="To"/>, or for the last signal
+/// before it, the first after it (S39); null if none.
+/// </param>
+/// <param name="Aspect">A signal: the aspect it was passed at (<c>aspPass</c>), if reported (S39).</param>
+/// <param name="NextSeconds">A signal: the seconds from passing it to passing <paramref name="Next"/>, a block's running time (S39).</param>
+/// <param name="ClearSeconds">A track circuit: the seconds from its occupation to its clearing behind the train (S39).</param>
+public sealed record PlaceSample(SignallingKind Kind, string Id, Tiploc From, Tiploc To, double Fraction, SimTime At, double? End = null, string? Line = null, string? Signal = null, RunKind Run = RunKind.Through, string? Next = null, int? Aspect = null, int? NextSeconds = null, int? ClearSeconds = null);
 
 /// <summary>
 /// The signals, track circuits and TD berths learned for a sim (S37, #19), kept in its profile so they can be shared.
@@ -283,6 +306,9 @@ public sealed record SignallingPlaces
                     Direction = mine.Direction ?? theirs.Direction,
                     Signal = mine.Signal ?? theirs.Signal,
                     Next = Counted(mine.Next, theirs.Next?.Select(n => (n.Key, n.Value)) ?? []),
+                    Aspects = AspectsOf(mine.Aspects, theirs.Aspects ?? []),
+                    NextSeconds = Fastest(mine.NextSeconds, theirs.NextSeconds?.Select(n => (n.Key, n.Value)) ?? []),
+                    ClearSeconds = Fastest(mine.ClearSeconds, theirs.ClearSeconds),
                     Line = mine.Line == theirs.Line || theirs.Line is null ? mine.Line : mine.Line is null && !mine.MixedLines ? theirs.Line : null,
                     MixedLines = mine.MixedLines || theirs.MixedLines || (mine.Line is not null && theirs.Line is not null && mine.Line != theirs.Line),
                     LastLearned = Later(mine.LastLearned, theirs.LastLearned),
@@ -482,6 +508,9 @@ public sealed record SignallingPlaces
             LastSession = sessionId,
             Signal = samples.LastOrDefault(s => s.Signal is not null)?.Signal ?? place.Signal,
             Next = Counted(place.Next, samples.Where(s => s.Next is not null).Select(s => (s.Next!.Trim(), 1))),
+            Aspects = AspectsOf(place.Aspects, samples.Where(s => s.Aspect is not null).Select(s => s.Aspect!.Value)),
+            NextSeconds = Fastest(place.NextSeconds, samples.Where(s => s.Next is not null && s.NextSeconds is > 0).Select(s => (s.Next!.Trim(), s.NextSeconds!.Value))),
+            ClearSeconds = samples.Where(s => s.ClearSeconds is > 0).Aggregate(place.ClearSeconds, (a, s) => Fastest(a, s.ClearSeconds)),
             Line = line,
             MixedLines = mixed,
         };
@@ -504,6 +533,26 @@ public sealed record SignallingPlaces
         }
 
         return result.Count == 0 ? null : result;
+    }
+
+    /// <summary>The fastest time for each signal; null if there are none.</summary>
+    private static Dictionary<string, int>? Fastest(IReadOnlyDictionary<string, int>? times, IEnumerable<(string Id, int Seconds)> more)
+    {
+        var result = times is null ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase) : new Dictionary<string, int>(times, StringComparer.OrdinalIgnoreCase);
+        foreach (var (id, seconds) in more)
+        {
+            result[id] = result.TryGetValue(id, out var known) ? Math.Min(known, seconds) : seconds;
+        }
+
+        return result.Count == 0 ? null : result;
+    }
+
+    private static int? Fastest(int? a, int? b) => a is null ? b : b is null ? a : Math.Min(a.Value, b.Value);
+
+    private static List<int>? AspectsOf(IEnumerable<int>? a, IEnumerable<int> b)
+    {
+        var all = (a ?? []).Concat(b).Where(x => x >= 0).Distinct().Order().ToList();
+        return all.Count == 0 ? null : all;
     }
 
     private static List<double> Keep(IEnumerable<double> samples) => samples.Select(s => Math.Round(Math.Clamp(s, 0, 1), 4)).TakeLast(MaxKeptSamples).ToList();

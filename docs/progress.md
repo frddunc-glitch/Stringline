@@ -2100,6 +2100,43 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - 36. ~~**Standing threshold.**~~ Sooner: 1.2 × the minimum run + 10 s (Fred, S38).
 - 37. ~~**Ticks.**~~ Keep Down on the names' edge and Up on the far edge (Fred, S38).
 
+## 2026-10-21 — S39: Block headways and conflicts at signals (#19, part 3)
+
+### Done
+- **Fred's choices** (asked during the session): a follower needs **enough blocks for green** clear ahead of the signal it passes (three for four-aspect, two for three-aspect) plus the **overlap**, timed by the **learned track circuit** past the last signal (else 15 s); a section takes the **largest** of its signals' figures; on the failure recording, **blocks win** over the WTT's figure (5S06/5O05 goes, below); aspects are learned **by corridor** (a double yellow anywhere on it is four-aspect).
+- **Found:** the plan's "at the section's minimum run speed" did not hold. The WTT's minimum runs are both faster and slower than SimSig's trains run (WESTLON → CJWIN booked at least 30 s, run in 83 s; CJML → QTRDBAT 2:15, run in 74 s), and block headways from learned shares × those minimums lost both failure clashes. The block times are therefore **observed**: the learner's fastest unchecked signal-to-signal times (`03-…md` §6, `06-…md` §3).
+- **Learner** (`SignalLearner`, `SignallingPlaces`; `04-…md` §5): a signal's `next` now includes the first signal past `to` (so blocks follow a line across a timing location); new `nextSeconds` (fastest time to each next signal, not across a stop), `aspects` (aspects passed at) and, for track circuits, `clearSeconds` (fastest occupation to clearing); all pooled on import (fastest, union). A profile learned before S39 gets them as it learns from new play.
+- **Block headways** (`Stringline.Network.Profiles.BlockHeadways`, `SectionBlocks`, `BlockSignal`; `StringlineProfile.WithBlockHeadways`; `06-…md` §3): signals placed on a corridor are put in order and in sections; each one's headway is the sum of the *n* + 1 blocks ahead along its line plus the overlap; a section's is the largest, at least 1 min. `Section` gains `Aspects` (hand-set), `BlockHeadwaySeconds`, `BlockSignals`, `BlockAspects`, and `HeadwaySource.Blocks`; the order is hand > blocks > WTT (only tightening) > default. Measured again when learning (`SignalLearning.Apply`), in `ForecastNetwork.For`, and on every profile editor change; `ProfileEdits.WithAspects`.
+- **Catching up at signals** (`SectionOccupancy`, `ForecastSection.DownSignals`/`UpSignals`, `SectionWindow.Kind`): the same-direction check at each placed signal between a section's ends, with each train's time at the signal by its kind of run (starting, stopping, through); the signal's own block headway when the section's is from the blocks. Shared by the knock-on pass, the conflict detector, the suggester and the optimiser. A conflict there names it: `Conflict.Signal`, "1F01 catches 2S01 at S1", hover "1 min 45 s (from signal blocks, at S457)".
+- **App:** the profile editor's sections get an **Aspects** column (blank = learned; its tooltip says what play showed), and the From column shows **Blocks** with a tooltip on the signals and aspects; the editor measures block headways with the Options samples threshold.
+- **Tools:** `corridors --places p.json [--min-samples n]` (implies `--headways`): Blocks, Signals and Aspects columns.
+- **Waterloo** (places from the 4 h recording): four-aspect throughout; block headways 1:43–2:18 on the main line, 1:25–2:07 on the Windsor lines; EARLSFD–WIMB and PUTNEY–BARNES keep the WTT's and the default. Headway and overtake conflicts at the end, against the WTT's headways with the same places in the forecast: **4× 12 → 8** (none new), **failure 2 → 1** (2O05/2U07 kept; 5S06/5O05, 108 s apart where the blocks need 1:25, dropped as Fred accepted), **1× 0 → 0**. No catching-up conflict at a signal was found on the recordings; `replan` on the 4× recording with the learned profile: 17 → 16, none at a signal, so the optimiser's model needs no per-signal constraints yet.
+- **Docs:** `03-…md` §6 (block times, aspects seen), `04-…md` §5, `06-…md` §3 (order, block headways, catching up at signals), the plan's "Built in S39", `CLAUDE.md`, `docs/developer.md`; the guide's profiles (Headways, the Aspects column) and conflicts pages. `build/guide-shots.ps1` not re-run (its free-sim profile has no learned places).
+- **Tests:** Network +7 (`BlockHeadwaysTests`: four- and three-aspect, hand-set and unknown aspects and `WithAspects`, the headway order, the floor, learning and pooling the timings and aspects, JSON round trip); Planning +10 (`ConflictScenarioTests` 3: catching up at a signal and not before, the knock-on hold, two trains running through; `SignalLearnerTests` 2; `BlockHeadwayFixtureTests` 5: Waterloo's sections, the three recordings before and after, Llangollen's single line unchanged); Graph (the hover names the signal); Tools +1 (`--places`); App +1 (the editor's Blocks source and Aspects column). `SignalPlacesTests.Reviewing_a_session_already_learned_from_learns_nothing_new` now waits for the plan's snapshot after the replay: it failed every time here, on HEAD too, reading `Snapshot.Timetable` before the engine republished.
+- Totals: 1 795 (Core 280, Architecture 18, Gateway 211, Timetable 168, Network 199, Planning 297, Persistence 13, Graph 300, Optimiser 22, Tools 81, App 206). Green on Windows (Debug); the solution and the portable solution build with `-warnaserror`. Linux not run.
+- **Benchmarks** (`--quick`, Release): pan 9.5–11.3 ms, update 11.6–11.9 ms, zoom 42.6–44.8 ms; forecast independent 17 ms, both passes 34–52 ms, conflicts 12–18 ms; the 4 h recording half way with places 43–49 ms (S38: 33 ms). The machine was noisy: the benchmark without places, which S39 does not touch, ranged 34–52 ms between runs, and turning the signal check off made no clear difference.
+
+### Decisions
+- **Block times are observed** (the fastest unchecked signal-to-signal time), not learned shares × the WTT's minimum run: the minimums are wrong both ways at Waterloo. Signal shares still place signals in order and in sections.
+- **The overlap is the first track circuit past the last signal** clearing behind the leader (it is entered as the train passes the signal, `03-…md` §6); 15 s where none is timed.
+- **A block headway is at least 1 min** (as the WTT's), and only a signal whose blocks ahead are all placed and timed gives one.
+- **Between the ends only a starting or stopping train is checked at signals:** two trains running through pass them at the same shares of their windows, and no signal needs more than its section, so the ends already decide. This keeps the knock-on pass's cost where it was.
+- **Aspects with nothing seen are four-aspect** (a profile learned before S39); only a corridor showing aspects but no double yellow is three-aspect.
+
+### Next
+- S32 (WTT rules), then S33 (holds at signals).
+- 👤 Fred: a Kings Cross recording with `--td` at 1×–4×, and more play there (still 2 signals used); block headways need placed signals in a row with their block times.
+
+### Known issues
+- A profile learned before S39 has no block times, and learning never counts the same session twice, so its sections keep the WTT's headways until new sessions are learned (or its places are reset and learned again from the recordings).
+- The optimiser's model checks section ends only; a clash at a signal reaches it through its checking rounds (none found on Waterloo).
+- The forecast-with-places benchmark read 43–49 ms against S38's 33 ms on a noisy machine; worth re-measuring on a quiet one.
+- A section's block headway takes the largest signal, so one long or badly timed block (from few trains) can set it; the editor's tooltip shows how many signals it came from.
+
+### Questions for Fred
+- 38. **Floor and overlap.** Are a 1 min least block headway and 15 s for an untimed overlap right?
+- 39. **Old profiles.** Should a profile learned before S39 be offered a "learn again" from its sessions' recordings (forgetting their sessions), so it gets block times without new play?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

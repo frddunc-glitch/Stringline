@@ -470,6 +470,7 @@ Takes over S33's "find out first".
   - Llangollen's single line unchanged;
   - `ProfileJson` round trip of the aspect count.
   - Update `06-…md` §3.
+- *Built in S39:* Fred chose (asked during the session) **enough blocks for green** (three for four-aspect, two for three-aspect) plus the overlap, the overlap timed by the **learned track circuit** past the last signal (else 15 s), the **largest** signal's figure as the section's, and **aspects by corridor** (a double yellow anywhere on it). The WTT's minimum runs were both faster and slower than SimSig's trains run, so the block times are the learner's fastest observed signal-to-signal times (`nextSeconds`, and `clearSeconds` for track circuits), not shares of the minimum. On Waterloo (places from the 4 h recording) headway conflicts at the end fall 12 → 8 on the 4× recording, none new; on the failure recording 2 → 1, keeping 2O05/2U07 and losing 5S06/5O05 (108 s apart where the blocks need 1:25), which Fred accepted. Catching up is checked at placed signals by each train's kind of run; none was found on Waterloo, so the optimiser needs no per-signal constraints.
 
 ## Phase 4d — Timetable editor (GitHub issue #20)
 Fred raised #20 on 2026-10-20: SimSig's editor and outside tools handle timetable editing poorly. Stringline can be a better editor, with SimSig still validating and running the result, because the gateway cannot send a timetable to SimSig. The design is in `08-timetable-editor.md`. In the design review (2026-10-21) Fred chose:

@@ -348,4 +348,68 @@ public sealed class ConflictScenarioTests
         var b = Detect(WorkingPlan.FromTimetable(timetable), LoopNetwork(timetable), "08:05", live: live);
         a.All.Should().Equal(b.All);
     }
+
+    // ---- Catching up at a signal (S39) ----
+
+    /// <summary>
+    /// 2S01 starts from A at 08:00 and 1F01 runs through A at 08:05, both through B ten minutes later: 5 min apart at
+    /// both ends. Starting from a stand, 2S01 is slow at first and passes S1 8/10 of the way (08:08); 1F01, running
+    /// through, passes it 2/10 of the way (08:07).
+    /// </summary>
+    private static (WorkingTimetable Timetable, ForecastNetwork Plain, ForecastNetwork Signals) CatchingUp()
+    {
+        var timetable = Of(
+            Train("1F01", points: [Pass("A", "08:05"), Pass("B", "08:15")]),
+            Train("2S01", points: [Call("A", null, "08:00"), Pass("B", "08:10")]));
+        var plain = ForecastNetwork.Build([CatchingLine], timetable);
+        return (timetable, plain, WithS1(plain));
+    }
+
+    private static readonly Corridor CatchingLine = Line("main", 180, single: false, "A", "B");
+
+    /// <summary>The network with S1 placed between A and B: 0.2 of the way running through, 0.8 starting.</summary>
+    private static ForecastNetwork WithS1(ForecastNetwork network)
+    {
+        var places = Network.Profiles.SignallingPlaces.Empty
+            .SetByHand(Network.Profiles.SignallingKind.Signal, "S1", new Tiploc("A"), new Tiploc("B"), 0.2)
+            .SetByHand(Network.Profiles.SignallingKind.Signal, "S1", new Tiploc("A"), new Tiploc("B"), 0.8, Network.Profiles.RunKind.Starting);
+        return network.WithBlocks(Network.Profiles.BlockHeadways.Measure([CatchingLine], Network.Profiles.UsablePlaces.Of(places)));
+    }
+
+    [Fact]
+    public void Headway_a_train_running_through_catches_one_starting_at_a_signal_between_the_ends()
+    {
+        var (timetable, plain, signals) = CatchingUp();
+        Detect(WorkingPlan.FromTimetable(timetable), plain).Count.Should().Be(0, "the ends are 5 min apart");
+
+        // At S1 1F01 must pass 3 min after 2S01 (08:11), and would pass at 08:07: 4 min too close.
+        var c = Detect(WorkingPlan.FromTimetable(timetable), signals).All.Should().ContainSingle().Subject;
+        c.Kind.Should().Be(ConflictKind.Headway);
+        (c.HeadcodeA, c.HeadcodeB).Should().Be((new Headcode("1F01"), (Headcode?)new Headcode("2S01")));
+        (c.Where, c.To).Should().Be((new Tiploc("A"), (Tiploc?)new Tiploc("B")));
+        c.Signal.Should().Be("S1");
+        c.SeveritySeconds.Should().Be(240);
+        c.Summary.Should().Be("1F01 catches 2S01 at S1");
+        (c.HeadwaySeconds, c.HeadwaySource).Should().Be((180, (HeadwaySource?)HeadwaySource.Default), "no block headway is measured, so the section's applies");
+    }
+
+    [Fact]
+    public void The_knock_on_pass_holds_a_train_that_would_catch_another_at_a_signal()
+    {
+        var (timetable, plain, signals) = CatchingUp();
+        var plan = WorkingPlan.FromTimetable(timetable);
+        Run(plan, network: plain).Find(Fast)!.KnockOnSeconds.Should().Be(0);
+        Run(plan, network: signals).Find(Fast)!.KnockOnSeconds.Should().Be(240);
+    }
+
+    [Fact]
+    public void Two_trains_running_through_are_checked_only_at_the_ends()
+    {
+        var timetable = Of(
+            Train("1F01", points: [Pass("A", "08:05"), Pass("B", "08:15")]),
+            Train("2S01", points: [Pass("A", "08:00"), Pass("B", "08:10")]));
+        var network = WithS1(ForecastNetwork.Build([CatchingLine], timetable));
+        network.FindSection(new Tiploc("A"), new Tiploc("B"))!.DownSignals.Should().ContainSingle();
+        Detect(WorkingPlan.FromTimetable(timetable), network).Count.Should().Be(0, "both pass S1 at the same share of their runs");
+    }
 }

@@ -163,6 +163,11 @@ public sealed class GraphConflictTests
         info.Lines.Select(l => l.Label).Should().ContainInOrder("When", "Headway", "Resolve");
         GraphConflicts.Describe(hand, scene).ValueOf("Headway").Should().Be("2 min (set by hand)");
         GraphConflicts.Describe(scene.Conflicts[0], scene).ValueOf("Headway").Should().BeNull("a platform has no headway");
+
+        // S39: a train caught up at a signal between the ends, judged by the signal blocks.
+        var signal = GraphConflicts.Describe(new GraphConflict(Headway with { HeadwaySeconds = 105, HeadwaySource = HeadwaySource.Blocks, Signal = "S457" }, TwoThirds, Third, TwoThirds), scene);
+        signal.Heading.Should().Be("Headway: 2B02 catches 1A01 at S457");
+        signal.ValueOf("Headway").Should().Be("1 min 45 s (from signal blocks, at S457)");
     }
 
     [Fact]
