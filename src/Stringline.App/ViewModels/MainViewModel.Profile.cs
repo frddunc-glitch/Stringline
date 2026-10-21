@@ -322,7 +322,7 @@ internal sealed partial class MainViewModel
 
         profile = WithGlobalHeadway(profile);
         _timetable = loaded with { Profile = profile, NeedsSimId = false, ProfileNote = null };
-        _engine.SetForecast(ForecastNetwork.For(profile, loaded.Timetable));
+        _engine.SetForecast(ForecastNetwork.For(profile, loaded.Timetable, _settings.LearnMinSamples));
         RebuildCorridorTabs(profile);
         Trains.Update(Snapshot, profile);
         UpdateTitle();

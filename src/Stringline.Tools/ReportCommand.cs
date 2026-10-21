@@ -168,6 +168,7 @@ internal static class ReportCommand
             EntryDelays = state.EntryDelays,
             Network = network,
             Options = options,
+            LineSide = state.LineSide,
         });
         var clock = state.Clock.HasTime ? SimClockReading.None with { HasTime = true, LastReported = now ?? state.Clock.LastReported, AreaId = state.Clock.AreaId } : SimClockReading.None;
         var snapshot = new PlanSnapshot(1, tt, live, clock, state.Summarise(), state.Version, state.SessionStart, plan, Forecast: forecast);

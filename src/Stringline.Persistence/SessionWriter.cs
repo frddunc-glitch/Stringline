@@ -46,6 +46,7 @@ public sealed partial class SessionWriter : IDisposable
     private List<PlanStep> _steps = [];
     private bool _metaDirty;
     private bool _hasSteps;
+    private bool _hasMovement;
     private SimTime? _lastClock;
     private bool _failing;
     private bool _disposed;
@@ -157,7 +158,8 @@ public sealed partial class SessionWriter : IDisposable
                     }
                 }
 
-                kept |= e is ClockEvent or TrainLocationEvent or TrainDelayEvent or TdStepEvent or TimetableSummaryEvent;
+                kept |= PlanningEngine.IsKept(e);
+                _hasMovement |= PlanningEngine.IsKept(e) && e is not SignallingStateEvent;
             }
 
             if (kept && !_disposed)
@@ -270,7 +272,8 @@ public sealed partial class SessionWriter : IDisposable
             SessionDatabase? db;
             lock (_lock)
             {
-                if (_disposed || (_frames.Count == 0 && _steps.Count == 0 && !_metaDirty) || (_db is null && _frames.Count == 0 && !_hasSteps))
+                // Signal and track circuit states alone (the snapshot at connect) make no file: there is nothing to resume yet.
+                if (_disposed || (_frames.Count == 0 && _steps.Count == 0 && !_metaDirty) || (_db is null && (_frames.Count == 0 || !_hasMovement) && !_hasSteps))
                 {
                     return;
                 }

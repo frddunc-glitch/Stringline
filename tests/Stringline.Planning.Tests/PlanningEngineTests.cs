@@ -67,6 +67,62 @@ public sealed class PlanningEngineTests
     }
 
     [Fact]
+    public async Task Publishes_signals_and_track_circuits_and_keeps_them_through_a_rebuild()
+    {
+        var engine = Engine();
+        engine.SetTimetable(Timetable());
+        SignallingStateEvent Track(string id, bool clear) =>
+            new(T0, "test", SignallingObjectType.Track, "track", id, SimTime.Parse("06:01"), new Dictionary<string, string> { ["clear"] = clear ? "True" : "False" });
+
+        var snapshot = await RunUntil(engine, s => s.LineSide.Track("T1") is { Clear: false }, () =>
+        {
+            Array.ForEach(Departures, engine.Post);
+            engine.Post(Track("T1", false));
+        });
+        snapshot.LineSide.Track("T1")!.Value.LastOccupied.Should().Be(SimTime.Parse("06:01"));
+
+        // A new timetable rebuilds the live state from the events kept: the line side comes back too.
+        snapshot = await RunUntil(engine, s => s.Timetable?.Trains.Count == 1 && s.LineSide.Track("T1") is not null, () => engine.SetTimetable(Of(Train("1A01", points: [Call("WLOO", null, "06:00"), Pass("VAUX", "06:04")]))));
+        snapshot.LineSide.Track("T1")!.Value.Clear.Should().BeFalse();
+
+        PlanningEngine.IsKept(Track("T1", true)).Should().BeTrue();
+        PlanningEngine.IsKept(new SignallingStateEvent(T0, "test", SignallingObjectType.Route, "route", "R1A", null, new Dictionary<string, string>())).Should().BeFalse("only signals and track circuits are kept");
+    }
+
+    [Fact]
+    public async Task A_change_only_to_the_line_side_publishes_at_most_once_a_second()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.UnixEpoch);
+        var engine = new PlanningEngine(new PlanningEngineOptions { PublishInterval = TimeSpan.Zero, LineSideInterval = TimeSpan.FromSeconds(1) }, time);
+        engine.SetTimetable(Timetable());
+        SignallingStateEvent Signal(int aspect) =>
+            new(T0, "test", SignallingObjectType.Signal, "signal", "S1", SimTime.Parse("06:01"), new Dictionary<string, string> { ["aspect"] = aspect.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+
+        await RunUntil(engine, s => s.Trains.Count == 2, () => Array.ForEach(Departures, engine.Post));
+        var published = 0;
+        engine.SnapshotPublished += (_, _) => published++;
+
+        await RunUntil(engine, s => s.LineSide.Signal("S1") is not null, () =>
+        {
+            time.Advance(TimeSpan.FromSeconds(2));
+            engine.Post(Signal(0));
+        });
+        var after = published;
+        using var cts = new CancellationTokenSource();
+        var loop = engine.RunAsync(cts.Token);
+        engine.Post(Signal(6));
+        engine.Post(Signal(2));
+        await Task.Delay(200);
+        published.Should().Be(after, "less than a second since the last publish");
+        time.Advance(TimeSpan.FromSeconds(1));
+        await Task.Delay(200);
+        await cts.CancelAsync();
+        await loop;
+        published.Should().Be(after + 1, "both changes go into one snapshot a second on");
+        engine.Current.LineSide.Signal("S1")!.Value.Aspect.Should().Be(2);
+    }
+
+    [Fact]
     public async Task Publishes_the_live_trains_and_clock()
     {
         var engine = Engine();

@@ -1,4 +1,5 @@
 using SkiaSharp;
+using Stringline.Network;
 using Stringline.Network.Profiles;
 using Stringline.Planning;
 
@@ -188,6 +189,7 @@ public sealed class SkiaGraphRenderer : IDisposable
         DrawPast(canvas, scene, viewport, plot);
         DrawTimeGrid(canvas, ticks, viewport, plot);
         DrawLocationLines(canvas, scene, viewport, plot);
+        DrawSignalRows(canvas, scene, viewport, plot);
         foreach (var disruption in scene.Disruptions)
         {
             DrawDisruption(canvas, disruption, viewport, plot);
@@ -214,6 +216,7 @@ public sealed class SkiaGraphRenderer : IDisposable
         canvas.Restore();
 
         canvas.DrawRect(plot, Stroke(Theme.Border, 1));
+        DrawSignalTicks(canvas, scene, viewport, plot);
         DrawTimeLabels(canvas, ticks, viewport, plot);
         DrawLocationLabels(canvas, scene, viewport, plot);
         DrawTitle(canvas, scene);
@@ -290,6 +293,56 @@ public sealed class SkiaGraphRenderer : IDisposable
         {
             var paint = location.IsMinor ? MinorLine() : location.IsStation ? Stroke(Theme.StationLine, 1) : Stroke(Theme.LocationLine, 1);
             LineAtAxis(canvas, viewport, plot, Crisp(viewport.AxisToPixel(location.Axis)), paint);
+        }
+    }
+
+    /// <summary>Placed signals as rows (S38): a faint dotted line across the plot for each, as a minor row.</summary>
+    private void DrawSignalRows(SKCanvas canvas, GraphScene scene, GraphViewport viewport, SKRect plot)
+    {
+        if (scene.SignalDisplay != SignalDisplay.Rows)
+        {
+            return;
+        }
+
+        var paint = MinorLine();
+        foreach (var signal in scene.Signals)
+        {
+            LineAtAxis(canvas, viewport, plot, Crisp(viewport.AxisToPixel(signal.Axis)), paint);
+        }
+    }
+
+    /// <summary>
+    /// Placed signals as ticks (S38): a short line in from the plot's edge for each, Down signals on the location
+    /// labels' side and Up signals on the other, so a signal's direction reads at a glance.
+    /// </summary>
+    private void DrawSignalTicks(SKCanvas canvas, GraphScene scene, GraphViewport viewport, SKRect plot)
+    {
+        if (scene.SignalDisplay != SignalDisplay.Ticks)
+        {
+            return;
+        }
+
+        var paint = Stroke(Theme.SignalTick, 1);
+        var (low, high) = viewport.IsVertical ? (plot.Left, plot.Right) : (plot.Top, plot.Bottom);
+        foreach (var signal in scene.Signals)
+        {
+            var at = Crisp(viewport.AxisToPixel(signal.Axis));
+            if (at < low || at > high)
+            {
+                continue;
+            }
+
+            var down = signal.Direction == TrackDirection.Down;
+            if (viewport.IsVertical)
+            {
+                var y = down ? plot.Top : plot.Bottom;
+                canvas.DrawLine(at, y, at, down ? y + GraphSignals.TickLength : y - GraphSignals.TickLength, paint);
+            }
+            else
+            {
+                var x = down ? plot.Left : plot.Right;
+                canvas.DrawLine(x, at, down ? x + GraphSignals.TickLength : x - GraphSignals.TickLength, at, paint);
+            }
         }
     }
 

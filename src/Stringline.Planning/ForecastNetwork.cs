@@ -78,6 +78,16 @@ public sealed class ForecastNetwork
 
     public IReadOnlyCollection<ForecastSection> Sections => _sections.Values;
 
+    /// <summary>The profile's usable learned places (S38): the forecast re-anchors a train at each one it passes.</summary>
+    public UsablePlaces Places { get; private init; } = UsablePlaces.Empty;
+
+    /// <summary>The network with these learned places.</summary>
+    public ForecastNetwork WithPlaces(UsablePlaces places)
+    {
+        ArgumentNullException.ThrowIfNull(places);
+        return new ForecastNetwork(_corridors, _sections, Priorities, _graph) { Places = places };
+    }
+
     /// <summary>
     /// The network of these corridors. With a timetable, the tracks each way are widened to what its trains use at
     /// once; <paramref name="priorities"/> are category priorities (from the profile's category styles).
@@ -115,8 +125,11 @@ public sealed class ForecastNetwork
         return timetable is null || sections.Count == 0 ? network : network.WidenedFor(timetable);
     }
 
-    /// <summary>The network of a profile's corridors, widened for the timetable, with its category styles' priorities.</summary>
-    public static ForecastNetwork For(StringlineProfile profile, WorkingTimetable? timetable)
+    /// <summary>
+    /// The network of a profile's corridors, widened for the timetable, with its category styles' priorities and its
+    /// learned places that have <paramref name="minSamples"/> samples (S38).
+    /// </summary>
+    public static ForecastNetwork For(StringlineProfile profile, WorkingTimetable? timetable, int minSamples = SignallingPlaces.DefaultMinSamples)
     {
         ArgumentNullException.ThrowIfNull(profile);
         var priorities = new Dictionary<string, int>();
@@ -125,7 +138,8 @@ public sealed class ForecastNetwork
             priorities.TryAdd(style.CategoryId, style.Priority);
         }
 
-        return Build(profile.Corridors, timetable, priorities);
+        var network = Build(profile.Corridors, timetable, priorities);
+        return profile.Places.Count == 0 ? network : network.WithPlaces(UsablePlaces.Of(profile.Places, minSamples));
     }
 
     /// <summary>The section between two adjacent corridor locations, in either order, if any.</summary>
@@ -225,7 +239,7 @@ public sealed class ForecastNetwork
             widened[pair] = section with { DownTracks = down, UpTracks = up };
         }
 
-        return new ForecastNetwork(_corridors, widened, Priorities, _graph);
+        return new ForecastNetwork(_corridors, widened, Priorities, _graph) { Places = Places };
     }
 
     /// <summary>

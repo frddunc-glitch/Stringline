@@ -257,9 +257,11 @@ public sealed class SignalLearner
         {
             foreach (var run in _runs.Values.SelectMany(r => r).Where(r => r.Usable))
             {
-                foreach (var s in run.Between)
+                for (var i = 0; i < run.Between.Count; i++)
                 {
-                    _samples.Add(new PlaceSample(SignallingKind.Signal, s.Location.Code, run.A.Location, run.B.Location, run.FractionAt(s.Time), run.B.Time, Line: LineOf(run), Run: run.Kind));
+                    var s = run.Between[i];
+                    var next = i + 1 < run.Between.Count ? run.Between[i + 1].Location.Code : null; // the signal ahead of it on this train's line (S38)
+                    _samples.Add(new PlaceSample(SignallingKind.Signal, s.Location.Code, run.A.Location, run.B.Location, run.FractionAt(s.Time), run.B.Time, Line: LineOf(run), Run: run.Kind, Next: next));
                 }
             }
         }

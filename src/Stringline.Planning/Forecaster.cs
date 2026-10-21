@@ -2,6 +2,7 @@ using Stringline.Core;
 using Stringline.Core.Events;
 using Stringline.Core.Live;
 using Stringline.Core.Timetables;
+using Stringline.Network.Profiles;
 
 namespace Stringline.Planning;
 
@@ -25,6 +26,9 @@ public sealed record ForecastRequest(WorkingPlan Plan)
 
     public ForecastOptions Options { get; init; } = new();
 
+    /// <summary>The signals, track circuits and berths as last reported (S38), for progress between timing points and held trains.</summary>
+    public LineSideState LineSide { get; init; } = LineSideState.Empty;
+
     /// <summary>A request for the plan, live trains and last reported clock of a snapshot.</summary>
     public static ForecastRequest For(PlanSnapshot snapshot, ForecastNetwork? network = null, ForecastOptions? options = null)
     {
@@ -37,6 +41,7 @@ public sealed record ForecastRequest(WorkingPlan Plan)
             EntryDelays = snapshot.EntryDelays,
             Network = network ?? ForecastNetwork.Empty,
             Options = options ?? new ForecastOptions(),
+            LineSide = snapshot.LineSide,
         };
     }
 }
@@ -68,6 +73,18 @@ public static class Forecaster
 {
     /// <summary>Most re-checks of one run before it is accepted as it stands (a guard; real runs settle in two or three).</summary>
     private const int MaxSettle = 64;
+
+    /// <summary>A train is overdue at a red signal this long past 1.5 times its minimum run there (S38).</summary>
+    private const int StandingGraceSeconds = 15;
+
+    /// <summary>A train's pace in a run is measured once it has covered this share of it (S38)…</summary>
+    private const double MinPaceShare = 0.15;
+
+    /// <summary>…and this many seconds of minimum run.</summary>
+    private const int MinPaceSeconds = 20;
+
+    /// <summary>A train last reported this long ago may still be near where it was (as the learner has it).</summary>
+    private const int NearSeconds = 120;
 
     public static Forecast Run(ForecastRequest request)
     {
@@ -128,6 +145,9 @@ public static class Forecaster
         private readonly PriorityQueue<Runner, (int Time, int Priority, int Order)> _queue = new();
         private readonly Dictionary<int, SectionOccupancy<Runner>> _occupancy = [];
         private readonly Dictionary<Headcode, Runner> _firstNotStarted = [];
+        private Dictionary<Tiploc, int>? _near;
+        private Dictionary<Headcode, int>? _headcodes;
+        private Dictionary<string, List<(string Berth, SimTime Since)>>? _berths;
 
         public Pass(ForecastRequest request, StartingTrains starting, bool interaction)
         {
@@ -225,13 +245,18 @@ public static class Forecaster
             var last = -1;
             var lastWasArrival = false;
             var unbooked = new List<ActualEvent>();
+            ActualEvent? lastTiming = null;
+            var sinceTiming = new List<ActualEvent>(); // signal passes since the last timing location (S38)
             foreach (var actual in live.ActualsOf(working))
             {
                 if (!actual.AtTimingPoint)
                 {
+                    sinceTiming.Add(actual);
                     continue;
                 }
 
+                lastTiming = actual;
+                sinceTiming.Clear();
                 var k = -1;
                 for (var j = cursor; j < points.Count; j++)
                 {
@@ -306,6 +331,17 @@ public static class Forecaster
                 }
             }
 
+            if (_options.SignalPlaces && !lastPoint && lastTiming is not null && NextTimed(points, last) is { } then)
+            {
+                // From the timing location last reported: the booked point, or an unbooked one on the way (S36).
+                double? fromShare = lastTiming.Location == points[last].Location ? 0
+                    : r.Anchor is { } a && a.Location == lastTiming.Location && a.Time == lastTiming.Time ? a.Share : null;
+                if (fromShare is { } s0)
+                {
+                    PlaceProgress(r, live, last, then, lastTiming, s0, sinceTiming);
+                }
+            }
+
             if (lastWasArrival)
             {
                 if (lastPoint)
@@ -357,12 +393,15 @@ public static class Forecaster
         /// or in the timetable's location graph. Its share of the run comes from the corridor's section minimums, else
         /// the minimum runs either side of it; null if neither says where it is.
         /// </summary>
-        private ProgressAnchor? AnchorAt(Runner r, int c, int n, ActualEvent report)
+        private ProgressAnchor? AnchorAt(Runner r, int c, int n, ActualEvent report) =>
+            UnbookedShare(r, c, n, report.Location) is { } share ? new ProgressAnchor(report.Location, report.Time, c, n, share) : null;
+
+        /// <summary>An unbooked timing location's share of the run from <paramref name="c"/> to <paramref name="n"/>, as <see cref="AnchorAt"/> finds it; null if not on the way.</summary>
+        private double? UnbookedShare(Runner r, int c, int n, Tiploc via)
         {
             var points = r.Points;
             var mins = _plan.MinRuns;
             var network = _request.Network;
-            var via = report.Location;
             for (var j = c; j < n; j++)
             {
                 var (a, b) = (points[j].Location, points[j + 1].Location);
@@ -384,7 +423,7 @@ public static class Forecaster
                 double step = mins.Along(points, j, j + 1) ?? 0;
                 double after = j + 1 < n ? mins.Along(points, j + 1, n) ?? 0 : 0;
                 var whole = before + step + after;
-                return new ProgressAnchor(via, report.Time, c, n, Math.Clamp(whole > 0 ? (before + (s * step)) / whole : s, 0, 1));
+                return Math.Clamp(whole > 0 ? (before + (s * step)) / whole : s, 0, 1);
             }
 
             return null;
@@ -398,6 +437,11 @@ public static class Forecaster
         /// </summary>
         private int AnchoredRun(Runner r, ProgressAnchor anchor, int c, int n, int d, int plannedRun, int plannedArrive)
         {
+            if (anchor.Place is { } place)
+            {
+                return PlacedRun(r, anchor, place, c, n, d, plannedRun, plannedArrive);
+            }
+
             var from = anchor.Time.Seconds;
             var full = _plan.MinRuns.Along(r.Points, c, n, anchor.Time, _plan.Disruptions, plannedRun) ?? plannedRun;
             var plain = _plan.MinRuns.Along(r.Points, c, n);
@@ -407,6 +451,259 @@ public static class Forecaster
             var plannedRest = plannedRun * (1 - anchor.Share);
             var rest = (int)Math.Round(Math.Max(restMin, Math.Min(plannedRest, plannedArrive - from)));
             return Math.Max(0, from + rest - d);
+        }
+
+        // ---- Progress between timing points at learned places (S38) ----
+
+        /// <summary>
+        /// Moves a running train's anchor on to the furthest learned place it is known to have reached since its last
+        /// timing location: the last signal it passed, the track circuit it last entered, or the berth its description
+        /// last stepped into, whichever came last. Then, if the signal ahead of there shows red and the train is overdue
+        /// at it, it is standing there (<see cref="TrainForecast.Standing"/>).
+        /// </summary>
+        private void PlaceProgress(Runner r, LiveTrain live, int c, int n, ActualEvent from, double fromShare, List<ActualEvent> passes)
+        {
+            var places = _request.Network.Places;
+            if (places.IsEmpty)
+            {
+                return;
+            }
+
+            var departed = from.Action != TrainLocationAction.Pass;
+            var best = (Time: int.MinValue, Share: -1.0, Anchor: (ProgressAnchor?)null);
+            void Offer(SignallingKind kind, string id, IEnumerable<SignallingPlace> candidates, SimTime time, int? aspect = null)
+            {
+                foreach (var group in candidates.Where(p => p.From == from.Location).GroupBy(p => p.To).OrderBy(g => LocationShare(r, c, n, g.Key) ?? 2))
+                {
+                    if (LocationShare(r, c, n, group.Key) is not { } toShare || toShare <= fromShare)
+                    {
+                        continue;
+                    }
+
+                    var arrives = group.Key == r.Points[n].Location && !r.Points[n].IsPass;
+                    var place = UsablePlaces.Choose(group, SignallingPlaces.RunOf(departed, arrives))!;
+                    var share = fromShare + (place.Fraction * (toShare - fromShare));
+                    if (time.Seconds > best.Time || (time.Seconds == best.Time && share > best.Share))
+                    {
+                        var at = new AnchorPlace(kind, place.Id, from.Location, group.Key, place.Fraction, place.Run, from.Time, fromShare, aspect) { Block = kind == SignallingKind.Signal ? null : place.Signal };
+                        best = (time.Seconds, share, new ProgressAnchor(Tiploc.TryCreate(id, out var tiploc) ? tiploc : from.Location, time, c, n, Math.Clamp(share, 0, 1)) { Place = at });
+                    }
+
+                    return;
+                }
+            }
+
+            foreach (var pass in passes)
+            {
+                Offer(SignallingKind.Signal, pass.Location.Code, places.SignalFrom(pass.Location.Code, from.Location), pass.Time, pass.AspectPassed);
+            }
+
+            // A track circuit occupied since the train's last report, in the block it was last reported entering, if no
+            // other train could have done it (as the learner puts them to trains).
+            var lastReport = live.Last;
+            if (lastReport.Action != TrainLocationAction.Arrive && NearAt(lastReport.Location) <= 1)
+            {
+                foreach (var track in places.TracksAfter(lastReport.Location.Code).GroupBy(p => p.Id, StringComparer.OrdinalIgnoreCase))
+                {
+                    if (_request.LineSide.Track(track.Key) is { LastOccupied: { } occupied } && occupied >= lastReport.Time && (_now is not { } now || occupied.Seconds <= now))
+                    {
+                        Offer(SignallingKind.TrackCircuit, track.Key, track, occupied);
+                    }
+                }
+            }
+
+            // A berth its description stepped into since the last timing location, if no other train has its headcode.
+            if (HeadcodeCount(live.Headcode) == 1)
+            {
+                foreach (var (berth, since) in BerthsHolding(live.Headcode))
+                {
+                    if (since >= from.Time)
+                    {
+                        Offer(SignallingKind.Berth, berth, places.Berth(berth), since);
+                    }
+                }
+            }
+
+            if (best.Anchor is { } anchor)
+            {
+                r.Anchor = anchor;
+            }
+
+            Standing(r, c, n, from, fromShare, best.Anchor);
+        }
+
+        /// <summary>
+        /// Marks the train standing at the signal ahead of where it was last known (<paramref name="at"/>, or its last
+        /// timing location), if that signal is red and the train is overdue there: later than 1.5 times its minimum
+        /// run to the signal, plus 15 s. Red is as the sim reported it; without the TD topic, a single yellow passed at
+        /// the signal before it says so. The anchor moves to the signal, at the time it is reckoned to have got there.
+        /// </summary>
+        private void Standing(Runner r, int c, int n, ActualEvent from, double fromShare, ProgressAnchor? at)
+        {
+            if (_now is not { } now)
+            {
+                return;
+            }
+
+            var places = _request.Network.Places;
+            var share = at?.Share ?? fromShare;
+            var time = at?.Time ?? from.Time;
+            var to = at?.Place?.To ?? places.Signals.Where(p => p.From == from.Location).Select(p => p.To).Distinct()
+                .Select(t => (To: t, Share: LocationShare(r, c, n, t))).Where(t => t.Share > fromShare).OrderBy(t => t.Share).Select(t => (Tiploc?)t.To).FirstOrDefault();
+            if (to is not { } next || LocationShare(r, c, n, next) is not { } toShare)
+            {
+                return;
+            }
+
+            var departed = from.Action != TrainLocationAction.Pass;
+            var arrives = next == r.Points[n].Location && !r.Points[n].IsPass;
+            var wanted = SignallingPlaces.RunOf(departed, arrives);
+            var between = places.SignalsBetween(from.Location, next).GroupBy(p => p.Id, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => UsablePlaces.Choose(g, wanted)!, StringComparer.OrdinalIgnoreCase);
+
+            // The signal ahead on the train's own line: a berth's own signal; else the one trains passed next after the
+            // last signal it passed (or the one starting the track circuit's block); else, from the timing location,
+            // the first signal of trains that took the same line there. Parallel lines have signals at similar places.
+            var aheadId = at?.Place switch
+            {
+                { Kind: SignallingKind.Berth, Block: { } own } => own,
+                { Kind: SignallingKind.Signal } p => NextSignal(between, p.Id),
+                { Kind: SignallingKind.TrackCircuit, Block: { } block } => NextSignal(between, block),
+                _ => from.Platform.Length == 0 ? null
+                    : between.Values.Where(p => p.Line == from.Platform).MinBy(p => p.Fraction)?.Id,
+            };
+            if (aheadId is null || !between.TryGetValue(aheadId, out var signal))
+            {
+                return;
+            }
+
+            var ahead = (Place: signal, Share: fromShare + (signal.Fraction * (toShare - fromShare)));
+            if (ahead.Share <= share)
+            {
+                return;
+            }
+
+            var reported = _request.LineSide.Signal(signal.Id);
+            var red = reported is { } state ? state.IsRed && state.Since.Seconds <= now
+                : at?.Place is { Kind: SignallingKind.Signal, Aspect: SignalAspects.SingleYellow }; // a single yellow says the next was at red; no TD to say it has cleared
+            if (!red)
+            {
+                return;
+            }
+
+            var plannedRun = Math.Max(0, r.Points[n].FirstTime!.Value.Seconds - r.Points[c].LastTime!.Value.Seconds);
+            var full = _plan.MinRuns.Along(r.Points, c, n, time, _plan.Disruptions, plannedRun) ?? plannedRun;
+            var expected = (int)Math.Round(full * (ahead.Share - share));
+            if (now < time.Seconds + (1.5 * expected) + StandingGraceSeconds)
+            {
+                return;
+            }
+
+            var since = new SimTime(Math.Min(now, time.Seconds + expected));
+            var place = new AnchorPlace(SignallingKind.Signal, signal.Id, from.Location, next, signal.Fraction, signal.Run, from.Time, fromShare, SignalAspects.Red);
+            r.Anchor = new ProgressAnchor(Tiploc.TryCreate(signal.Id, out var tiploc) ? tiploc : from.Location, since, c, n, Math.Clamp(ahead.Share, 0, 1)) { Place = place };
+            r.Standing = new StandingAtSignal(signal.Id, since, from.Location, next, signal.Fraction, new SimTime(Math.Max(now, since.Seconds)), reported is not null);
+        }
+
+        /// <summary>The signal trains passed next most often after <paramref name="signal"/>, among those placed in this run; null if none is known.</summary>
+        private static string? NextSignal(Dictionary<string, SignallingPlace> between, string signal) =>
+            between.TryGetValue(signal, out var place) && place.Next is { } next
+                ? next.Where(n => between.ContainsKey(n.Key)).OrderByDescending(n => n.Value).Select(n => n.Key).FirstOrDefault()
+                : null;
+
+        /// <summary>
+        /// How far along the run from <paramref name="c"/> to <paramref name="n"/> a location is, in minimum run time:
+        /// 0 at c, a plan point's share of the minimums (else of the planned times), or an unbooked location's share as
+        /// an anchor would have it. Null if it is not on the way.
+        /// </summary>
+        private double? LocationShare(Runner r, int c, int n, Tiploc location)
+        {
+            var points = r.Points;
+            if (location == points[c].Location)
+            {
+                return 0;
+            }
+
+            for (var j = c + 1; j <= n; j++)
+            {
+                if (points[j].Location != location)
+                {
+                    continue;
+                }
+
+                if (j == n)
+                {
+                    return 1;
+                }
+
+                if (_plan.MinRuns.Along(points, c, n) is { } whole && whole > 0 && _plan.MinRuns.Along(points, c, j) is { } part)
+                {
+                    return (double)part / whole;
+                }
+
+                return points[j].FirstTime is { } t && points[c].LastTime is { } d && points[n].FirstTime is { } a && a > d
+                    ? Math.Clamp((double)(t - d) / (a - d), 0, 1)
+                    : null;
+            }
+
+            return UnbookedShare(r, c, n, location);
+        }
+
+        /// <summary>
+        /// The run from <paramref name="c"/> to <paramref name="n"/> of a train past a learned place (S38), as the time
+        /// from its departure <paramref name="d"/>: the share of the run left, at the minimum scaled by how the train
+        /// has run so far in it (no slower than <see cref="ForecastOptions.MaxPace"/>), or the planned rest if it is not
+        /// late. A train standing at a signal runs the rest from when it can move, at the minimum.
+        /// </summary>
+        private int PlacedRun(Runner r, ProgressAnchor anchor, AnchorPlace place, int c, int n, int d, int plannedRun, int plannedArrive)
+        {
+            var from = r.Standing is { } standing ? standing.Leaves.Seconds : anchor.Time.Seconds;
+            var full = _plan.MinRuns.Along(r.Points, c, n, anchor.Time, _plan.Disruptions, plannedRun) ?? plannedRun;
+            var pace = 1.0;
+            var covered = anchor.Share - place.FromShare;
+            var expected = full * covered;
+            if (r.Standing is null && covered >= MinPaceShare && expected >= MinPaceSeconds && r.ActualArrive[c] is null)
+            {
+                pace = Math.Clamp((anchor.Time - place.FromTime) / expected, 1, _options.MaxPace);
+            }
+
+            var restMin = full * (1 - anchor.Share) * pace;
+            var plannedRest = plannedRun * (1 - anchor.Share);
+            var rest = (int)Math.Round(Math.Max(restMin, Math.Min(plannedRest, plannedArrive - from)));
+            return Math.Max(0, from + rest - d);
+        }
+
+        /// <summary>Running trains whose last report was at this place and who may still be near it (for putting a track circuit to one).</summary>
+        private int NearAt(Tiploc place)
+        {
+            if (_near is null)
+            {
+                _near = [];
+                foreach (var t in _request.LiveTrains)
+                {
+                    var last = t.Last;
+                    if (last.Action != TrainLocationAction.Arrive && (_now is not { } now || last.Time.Seconds >= now - NearSeconds))
+                    {
+                        _near[last.Location] = _near.GetValueOrDefault(last.Location) + 1;
+                    }
+                }
+            }
+
+            return _near.GetValueOrDefault(place);
+        }
+
+        private int HeadcodeCount(Headcode headcode)
+        {
+            _headcodes ??= _request.LiveTrains.GroupBy(t => t.Headcode).ToDictionary(g => g.Key, g => g.Count());
+            return _headcodes.GetValueOrDefault(headcode);
+        }
+
+        /// <summary>The berths holding this headcode now, and since when.</summary>
+        private List<(string Berth, SimTime Since)> BerthsHolding(Headcode headcode)
+        {
+            _berths ??= _request.LineSide.Berths.GroupBy(b => b.Value.Description, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Select(b => (b.Key, b.Value.Since)).ToList(), StringComparer.OrdinalIgnoreCase);
+            return _berths.TryGetValue(headcode.Value, out var list) ? list : [];
         }
 
         /// <summary>A train not seen yet: if another train forms it, wait for that one; otherwise start now.</summary>
@@ -811,6 +1108,9 @@ public static class Forecaster
         /// <summary>The unbooked timing location the run on from its last booked report is forecast from (S36).</summary>
         public ProgressAnchor? Anchor { get; set; }
 
+        /// <summary>Standing at a red signal (S38).</summary>
+        public StandingAtSignal? Standing { get; set; }
+
         public NotRunningReason? NotRunning { get; set; }
 
         public bool NotSeen { get; set; }
@@ -883,6 +1183,7 @@ public static class Forecaster
                 BlockHolds = BlockHolds.Count == 0 ? [] : [.. BlockHolds],
                 NotSeen = NotSeen && Status == TrainForecastStatus.NotStarted,
                 Anchor = Status == TrainForecastStatus.Running ? Anchor : null,
+                Standing = Status == TrainForecastStatus.Running ? Standing : null,
             };
         }
 

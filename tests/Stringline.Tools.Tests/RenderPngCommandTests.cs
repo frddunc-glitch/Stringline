@@ -53,6 +53,24 @@ public sealed class RenderPngCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Draws_learned_signals_as_ticks_unless_told_otherwise()
+    {
+        var profile = Out("learned.json");
+        var root = new RootCommand { LearnCommand.Create() };
+        (await root.Parse(["learn", "--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo1x), "--out", profile]).InvokeAsync(new InvocationConfiguration { Output = new StringWriter(), Error = new StringWriter() })).Should().Be(0);
+
+        var (exit, _, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo1x), "--profile", profile, "--at", "05:30", Out("ticks.png"));
+        exit.Should().Be(0, error);
+        (exit, _, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo1x), "--profile", profile, "--at", "05:30", "--signals", "off", Out("off.png"));
+        exit.Should().Be(0, error);
+        (exit, _, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo1x), "--profile", profile, "--at", "05:30", "--signals", "rows", Out("rows.png"));
+        exit.Should().Be(0, error);
+
+        File.ReadAllBytes(Out("ticks.png")).Should().NotEqual(File.ReadAllBytes(Out("off.png")));
+        File.ReadAllBytes(Out("rows.png")).Should().NotEqual(File.ReadAllBytes(Out("ticks.png")));
+    }
+
+    [Fact]
     public async Task Draws_wtt_and_actuals_around_the_time_given()
     {
         var (exit, output, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo4x), "--corridor", "main", "--at", "07:00", "--hours", "3", Out());

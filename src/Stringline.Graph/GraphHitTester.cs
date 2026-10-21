@@ -30,6 +30,9 @@ public enum GraphTargetKind
 
     /// <summary>A location's label in the margin.</summary>
     Label,
+
+    /// <summary>A placed signal's tick or row (S38).</summary>
+    Signal,
 }
 
 /// <summary>
@@ -54,6 +57,9 @@ public sealed record GraphTarget(GraphTargetKind Kind)
 
     /// <summary>The location, for <see cref="GraphTargetKind.Label"/>.</summary>
     public GraphLocation? Location { get; init; }
+
+    /// <summary>The placed signal, for <see cref="GraphTargetKind.Signal"/>.</summary>
+    public GraphSignal? Signal { get; init; }
 }
 
 /// <summary>
@@ -169,6 +175,11 @@ public static class GraphHitTester
         if (GraphAnnotations.DisruptionAt(scene, viewport, point) is { } disruption)
         {
             return new GraphTarget(GraphTargetKind.Disruption) { Disruption = disruption };
+        }
+
+        if (GraphSignals.SignalAt(scene, viewport, point) is { } signal)
+        {
+            return new GraphTarget(GraphTargetKind.Signal) { Signal = signal };
         }
 
         return GraphLabels.LocationAt(scene, viewport, point) is { } location ? new GraphTarget(GraphTargetKind.Label) { Location = location } : null;

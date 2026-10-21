@@ -8,7 +8,9 @@ namespace Stringline.Core.Live;
 /// <param name="Platform">Platform at a station, or line at a junction; empty if none (usual on arrivals and at signals).</param>
 /// <param name="AtTimingPoint">True if <see cref="Location"/> is a timing point in the WTT; false for signals and unknown locations.</param>
 /// <param name="Working">Index into <see cref="LiveTrain.Workings"/> of the working the train was running as.</param>
-public sealed record ActualEvent(Tiploc Location, TrainLocationAction Action, SimTime Time, string Platform, bool AtTimingPoint, int Working)
+/// <param name="AspectPassed">At a signal: the aspect it showed as the train passed (<see cref="SignalAspects"/>), if given.</param>
+/// <param name="AspectApproach">At a signal: the aspect it showed as the train approached, if given.</param>
+public sealed record ActualEvent(Tiploc Location, TrainLocationAction Action, SimTime Time, string Platform, bool AtTimingPoint, int Working, int? AspectPassed = null, int? AspectApproach = null)
 {
     public override string ToString() => $"{Action.ToString().ToLowerInvariant()} {Location} {Time}{(Platform.Length > 0 ? " P" + Platform : "")}";
 }

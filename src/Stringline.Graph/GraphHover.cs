@@ -52,6 +52,7 @@ public static class GraphHover
             GraphTargetKind.ConflictRing or GraphTargetKind.Conflict => GraphConflicts.Describe(target.Conflict!, scene, suggestionFor?.Invoke(target.Conflict!.Conflict)),
             GraphTargetKind.Disruption => GraphAnnotations.Describe(target.Disruption!, scene),
             GraphTargetKind.Note => GraphAnnotations.Describe(target.Note!, scene),
+            GraphTargetKind.Signal => GraphSignals.Describe(target.Signal!, scene),
             _ => GraphLabels.Describe(target.Location!),
         };
     }
@@ -91,13 +92,24 @@ public static class GraphHover
         var wtt = path.Train is { } id ? snapshot.Timetable?.Find(id) : null;
         var (live, working) = FindLive(path, snapshot);
         var vertex = hit.Vertex;
-        var location = scene.Locations.FirstOrDefault(l => Math.Abs(l.Axis - vertex.Axis) < 1e-9);
+        var signal = path.SignalAt(hit.NearestVertex);
+        var location = signal is null ? scene.Locations.FirstOrDefault(l => Math.Abs(l.Axis - vertex.Axis) < 1e-9) : null;
 
         var heading = wtt is { Description.Length: > 0 } ? $"{path.Headcode}  {wtt.Description}" : path.Headcode.Value;
         var lines = new List<HoverLine>();
         if (location is not null)
         {
             lines.Add(new HoverLine(Location, location.Name == location.Tiploc.Code ? location.Name : $"{location.Name} ({location.Tiploc})"));
+        }
+        else if (signal is not null)
+        {
+            // A learned place on the line (S38): the signal passed there, as the sim reported it.
+            lines.Add(new HoverLine(Location, path.Layer == GraphLayer.Forecast ? $"{signal} (learned place)" : $"{signal} (signal)"));
+            if (path.Layer == GraphLayer.Actual && live is not null && working is { } at &&
+                live.ActualsOf(at).Where(a => !a.AtTimingPoint && string.Equals(a.Location.Code, signal, StringComparison.OrdinalIgnoreCase)).MinBy(a => Math.Abs(a.Time.Seconds - vertex.Time)) is { } pass)
+            {
+                lines.Add(new HoverLine(Actual, FormatPass(pass)));
+            }
         }
 
         var point = location is null || wtt is null ? null : NearestPoint(wtt, location.Tiploc, vertex.Time);
@@ -168,7 +180,16 @@ public static class GraphHover
             lines.Add(new HoverLine(Forecast, point.DelaySeconds is { } delay ? $"{times}  ({FormatDelay(delay).ToLowerInvariant()})" : times));
         }
 
-        if (forecast.Anchor is { } anchor)
+        if (forecast.Standing is { } standing)
+        {
+            var leaves = standing.Leaves > standing.Since ? $"; forecast to move at {Format(standing.Leaves, "H")} at the earliest" : string.Empty;
+            lines.Add(new HoverLine(Note, $"Standing at {standing.Signal} since {Format(standing.Since, "H")} ({(standing.AspectKnown ? "at red" : "after a single yellow")}){leaves}"));
+        }
+        else if (forecast.Anchor is { Place: { } place } placed)
+        {
+            lines.Add(new HoverLine(Note, $"{Capitalise(place.ToString())} {Format(placed.Time, "H")}: forecast on from there"));
+        }
+        else if (forecast.Anchor is { } anchor)
         {
             lines.Add(new HoverLine(Note, $"Passed {anchor.Location} {Format(anchor.Time, "H")} (not booked): forecast on from there"));
         }
@@ -272,6 +293,23 @@ public static class GraphHover
         var platform = actual.Platform.Length > 0 ? $" P{actual.Platform}" : string.Empty;
         return $"{verb} {Format(actual.Time, "T")}{platform}";
     }
+
+    /// <summary>
+    /// A signal pass as the actual line's hover gives it (S38): "passed S457 at 09:12:30 (green)", with the aspect on
+    /// approach too when it differed ("single yellow, approached at red").
+    /// </summary>
+    public static string FormatPass(ActualEvent pass)
+    {
+        ArgumentNullException.ThrowIfNull(pass);
+        var aspect = pass.AspectPassed is { } passed
+            ? pass.AspectApproach is { } approached && approached != passed
+                ? $" ({SignalAspects.Name(passed)}, approached at {SignalAspects.Name(approached)})"
+                : $" ({SignalAspects.Name(passed)})"
+            : string.Empty;
+        return $"passed {pass.Location} at {Format(pass.Time, "T")}{aspect}";
+    }
+
+    private static string Capitalise(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 
     private static string FormatMatch(LiveWorking working) => working.Status switch
     {

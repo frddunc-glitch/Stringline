@@ -1,9 +1,12 @@
 using System.CommandLine;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
+using Stringline.Core;
+using Stringline.Core.Events;
 using Stringline.Gateway;
 using Stringline.Gateway.Recording;
 using Stringline.Network.Profiles;
+using Stringline.Persistence;
 using Stringline.Planning;
 using Stringline.Timetable;
 
@@ -18,7 +21,7 @@ internal static class LearnCommand
     public static Command Create()
     {
         var wtt = new Option<FileInfo>("--wtt") { Description = "The SimSig timetable (.wtt).", Required = true };
-        var logs = new Option<FileInfo[]>("--log") { Description = "A recording (.sslog); give it more than once to learn from several.", Required = true, AllowMultipleArgumentsPerToken = true };
+        var logs = new Option<FileInfo[]>("--log") { Description = "A recording (.sslog) or saved live session (.stringline); give it more than once to learn from several.", Required = true, AllowMultipleArgumentsPerToken = true };
         var profile = new Option<FileInfo?>("--profile") { Description = "A profile JSON to learn into. Default: generated from the WTT." };
         var output = new Option<FileInfo?>("--out") { Description = "Write the profile with the learned places here." };
         var report = new Option<bool>("--report") { Description = "List each section's places, with samples, spread and state." };
@@ -74,30 +77,42 @@ internal static class LearnCommand
         LearnOutcome? outcome = null;
         foreach (var log in settings.Logs)
         {
-            SslogRecording recording;
+            IEnumerable<GatewayEvent> events;
+            string id;
+            SimTime? first;
             try
             {
-                recording = SslogRecording.Load(log.FullName);
+                // A saved live session (S38) is learned from as the app learns from it; a replay session from its recording.
+                var saved = string.Equals(log.Extension, SessionCatalogue.Extension, StringComparison.OrdinalIgnoreCase) ? SavedSession.Load(log.FullName) : null;
+                if (saved is { Info.Kind: SavedSessionKind.Live })
+                {
+                    (events, id, first) = (saved.Events(parser).ToList(), SignalLearning.SessionId(saved.Info.Created), null);
+                }
+                else
+                {
+                    var recording = SslogRecording.Load(saved?.Info.RecordingPath ?? log.FullName);
+                    (events, id, first) = (recording.Messages.SelectMany(m => parser.Parse(m.ToGatewayMessage())), SignalLearning.RecordingId(recording.Header.Created), recording.FirstSim);
+                }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or SessionFormatException)
             {
                 await error.WriteLineAsync($"Cannot read {log.Name}: {ex.Message}").ConfigureAwait(false);
                 return 2;
             }
 
             var learner = new SignalLearner();
-            foreach (var e in recording.Messages.SelectMany(m => parser.Parse(m.ToGatewayMessage())))
+            foreach (var e in events)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 learner.Observe(e);
+                first ??= e is ClockEvent { Clock.Seconds: > 0 } clock ? clock.Clock : null;
             }
 
             var learned = learner.Learn(import.Timetable);
-            var id = SignalLearning.RecordingId(recording.Header.Created);
             outcome = SignalLearning.Apply(profile, learned, id, settings.MinSamples);
             profile = outcome.Profile;
             each.Add(new Learned(log.Name, SignalLearning.Apply(profile with { Signalling = null }, learned, id, settings.MinSamples).Profile.Places));
-            WriteRecording(text, log.Name, recording, learned, outcome.Added);
+            WriteRecording(text, log.Name, first, learned, outcome.Added);
         }
 
         WriteSummary(text, profile.Places, settings.MinSamples);
@@ -130,11 +145,11 @@ internal static class LearnCommand
         return 0;
     }
 
-    private static void WriteRecording(TextWriter w, string name, SslogRecording recording, LearnedPlaces learned, int added)
+    private static void WriteRecording(TextWriter w, string name, SimTime? first, LearnedPlaces learned, int added)
     {
         var t = learned.Tracks;
         w.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"{name} ({recording.FirstSim?.ToString() ?? "-"} to {learned.UpTo?.ToString() ?? "-"}): {learned.Runs} runs between timing locations, {learned.RunsUsed} usable; samples: {learned.Count(SignallingKind.Signal)} signal, {learned.Count(SignallingKind.TrackCircuit)} track circuit, {learned.Count(SignallingKind.Berth)} berth ({added} new)."));
+            $"{name} ({first?.ToString() ?? "-"} to {learned.UpTo?.ToString() ?? "-"}): {learned.Runs} runs between timing locations, {learned.RunsUsed} usable; samples: {learned.Count(SignallingKind.Signal)} signal, {learned.Count(SignallingKind.TrackCircuit)} track circuit, {learned.Count(SignallingKind.Berth)} berth ({added} new)."));
         if (t.Occupations > 0)
         {
             w.WriteLine(string.Create(CultureInfo.InvariantCulture,

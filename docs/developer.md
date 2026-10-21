@@ -81,11 +81,11 @@ A few rules run through the code:
 | `wtt-dump` | Prints a timetable, one train (`--train`) or its import warnings |
 | `match` | Matches a recording's trains to a timetable and lists the ones it could not |
 | `corridors` | Proposes corridors, sections, run times and headways from a timetable, and can write a starter profile |
-| `render-png` | Draws a corridor's graph to a PNG or PDF with the app's renderer, including multi-page plots (`--plot`) |
+| `render-png` | Draws a corridor's graph to a PNG or PDF with the app's renderer, including multi-page plots (`--plot`) and learned signals on the axis (`--signals`) |
 | `replan` | Re-plans the hour ahead of a point in a recording and lists the conflicts before and after |
 | `report` | Writes the delay table as CSV, from a recording or a saved session |
-| `gaps` | Measures how long trains go between reports on the corridors, and how often they report a timing location their WTT leaves out (the S36 baseline) |
-| `learn` | Learns signal, track circuit and berth places from recordings into a profile, and compares the places between recordings (S37) |
+| `gaps` | Measures how long trains go between reports on the corridors, and how often they report a timing location their WTT leaves out (the S36 baseline; with a profile's learned places, the gaps between placed signals too, S38) |
+| `learn` | Learns signal, track circuit and berth places from recordings or saved live sessions into a profile, and compares the places between recordings (S37) |
 | `icon` | Redraws the app icon after a change to `AppIcon` |
 
 [`CLAUDE.md`](../CLAUDE.md) keeps every command with its options; each command's `--help` lists them too. Example:

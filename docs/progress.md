@@ -2047,8 +2047,57 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - A berth's place is where its block starts (the step comes as the train passes the signal before), not at its signal.
 
 ### Questions for Fred
-- 34. **Run kinds in S38.** A stopping train's places differ from a through train's near the stop. S38 will use the place for the kind of run the train's plan has there, falling back to any used place for the signal. Is that what you want, or one place per signal for drawing?
+- 34. ~~**Run kinds in S38.**~~ The train's kind, then any used place (Fred, S38).
 - 35. **Sharing.** Merge pools samples, so importing the same shared profile twice counts its samples twice. Should a merge skip sessions both profiles already have (and their samples), at the cost of keeping samples per session?
+
+## 2026-10-21 — S38: Signals and track circuits in the graph and forecast (#17 part 2, #19)
+
+### Done
+- **Fred's choices** (asked during the session): question 34 answered — use the place for the **train's kind of run**, else any used place of that signal between the same two timing locations (hand-set first, then the most samples); **save signal and track circuit `SG_MSG`s in session files**, so resume and review show held trains and track circuit progress as live; **ticks** as the default for View ▸ Signals.
+- **Found in the recordings** (`03-…md` §6): aspects are 0 red, 1 shunt, 2 single yellow, 4 double yellow, 6 green. `aspAppr` 0 (approached at red) is mostly a brief check: 353 of 4 408 passes in the 4 h recording, median 2 s lost. Every wait of a minute or more followed a single yellow at the signal before, with the signal's `SG_MSG` at red until 10–30 s before the train passed it. No message says a train has stopped. Also, the nearest placed signal ahead is often a **parallel line's** (S28 on line 5 at 0.291 and S22 on line 2 at 0.302 from Clapham Jn A Jn to Waterloo): the first try told 223 trains as standing, of which 37 then passed that signal.
+- **Learner:** each signal place now counts the **signal passed next** after it (`SignallingPlace.Next`, JSON `next`, pooled on import). A profile learned before S38 gets them as it learns again.
+- **Live state** (`Stringline.Core.Live.LineSideState`, `LiveState.LineSide`): signal aspects, track circuits (clear, and when last occupied) and berths with times, from signal/track `SG_MSG`s and TD steps; `LineSideVersion` apart from `Version`. `ActualEvent` keeps `AspectPassed`/`AspectApproach`. The engine keeps signal and track `SG_MSG`s in its history (`PlanningEngine.IsKept`), puts `LineSide` in the snapshot and the forecast, and publishes a change only to them at most once a second (`LineSideInterval`; it waits that out, so a change is never left waiting for another event). Session files keep their frames, but those alone (the snapshot at connect) make no file.
+- **Forecast** (`06-…md` §2): `ForecastNetwork.Places` (`UsablePlaces`, at the Options samples threshold); `ProgressAnchor.Place` (`AnchorPlace`) for the latest signal passed, track circuit entered (block starts where the train was last reported, no other train near) or berth stepped into (its headcode, unique) since the last timing location. The rest of the run is the minimum's share left times the train's **pace** in the run (1–1.5). **Standing at a signal** (`TrainForecast.Standing`): the signal ahead on the train's line (berth's own signal; else the most frequent next signal; else the first signal of trains on the same line at the timing location) is red (or, without TD, was passed at single yellow) and the train is overdue (1.5 × minimum + 15 s): the anchor moves there, it is not "possibly stopped", and it is forecast to move from now at the earliest, behind the train ahead. `ForecastOptions.SignalPlaces` (on) turns it off.
+- **Graph** (`05-…md`): actual lines bend at placed signals (`GraphPath.Signals`), for the kind of run made; the forecast and live head go on from the place; a standing train's head waits at the signal and its forecast waits there first. Hover at a signal: "passed S457 at 09:12:30 (green, approached at red)"; forecast notes for places and "Standing at S28 since 07:58 (at red); forecast to move at 08:02 at the earliest". **Signals on the axis** (`GraphScene.Signals`, `SignalDisplay`): ticks (Down on the labels' side, Up on the other) or faint rows; hover gives ID, direction, locations, place and trains. The projection leaves out corners under a quarter pixel (`ProjectedPathCache`), so signal vertices on an even run cost nothing to draw.
+- **App:** View ▸ Signals ▸ Off / Ticks / Rows (remembered, `AppSettings.SignalDisplay`); the network uses the Options samples threshold and is renewed after learning and when the threshold changes; the train detail says "standing at S28 since 07:58".
+- **Tools:** `render-png --signals off|ticks|rows` (ticks), and `render-png`, `report` and `replan` forecast with the line side; `gaps` adds a "placed signals (S38)" row when the profile has learned places; `learn --log` takes saved live sessions (`.stringline`) too.
+- **Docs:** `03-…md` §6 (held at a signal), `04-…md` §5 (`next`), `05-…md` (signals and track circuits), `06-…md` §2 (progress at learned places, standing), the plan's "Built in S38", `CLAUDE.md`, `docs/developer.md`; the guide's reading-the-graph ("Between timing points": signals, standing, View ▸ Signals) and signal places pages. `build/guide-shots.ps1` not re-run (its free-sim profile has no learned places, so its pictures do not change).
+- **The gain** (Waterloo, places learned from the 4 h recording; `stringline gaps --profile`, median / 95th percentile / longest, seconds): 
+
+  | Recording | Booked only | All timing locations (S36) | Placed signals (S38) | All signals |
+  |---|---|---|---|---|
+  | Waterloo 1× | 122 / 347 / 371 | 83 / 137 / 150 | 24 / 55 / 83 | 23 / 54 / 83 |
+  | Waterloo 4× | 150 / 351 / 668 | 89 / 150 / 370 | 24 / 60 / 289 | 24 / 60 / 289 |
+  | Waterloo failure | 150 / 371 / 1 670 | 87 / 147 / 1 670 | 24 / 57 / 1 670 | 24 / 57 / 1 670 |
+  | Waterloo 4 h | 149 / 348 / 676 | 88 / 150 / 381 | 24 / 60 / 299 | 24 / 60 / 299 |
+  | Kings Cross (Fred's session, places from it alone) | 153 / 795 / 813 | the same | 134 / 795 / 813 | 32 / 89 / 648 |
+
+  Forecasts a minute apart through the 4 h recording put the next timing point 46.9 s from where the train got there, against 55.6 s without places (2 547 compared); 54 of 57 trains told as standing then passed that signal from red; 32 of 44 waits of a minute or more at a signal were found. Kings Cross has only 2 signals used after one 1½ h session without TD (most were passed by fewer than 3 trains): it needs more play there.
+- **Tests:** Core +10 (`LineSideStateTests`); Timetable +1 (line side in `LiveState`); Network +3 (next signals counted, pooled and saved; `UsablePlaces`; track circuits by block); Planning +14 (`ForecastSignalTests` 9: signal, pace, kind fallback, track circuit, two trains near, berth, standing, no-TD single yellow, next signal not nearest; `SignalForecastFixtureTests` 2: Waterloo 4 h and the T1620 failure; the learner's next signal; the engine's line side and its once-a-second publishing); Persistence +1; Graph +12 (`GraphSignalTests`, with tick and row snapshots); Tools +3; App +1.
+- Totals: 1 776 (Core 280, Architecture 18, Gateway 211, Timetable 168, Network 192, Planning 287, Persistence 13, Graph 300, Optimiser 22, Tools 80, App 205). Green on Windows (Debug); the solution and the portable solution build with `-warnaserror`. Linux not run.
+- **Benchmarks** (`--quick`, Release; the synthetic scene now has 3 placed signals a section on each actual line and their ticks): pan 10.5–11.5 ms and update 12 ms; zoom 47.7 ms with signals against 47.4 ms without (both with the corner simplification; 56.8 ms without signals before it). Forecast: Waterloo 4× independent 16 ms, both passes 37 ms; the 4 h recording half way with places and line side 33 ms.
+
+### Decisions
+- **A train is standing only when it is overdue at a red signal ahead on its own line**, not because it last approached a signal at red (that is usually a brief check, and the train has moved on by then).
+- **The signal ahead is the one trains passed next**, learned with the places, not the nearest placed one: parallel lines have signals at almost the same place.
+- **Track circuits and berths are put to trains as the learner does**: a track circuit occupied at or after the train's last report, in the block that starts there, with no other train near; a berth by a headcode only one live train has.
+- **Line-side changes alone publish at most once a second**: they come many times a second, and each publish re-forecasts.
+- **The heavy forecast fixture tests share an xUnit collection** with the forecast speed test, so they do not run at the same time.
+
+### Next
+- S39 (block headways and conflicts at signals), then S32 → S33.
+- 👤 Fred: a Kings Cross recording with `--td` at 1×–4× (still none), and more play there, so its signals reach 3 samples.
+
+### Known issues
+- **Zoom frames are over the 33 ms budget on this machine**, with or without signals (47 ms; S36 measured 31–41 ms on the same benchmark, so the machine was slower today). Pan and update frames are 11–12 ms.
+- At a junction the most frequent next signal can be the wrong route's: three of the 57 standing trains on the 4 h recording stood at the other route's signal nearby.
+- Without the TD topic only a single yellow at the signal before says the signal ahead is red; a train held after a double yellow there (the aspect stepped down later) is not told as standing.
+- A profile learned before S38 has no next signals, so standing is told only after a timing location (by line) until it learns again.
+- The 4 h test learns its places from the same recording it measures; the failure recording, a different session, shows a smaller gain (next point 170.9 s against 176.5 s, its errors dominated by the failure).
+
+### Questions for Fred
+- 36. **Standing threshold.** A train counts as standing at a red signal once it is 1.5 × its minimum run there plus 15 s overdue; that tells it about half its minimum run to the signal after it stopped. Sooner (more false ones) or later?
+- 37. **Ticks.** Down signals tick in from the location names' edge and Up signals from the far edge. Is that readable, or would you rather both on the names' side (Down left of the line, Up right)?
 
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:

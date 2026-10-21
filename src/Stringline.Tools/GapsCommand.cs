@@ -96,7 +96,7 @@ internal static class GapsCommand
 
         var state = new LiveState(import.Timetable, logger: loggerFactory.CreateLogger<LiveState>());
         RenderPngCommand.Play(state, events, null, cancellationToken);
-        var gaps = ReportGaps.Measure(import.Timetable, state.Trains, profile.Corridors);
+        var gaps = ReportGaps.Measure(import.Timetable, state.Trains, profile.Corridors, profile.Places.Count == 0 ? null : UsablePlaces.Of(profile.Places));
         var text = new StringWriter(CultureInfo.InvariantCulture);
         Write(text, gaps, state.SessionStart?.ToString() ?? "-", state.Clock.LastReported.ToString(), profile.Corridors.Count);
         await output.WriteAsync(text.ToString().AsMemory(), cancellationToken).ConfigureAwait(false);
@@ -114,6 +114,10 @@ internal static class GapsCommand
         Row("booked timing locations", gaps.Booked);
         Row("all timing locations", gaps.Timing);
         Row("with signals", gaps.Signals);
+        if (gaps.Placed is { } placed)
+        {
+            Row("placed signals (S38)", placed);
+        }
 
         void Row(string name, GapStats s) =>
             w.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  {name,-26} {s.Count,6} {s.Median,8} {s.P95,6} {s.Max,9}"));

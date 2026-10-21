@@ -145,6 +145,16 @@
           <MenuItem Header="Show f_orecast" IsCheckable="True" IsChecked="{Binding ShowForecast}" />
           <MenuItem Header="Show live _head" IsCheckable="True" IsChecked="{Binding ShowLiveHead}"
                     ToolTip="Carry each running train's line on from its last report to now, along its forecast, ending in a dot. It stops short of the next timing point until the train reports it." />
+          <MenuItem Header="Si_gnals" ToolTip="Signals placed from play (learned, or set in the profile's Signals tab), shown on the location axis; hover one for its ID">
+            <MenuItem Header="_Off" IsCheckable="False" IsChecked="{Binding IsSignalsOff, Mode=OneWay}"
+                      Command="{Binding SetSignalDisplayCommand}" CommandParameter="Off" />
+            <MenuItem Header="_Ticks" IsCheckable="False" IsChecked="{Binding IsSignalTicks, Mode=OneWay}"
+                      Command="{Binding SetSignalDisplayCommand}" CommandParameter="Ticks"
+                      ToolTip="A short tick at the plot's edge for each: Down signals on the location names' side, Up on the other" />
+            <MenuItem Header="_Rows" IsCheckable="False" IsChecked="{Binding IsSignalRows, Mode=OneWay}"
+                      Command="{Binding SetSignalDisplayCommand}" CommandParameter="Rows"
+                      ToolTip="A faint dotted row across the graph for each" />
+          </MenuItem>
           <MenuItem Header="Show _disruptions and notes" IsCheckable="True" IsChecked="{Binding ShowDisruptions}" />
           <MenuItem Header="Show co_nflicts" IsCheckable="True" IsChecked="{Binding ShowConflicts}" />
           <Separator />

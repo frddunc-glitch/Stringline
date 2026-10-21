@@ -37,6 +37,9 @@ public sealed record GraphTheme
     /// <summary>A minor row is labelled only with at least this many pixels to the rows either side (zoomed in).</summary>
     public float MinorLabelRoom { get; init; } = 28;
 
+    /// <summary>A placed signal's tick on the plot's edge (S38, View ▸ Signals ▸ Ticks).</summary>
+    public Colour SignalTick { get; init; } = new(0x75, 0x75, 0x75);
+
     /// <summary>The live head (S36): the short line from a running train's last report to now ends in a dot this wide.</summary>
     public float LiveHeadRadius { get; init; } = 3.5f;
 

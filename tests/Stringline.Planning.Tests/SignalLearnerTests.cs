@@ -62,6 +62,15 @@ public sealed class SignalLearnerTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void The_signal_passed_next_is_learned_with_each_place()
+    {
+        var places = Places(Fed([.. Run("1", 0), .. Run("2", 10), .. Run("3", 20)]).Learn(Tt));
+
+        places.Signals[0].Next.Should().BeEquivalentTo(new Dictionary<string, int> { ["S2"] = 3 });
+        places.Signals[1].Next.Should().BeNull("B comes after S2");
+    }
+
+    [Fact]
     public void Too_few_samples_stay_learning()
     {
         var places = Places(Fed([.. Run("1", 0), .. Run("2", 10)]).Learn(Tt));

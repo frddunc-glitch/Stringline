@@ -63,7 +63,14 @@ public sealed partial class LiveState
     public SimTime? SessionStart { get; private set; }
 
     /// <summary>Goes up by one on every change, so a reader can tell cheaply whether to rebuild.</summary>
+    /// <remarks>Line-side changes (<see cref="LineSide"/>) count in <see cref="LineSideVersion"/> instead: they come many times a second.</remarks>
     public long Version { get; private set; }
+
+    /// <summary>The signals, track circuits and berths as last reported (S38); empty without the TD topic.</summary>
+    public LineSideState LineSide { get; private set; } = LineSideState.Empty;
+
+    /// <summary>Goes up by one whenever <see cref="LineSide"/> changes.</summary>
+    public long LineSideVersion { get; private set; }
 
     /// <summary>Live trains in the order first seen.</summary>
     public IEnumerable<LiveTrain> Trains => _order.Select(uid => _trains[uid]);
@@ -108,6 +115,13 @@ public sealed partial class LiveState
     public bool Apply(GatewayEvent e)
     {
         ArgumentNullException.ThrowIfNull(e);
+        var lineSide = LineSide.With(e, Clock.HasTime ? Clock.LastReported : null);
+        if (!ReferenceEquals(lineSide, LineSide))
+        {
+            LineSide = lineSide;
+            LineSideVersion++;
+        }
+
         var changed = e switch
         {
             ClockEvent clock => ApplyClock(clock),
@@ -195,6 +209,8 @@ public sealed partial class LiveState
         _entryDelays.Clear();
         LastSummary = null;
         SessionStart = null;
+        LineSide = LineSideState.Empty;
+        LineSideVersion++;
         Clock.Reset();
         return true;
     }
@@ -282,7 +298,7 @@ public sealed partial class LiveState
         {
             var headcode = e.Headcode;
             var presentAtStart = e.Time - SessionStart.Value <= PresentAtStartSeconds;
-            var actual = new ActualEvent(e.Location, e.Action, e.Time, e.Platform, atTimingPoint, 0);
+            var actual = new ActualEvent(e.Location, e.Action, e.Time, e.Platform, atTimingPoint, 0, e.AspectPassed, e.AspectApproach);
             live = new LiveTrain(e.Uid, [new LiveWorking(headcode, 0)], [actual], presentAtStart);
             _trains.Add(e.Uid, live);
             _order.Add(e.Uid);
@@ -294,7 +310,7 @@ public sealed partial class LiveState
         {
             // A new working: the uid carries on under a new headcode.
             var index = live.Workings.Count;
-            var actual = new ActualEvent(e.Location, e.Action, e.Time, e.Platform, atTimingPoint, index);
+            var actual = new ActualEvent(e.Location, e.Action, e.Time, e.Platform, atTimingPoint, index, e.AspectPassed, e.AspectApproach);
             live = Replace(live with
             {
                 Workings = live.Workings.Add(new LiveWorking(e.Headcode, live.Actuals.Count)),
@@ -304,7 +320,7 @@ public sealed partial class LiveState
             return true;
         }
 
-        live = Replace(live with { Actuals = live.Actuals.Add(new ActualEvent(e.Location, e.Action, e.Time, e.Platform, atTimingPoint, live.CurrentIndex)) });
+        live = Replace(live with { Actuals = live.Actuals.Add(new ActualEvent(e.Location, e.Action, e.Time, e.Platform, atTimingPoint, live.CurrentIndex, e.AspectPassed, e.AspectApproach)) });
         if (live.Current.Status == MatchStatus.Pending)
         {
             Rematch(live, live.CurrentIndex);

@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Stringline.Core;
+using Stringline.Core.Events;
 using Stringline.Gateway;
 using Stringline.Planning;
 
@@ -37,7 +38,7 @@ public sealed class SessionStoreTests : IDisposable
         Feed(writer, signal);
         writer.Flush();
 
-        Files().Should().BeEmpty("a reset and a signal state are nothing to resume");
+        Files().Should().BeEmpty("a reset and a signal state are nothing to resume (the signal state is kept for later, S38)");
         writer.Path.Should().BeNull();
 
         Feed(writer, Clock(25200));
@@ -46,6 +47,25 @@ public sealed class SessionStoreTests : IDisposable
         writer.Path.Should().NotBeNull();
         Path.GetFileName(writer.Path).Should().MatchRegex(@"^waterloo-\d{8}-\d{4}\.stringline$");
         Files().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Signal_and_track_circuit_states_are_kept_once_there_is_something_to_resume()
+    {
+        string path;
+        using (var writer = SessionWriter.Create(Folder, new SessionInfo { Kind = SavedSessionKind.Live, Host = "localhost", Port = 51515 }, Manual))
+        {
+            Feed(writer, new GatewayMessage(Wall, "/topic/TD_ALL_SIG_AREA", """{"SG_MSG":{"area_id":"waterloo","obj_type":"signal","obj_id":"S1","aspect":"0","time":"25190"}}"""));
+            Feed(writer, new GatewayMessage(Wall, "/topic/TD_ALL_SIG_AREA", """{"SG_MSG":{"area_id":"waterloo","obj_type":"route","obj_id":"R1A","is_set":"True","time":"25190"}}"""));
+            Feed(writer, Clock(25200));
+            Feed(writer, new GatewayMessage(Wall, "/topic/TD_ALL_SIG_AREA", """{"SG_MSG":{"area_id":"waterloo","obj_type":"track","obj_id":"T1","clear":"False","time":"25210"}}"""));
+            writer.Flush();
+            path = writer.Path!;
+        }
+
+        var events = SavedSession.Load(path).Events().ToList();
+        events.OfType<SignallingStateEvent>().Select(e => e.ObjectId).Should().Equal(["S1", "T1"], "signals and track circuits since S38; routes are not used");
+        events.OfType<ClockEvent>().Should().ContainSingle();
     }
 
     [Fact]

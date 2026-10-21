@@ -114,6 +114,7 @@ internal static class ReplanCommand
             EntryDelays = state.EntryDelays,
             Network = ForecastNetwork.For(profile, tt),
             Options = new ForecastOptions { Interaction = !settings.NoKnockOn },
+            LineSide = state.LineSide,
         })
         {
             Options = new ReplanOptions

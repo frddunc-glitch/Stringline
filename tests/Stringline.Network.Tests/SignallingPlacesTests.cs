@@ -195,6 +195,61 @@ public sealed class SignallingPlacesTests
     }
 
     [Fact]
+    public void The_signals_passed_next_are_counted_pooled_and_saved()
+    {
+        PlaceSample Next(string next, string at) => Sample("S1", 0.4, at) with { Next = next };
+        var places = Learn(SignallingPlaces.Empty, "one", "06:30", Next("S3", "06:01"), Next("S3", "06:11"), Next("S5", "06:21"), Sample("S1", 0.4, "06:25"));
+
+        places.Signals[0].Next.Should().BeEquivalentTo(new Dictionary<string, int> { ["S3"] = 2, ["S5"] = 1 });
+        places.Pool(places).Signals[0].Next.Should().BeEquivalentTo(new Dictionary<string, int> { ["S3"] = 4, ["S5"] = 2 });
+        Learn(SignallingPlaces.Empty, "one", "06:30", Sample("S1", 0.4, "06:01")).Signals[0].Next.Should().BeNull("none was seen");
+
+        var profile = new StringlineProfile { AreaId = "test", Corridors = [Main] }.WithPlaces(places);
+        var json = ProfileJson.Serialize(profile);
+        json.Should().Contain("\"next\"");
+        ProfileJson.Deserialize(json).Places.Signals[0].Next.Should().BeEquivalentTo(places.Signals[0].Next);
+    }
+
+    [Fact]
+    public void Usable_places_leave_out_those_still_learning_and_choose_the_trains_kind_first()
+    {
+        var places = Learn(SignallingPlaces.Empty, "one", "06:30",
+                Sample("S1", 0.40, "06:01"), Sample("S1", 0.41, "06:02"), Sample("S1", 0.42, "06:03"),
+                Sample("S1", 0.30, "06:04", run: RunKind.Stopping), Sample("S1", 0.31, "06:05", run: RunKind.Stopping), Sample("S1", 0.30, "06:06", run: RunKind.Stopping),
+                Sample("S2", 0.8, "06:07"))
+            .SetByHand(SignallingKind.Signal, "S9", A, B, 0.9);
+
+        var usable = UsablePlaces.Of(places);
+
+        usable.SignalFrom("s1", A).Should().HaveCount(2);
+        usable.SignalFrom("S2", A).Should().BeEmpty("one sample is still learning");
+        usable.SignalsBetween(A, B).Select(p => p.Id).Should().Equal("S1", "S1", "S9");
+        UsablePlaces.Choose(usable.SignalFrom("S1", A), RunKind.Stopping)!.Fraction.Should().Be(0.30);
+        UsablePlaces.Choose(usable.SignalFrom("S1", A), RunKind.Starting)!.Run.Should().Be(RunKind.Through, "not learned for starting trains: the one with most samples (a tie keeps the first)");
+        UsablePlaces.Of(places, minSamples: 4).SignalFrom("S1", A).Should().BeEmpty();
+        UsablePlaces.Of(places, minSamples: 4).SignalsBetween(A, B).Should().ContainSingle(p => p.Id == "S9", "a hand-set place is always used");
+        UsablePlaces.PositionOn(Main, A, B, 0.5).Should().Be(0.25);
+        UsablePlaces.PositionOn(Main, B, A, 0.5).Should().Be(0.25);
+        UsablePlaces.PositionOn(Main, A, new Tiploc("X"), 0.5).Should().BeNull();
+    }
+
+    [Fact]
+    public void Track_circuits_are_found_by_the_place_their_block_starts_at()
+    {
+        var places = SignallingPlaces.Empty
+            .SetByHand(SignallingKind.TrackCircuit, "T1", A, B, 0.45)
+            .SetByHand(SignallingKind.TrackCircuit, "T2", A, B, 0.1)
+            .SetByHand(SignallingKind.Berth, "0001", A, B, 0.38);
+        places = places.With(SignallingKind.TrackCircuit, [.. places.TrackCircuits.Select(p => p.Id == "T1" ? p with { Signal = "S1" } : p)]);
+
+        var usable = UsablePlaces.Of(places);
+
+        usable.TracksAfter("S1").Select(p => p.Id).Should().Equal("T1");
+        usable.TracksAfter("A").Select(p => p.Id).Should().Equal(["T2"], "no signal before it: its block starts at the timing location");
+        usable.Berth("0001").Should().ContainSingle();
+    }
+
+    [Fact]
     public void A_profile_without_places_writes_none()
     {
         var profile = new StringlineProfile { AreaId = "test" };

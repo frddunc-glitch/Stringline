@@ -43,6 +43,9 @@ internal sealed class ProjectedPathCache : IDisposable
     /// <summary>How far the view may pan from the reference time, in pixels, before paths are re-projected (float precision).</summary>
     private const double MaxOffsetPixels = 100_000;
 
+    /// <summary>A vertex nearer than this, in pixels, to the line through its neighbours is left out of the projection.</summary>
+    private const float SlightCornerPixels = 0.25f;
+
     private readonly SKPathBuilder _builder = new();
     private Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
     private IReadOnlyList<GraphPath>? _paths;
@@ -148,17 +151,18 @@ internal sealed class ProjectedPathCache : IDisposable
             }
 
             _builder.Reset();
-            for (var i = start; i <= end; i++)
+            var last = Point(vertices[start]);
+            _builder.MoveTo(last);
+            for (var i = start + 1; i <= end; i++)
             {
                 var p = Point(vertices[i]);
-                if (i == start)
+                if (i < end && NearlyOnLine(p, last, Point(vertices[i + 1])))
                 {
-                    _builder.MoveTo(p);
+                    continue; // a corner too slight to see at this zoom, such as a signal passed at an even speed (S38)
                 }
-                else
-                {
-                    _builder.LineTo(p);
-                }
+
+                _builder.LineTo(p);
+                last = p;
             }
 
             if (path.IsCancelled && end == vertices.Count - 1)
@@ -172,6 +176,22 @@ internal sealed class ProjectedPathCache : IDisposable
         }
 
         return [.. runs];
+    }
+
+    /// <summary>Within <see cref="SlightCornerPixels"/> of the straight line from <paramref name="a"/> to <paramref name="b"/>, and between them.</summary>
+    private static bool NearlyOnLine(SKPoint p, SKPoint a, SKPoint b)
+    {
+        var dx = b.X - a.X;
+        var dy = b.Y - a.Y;
+        var length = MathF.Sqrt((dx * dx) + (dy * dy));
+        if (length < 1e-3f)
+        {
+            return false;
+        }
+
+        var along = (((p.X - a.X) * dx) + ((p.Y - a.Y) * dy)) / length;
+        var across = MathF.Abs(((p.X - a.X) * dy) - ((p.Y - a.Y) * dx)) / length;
+        return across < SlightCornerPixels && along > 0 && along < length;
     }
 
     /// <summary>A cross at a cancelled train's end (<c>05-…md</c> §2), within the tiles' bleed.</summary>

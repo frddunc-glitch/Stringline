@@ -1,4 +1,5 @@
 using Stringline.Core;
+using Stringline.Core.Events;
 using Stringline.Core.Live;
 using Stringline.Core.Timetables;
 using Stringline.Network;
@@ -62,6 +63,15 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
     /// </summary>
     public SimTitle? SimTitle { get; init; }
 
+    /// <summary>
+    /// The learned places to draw with (S38): actual lines bend at the signals they pass, and the axis shows them as
+    /// <see cref="Signals"/> says. Null takes the profile's usable places.
+    /// </summary>
+    public UsablePlaces? Places { get; init; }
+
+    /// <summary>How the placed signals show on the axis (View ▸ Signals, S38).</summary>
+    public SignalDisplay Signals { get; init; } = SignalDisplay.Ticks;
+
     /// <summary>A request for the timetable and live trains of a <see cref="PlanSnapshot"/>, with the now line at its last reported clock.</summary>
     public static GraphSceneRequest For(StringlineProfile profile, Corridor corridor, PlanSnapshot snapshot)
     {
@@ -74,6 +84,7 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
             Forecast = snapshot.Forecast,
             Conflicts = snapshot.Conflicts,
             Now = snapshot.Clock.HasTime ? snapshot.Clock.LastReported : null,
+            Places = snapshot.Settings.Network.Places.IsEmpty ? null : snapshot.Settings.Network.Places,
         };
     }
 }
@@ -112,6 +123,7 @@ public static class GraphSceneBuilder
             .Select(l => new GraphLocation(l.Tiploc, profile.DisplayName(l.Tiploc), l.AxisPosition, !l.Minor && (l.Platforms > 0 || !l.IsTimingPointOnly), l.Platforms, l.Minor))
             .ToList();
 
+        var places = request.Places ?? UsablePlaces.Of(profile.Places);
         var paths = new List<GraphPath>();
         if (request.ShowWtt && request.Timetable is { } timetable)
         {
@@ -142,15 +154,23 @@ public static class GraphSceneBuilder
             }
         }
 
-        if (request.ShowActual)
+        // Actual lines are worked out whether or not they are shown: a live head carries on from the end of one.
+        var lastActual = new Dictionary<string, GraphVertex>(StringComparer.Ordinal);
+        var actual = new List<GraphPath>();
+        foreach (var live in request.LiveTrains)
         {
-            foreach (var live in request.LiveTrains)
+            for (var w = 0; w < live.Workings.Count; w++)
             {
-                for (var w = 0; w < live.Workings.Count; w++)
+                if (AddActual(actual, corridor, places, live, w, request) is { } end && w == live.CurrentIndex)
                 {
-                    AddActual(paths, corridor, live, w, request);
+                    lastActual[live.SimUid] = end;
                 }
             }
+        }
+
+        if (request.ShowActual)
+        {
+            paths.AddRange(actual);
         }
 
         if (request.ShowForecast && request.Forecast is { } forecast)
@@ -177,10 +197,37 @@ public static class GraphSceneBuilder
 
         if (request.ShowLiveHead && request.Forecast is { } withHeads && request.Now is not null)
         {
-            scene = scene with { LiveHeads = LiveHeads(corridor, withHeads, request) };
+            scene = scene with { LiveHeads = LiveHeads(corridor, withHeads, request, lastActual) };
+        }
+
+        if (request.Signals != SignalDisplay.Off && !places.IsEmpty)
+        {
+            scene = scene with { Signals = SignalMarks(corridor, places), SignalDisplay = request.Signals };
         }
 
         return scene;
+    }
+
+    /// <summary>
+    /// The placed signals on this corridor (S38): one mark per signal and pair of timing locations, at the place for
+    /// trains running through if learned, else the best other (<see cref="UsablePlaces.Choose"/>).
+    /// </summary>
+    internal static IReadOnlyList<GraphSignal> SignalMarks(Corridor corridor, UsablePlaces places)
+    {
+        var marks = new List<GraphSignal>();
+        foreach (var group in places.Signals.GroupBy(p => (Id: p.Id.ToUpperInvariant(), p.From, p.To)))
+        {
+            var place = UsablePlaces.Choose(group, RunKind.Through)!;
+            if (UsablePlaces.PositionOn(corridor, place.From, place.To, place.Fraction) is not { } axis)
+            {
+                continue;
+            }
+
+            var direction = place.Direction ?? (corridor.PositionOf(place.To) > corridor.PositionOf(place.From) ? TrackDirection.Down : TrackDirection.Up);
+            marks.Add(new GraphSignal(place.Id, axis, direction, place.From, place.To, place.Fraction, place.Run, place.SampleCount, place.HandSet));
+        }
+
+        return [.. marks.OrderBy(m => m.Axis).ThenBy(m => m.Id, StringComparer.Ordinal)];
     }
 
     /// <summary>
@@ -188,13 +235,14 @@ public static class GraphSceneBuilder
     /// last actual point) along its forecast to the next point it will report. None where any of those is off the
     /// corridor. Coloured as its actual line: by category, or by its latest delay.
     /// </summary>
-    private static List<GraphLiveHead> LiveHeads(Corridor corridor, Forecast forecast, GraphSceneRequest request)
+    private static List<GraphLiveHead> LiveHeads(Corridor corridor, Forecast forecast, GraphSceneRequest request, Dictionary<string, GraphVertex> lastActual)
     {
         var heads = new List<GraphLiveHead>();
         var byDelay = request.ColourMode == GraphColourMode.Delay;
         foreach (var train in forecast.Trains)
         {
-            if (train.Status != TrainForecastStatus.Running || HeadVertices(corridor, train) is not { } vertices)
+            var end = train.LiveUid is { } uid && lastActual.TryGetValue(uid, out var v) ? v : (GraphVertex?)null;
+            if (train.Status != TrainForecastStatus.Running || HeadVertices(corridor, train, end) is not { } vertices)
             {
                 continue;
             }
@@ -215,8 +263,13 @@ public static class GraphSceneBuilder
         return heads;
     }
 
-    /// <summary>A running train's head line: its last report, the end of a dwell there, then the next point; null if not all on the corridor.</summary>
-    private static List<GraphVertex>? HeadVertices(Corridor corridor, TrainForecast train)
+    /// <summary>
+    /// A running train's head line: its last report, the end of a dwell there, then the next point; null if not all on
+    /// the corridor. Since S38 it starts at the end of the actual line (<paramref name="lastActual"/>, the last signal
+    /// passed if placed), goes through a learned place reached since (a track circuit or berth), and stops at the
+    /// signal a train is standing at.
+    /// </summary>
+    private static List<GraphVertex>? HeadVertices(Corridor corridor, TrainForecast train, GraphVertex? lastActual = null)
     {
         var first = train.FirstForecast;
         if (first < 0)
@@ -252,17 +305,55 @@ public static class GraphSceneBuilder
             return null;
         }
 
-        var start = train.Anchor is { } anchor && anchor.After == last.Index && corridor.PositionOf(anchor.Location) is { } anchorAt
-            ? new GraphVertex(anchor.Time.Seconds, anchorAt)
+        var anchorAt = train.Anchor is { } anchor && anchor.After == last.Index ? AnchorVertex(corridor, anchor) : null;
+        var start = anchorAt is { Place: null } unbooked ? unbooked.Vertex
             : corridor.PositionOf(last.Location) is { } lastAt ? new GraphVertex(last.LastTime!.Value.Seconds, lastAt) : (GraphVertex?)null;
-        if (start is not { } from || reach.Seconds < from.Time)
+        if (lastActual is { } end && start is { } s && end.Time > s.Time)
+        {
+            start = end; // a signal passed since, placed on the actual line
+        }
+
+        if (start is not { } from)
         {
             return null;
         }
 
         vertices.Add(from);
+        if (anchorAt is { Place: not null, Vertex: var placed } && placed.Time > from.Time)
+        {
+            vertices.Add(placed);
+        }
+
+        if (train.Standing is { } standing && anchorAt is { Vertex: var signal })
+        {
+            // Standing at a red signal: the head waits there, flat, until a report moves it.
+            if (vertices[^1] != signal)
+            {
+                vertices.Add(signal with { Time = Math.Max(signal.Time, vertices[^1].Time) });
+            }
+
+            vertices.Add(signal with { Time = standing.Since.Seconds + SimTime.SecondsPerDay });
+            return vertices;
+        }
+
+        if (reach.Seconds < vertices[^1].Time)
+        {
+            return null;
+        }
+
         vertices.Add(new GraphVertex(reach.Seconds, nextAt));
         return vertices;
+    }
+
+    /// <summary>Where an anchor draws on the corridor: an unbooked timing location, or a learned place between two (S38); null if off it.</summary>
+    private static (GraphVertex Vertex, AnchorPlace? Place)? AnchorVertex(Corridor corridor, ProgressAnchor anchor)
+    {
+        if (anchor.Place is { } place)
+        {
+            return UsablePlaces.PositionOn(corridor, place.From, place.To, place.Fraction) is { } axis ? (new GraphVertex(anchor.Time.Seconds, axis), place) : null;
+        }
+
+        return corridor.PositionOf(anchor.Location) is { } at ? (new GraphVertex(anchor.Time.Seconds, at), null) : null;
     }
 
     private static (Colour Colour, LineStyle Style) StyleOf(LiveWorking working, GraphSceneRequest request) =>
@@ -324,10 +415,22 @@ public static class GraphSceneBuilder
             {
                 if (forecast.Points[k] is { Basis: ForecastBasis.Actual, LastTime: { } anchor } p)
                 {
-                    // From an unbooked timing location passed since (S36), if it is on the corridor; it stands in for the run's start.
-                    if (forecast.Anchor is { } passed && passed.After == k && corridor.Contains(passed.Location))
+                    // From an unbooked timing location (S36) or a learned place (S38) passed since, if it is on the
+                    // corridor; it stands in for the run's start. A train standing at a signal waits there first.
+                    if (forecast.Anchor is { } passed && passed.After == k && AnchorVertex(corridor, passed) is { } from)
                     {
-                        builder.Add(passed.Location, passed.Time, p.DelaySeconds, p.Index);
+                        if (from.Place is { } place)
+                        {
+                            builder.AddPlace(place.From, from.Vertex.Axis, passed.Time, p.DelaySeconds, place.Id, p.Index);
+                            if (forecast.Standing is { } standing && standing.Leaves > passed.Time)
+                            {
+                                builder.AddPlace(place.From, from.Vertex.Axis, standing.Leaves, p.DelaySeconds, place.Id, p.Index);
+                            }
+                        }
+                        else
+                        {
+                            builder.Add(passed.Location, passed.Time, p.DelaySeconds, p.Index);
+                        }
                     }
                     else
                     {
@@ -358,7 +461,7 @@ public static class GraphSceneBuilder
         {
             var (pathColour, segmentColours) = byDelay ? DelayColours(segment.Delays) : (colour, null);
             paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", GraphLayer.Forecast, forecast.Train, forecast.Headcode, pathColour,
-                segment.Vertices, Direction: corridor.DirectionOf(segment.Locations), LiveUid: forecast.LiveUid, SegmentColours: segmentColours, Points: segment.Indices));
+                segment.Vertices, Direction: corridor.DirectionOf(segment.Locations), LiveUid: forecast.LiveUid, SegmentColours: segmentColours, Points: segment.Indices, Signals: segment.Signals));
         }
     }
 
@@ -390,29 +493,89 @@ public static class GraphSceneBuilder
         }
     }
 
-    private static void AddActual(List<GraphPath> paths, Corridor corridor, LiveTrain live, int working, GraphSceneRequest request)
+    /// <summary>
+    /// A working's actual line: its reports at corridor locations, and since S38 the placed signals it passed between
+    /// them, so the line bends where the train was checked. Returns the line's last vertex, if it has one.
+    /// </summary>
+    private static GraphVertex? AddActual(List<GraphPath> paths, Corridor corridor, UsablePlaces places, LiveTrain live, int working, GraphSceneRequest request)
     {
         var w = live.Workings[working];
         var wtt = w is { IsMatched: true, Train: { } id } ? request.Timetable?.Find(id) : null;
         var byDelay = request.ColourMode == GraphColourMode.Delay && w.IsMatched;
 
         var builder = new PathAccumulator(corridor);
+        ActualEvent? from = null;
+        var passes = new List<ActualEvent>();
         foreach (var actual in live.ActualsOf(working))
         {
-            if (actual.AtTimingPoint)
+            if (!actual.AtTimingPoint)
             {
-                builder.Add(actual.Location, actual.Time, byDelay && wtt is not null ? TrainDelays.At(actual, wtt)?.Seconds : null);
+                if (from is not null && !places.IsEmpty)
+                {
+                    passes.Add(actual);
+                }
+
+                continue;
             }
+
+            if (from is not null && passes.Count > 0)
+            {
+                AddPasses(builder, corridor, places, from, actual, passes);
+            }
+
+            passes.Clear();
+            builder.Add(actual.Location, actual.Time, byDelay && wtt is not null ? TrainDelays.At(actual, wtt)?.Seconds : null);
+            from = actual;
+        }
+
+        if (from is not null && passes.Count > 0)
+        {
+            AddPasses(builder, corridor, places, from, null, passes);
         }
 
         var (colour, style) = StyleOf(w, request);
         var key = $"act:{live.SimUid}/{working}";
+        GraphVertex? end = null;
         foreach (var (segment, index, count) in builder.Finish())
         {
             var (pathColour, segmentColours) = byDelay ? DelayColours(segment.Delays) : (colour, null);
             paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", GraphLayer.Actual, w.Train, w.Headcode, pathColour,
                 segment.Vertices, IsUnmatched: !w.IsMatched, Direction: corridor.DirectionOf(segment.Locations), LiveUid: live.SimUid, Working: working,
-                SegmentColours: segmentColours, Style: style));
+                SegmentColours: segmentColours, Style: style, Signals: segment.Signals));
+            end = segment.Vertices[^1];
+        }
+
+        return end;
+    }
+
+    /// <summary>
+    /// Vertices for the signals a train passed between timing locations <paramref name="from"/> and
+    /// <paramref name="to"/> (null while it is still on its way), at their places for the kind of run it made (S38).
+    /// On its way, a signal is placed only if its places from there all lead to the same next location.
+    /// </summary>
+    private static void AddPasses(PathAccumulator builder, Corridor corridor, UsablePlaces places, ActualEvent from, ActualEvent? to, List<ActualEvent> passes)
+    {
+        var departed = from.Action != TrainLocationAction.Pass;
+        foreach (var pass in passes)
+        {
+            var candidates = places.SignalFrom(pass.Location.Code, from.Location);
+            SignallingPlace? place;
+            if (to is not null)
+            {
+                place = UsablePlaces.Choose(candidates.Where(p => p.To == to.Location), SignallingPlaces.RunOf(departed, to.Action == TrainLocationAction.Arrive));
+            }
+            else
+            {
+                var onward = candidates.Where(p => corridor.Contains(p.To)).ToList();
+                place = onward.Select(p => p.To).Distinct().Count() == 1
+                    ? UsablePlaces.KindsStarting(departed).Select(k => onward.FirstOrDefault(p => p.Run == k)).FirstOrDefault(p => p is not null) ?? UsablePlaces.Choose(onward, null)
+                    : null;
+            }
+
+            if (place is not null && UsablePlaces.PositionOn(corridor, place.From, place.To, place.Fraction) is { } axis)
+            {
+                builder.AddPlace(from.Location, axis, pass.Time, signal: pass.Location.Code);
+            }
         }
     }
 
@@ -442,7 +605,8 @@ public static class GraphSceneBuilder
     }
 
     /// <param name="Indices">The plan point index of each vertex, or null if some vertex has none (actuals).</param>
-    private sealed record Segment(List<GraphVertex> Vertices, List<Tiploc> Locations, List<int?> Delays, List<int>? Indices);
+    /// <param name="Signals">The signal (or other learned place) at each vertex, null at a timing location; null if there are none (S38).</param>
+    private sealed record Segment(List<GraphVertex> Vertices, List<Tiploc> Locations, List<int?> Delays, List<int>? Indices, List<string?>? Signals = null);
 
     /// <summary>Collects timed locations in running order into one or more corridor visits.</summary>
     private sealed class PathAccumulator(Corridor corridor)
@@ -465,31 +629,60 @@ public static class GraphSceneBuilder
 
             if (_current is null || (_away && index == _lastIndex))
             {
-                _current = new Segment([], [], [], []);
+                _current = new Segment([], [], [], [], []);
                 _segments.Add(_current);
             }
 
             _away = false;
-            var vertex = new GraphVertex(time.Seconds, corridor.Locations[index].AxisPosition);
-            if (_current.Vertices.Count == 0 || _current.Vertices[^1] != vertex)
+            Append(new GraphVertex(time.Seconds, corridor.Locations[index].AxisPosition), location, delay, point, null);
+            _lastIndex = index;
+        }
+
+        /// <summary>
+        /// A learned place between <paramref name="from"/> (on the corridor) and the next location, at axis position
+        /// <paramref name="axis"/> (S38). Skipped while the train is away from the corridor.
+        /// </summary>
+        public void AddPlace(Tiploc from, double axis, SimTime time, int? delay = null, string? signal = null, int point = -1)
+        {
+            var index = corridor.IndexOf(from);
+            if (index < 0 || _away)
             {
-                _current.Vertices.Add(vertex);
-                _current.Locations.Add(location);
-                _current.Delays.Add(delay);
-                _current.Indices!.Add(point);
+                return;
+            }
+
+            if (_current is null)
+            {
+                _current = new Segment([], [], [], [], []);
+                _segments.Add(_current);
+            }
+
+            Append(new GraphVertex(time.Seconds, axis), from, delay, point, signal);
+            _lastIndex = index;
+        }
+
+        private void Append(GraphVertex vertex, Tiploc location, int? delay, int point, string? signal)
+        {
+            var current = _current!;
+            if (current.Vertices.Count == 0 || current.Vertices[^1] != vertex)
+            {
+                current.Vertices.Add(vertex);
+                current.Locations.Add(location);
+                current.Delays.Add(delay);
+                current.Indices!.Add(point);
+                current.Signals!.Add(signal);
             }
             else if (delay is not null)
             {
-                _current.Delays[^1] ??= delay;
+                current.Delays[^1] ??= delay;
             }
-
-            _lastIndex = index;
         }
 
         /// <summary>The visits that draw as a line (at least two vertices), with their index and how many there are.</summary>
         public IEnumerable<(Segment Segment, int Index, int Count)> Finish()
         {
-            var drawn = _segments.Where(s => s.Vertices.Count >= 2).Select(s => s.Indices!.Contains(-1) ? s with { Indices = null } : s).ToList();
+            var drawn = _segments.Where(s => s.Vertices.Count >= 2)
+                .Select(s => s with { Indices = s.Indices!.Contains(-1) ? null : s.Indices, Signals = s.Signals!.Any(id => id is not null) ? s.Signals : null })
+                .ToList();
             return drawn.Select((s, i) => (s, i, drawn.Count));
         }
     }

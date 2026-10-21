@@ -1,5 +1,7 @@
 # Signal places and sharing a profile
 
+Once a signal is placed, Stringline uses it on the graph and in the forecast: see [Reading the graph](reading-the-graph.md#between-timing-points).
+
 A timetable only names timing locations, so on its own Stringline knows where a train is only when it passes one. Trains also report every signal they pass, and with the train describer (TD) topic, every track circuit they enter and every berth their description steps into. Stringline learns where these are from the trains it sees, and keeps them in the sim's profile, so a profile you have played with knows the line in more detail than the timetable does. You can share it with other players of the same sim.
 
 ## How places are learned

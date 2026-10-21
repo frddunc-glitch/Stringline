@@ -37,6 +37,8 @@ static void Quick()
     Time("independent", 20, () => forecast.Independent());
     Time("with knock-on (both passes)", 20, () => forecast.WithKnockOn());
     Time("conflicts", 20, () => forecast.Conflicts());
+    Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Forecast, Waterloo 4 h at half way, with learned places ({forecast.Anchored} trains anchored at one):"));
+    Time("with knock-on and places", 20, () => forecast.WithSignalPlaces());
 
     static void Time(string what, int runs, Action action)
     {

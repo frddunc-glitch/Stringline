@@ -248,4 +248,26 @@ public sealed class SignalPlacesTests : IDisposable
         await second.Ui.RunAsync(() => app.ImportProfileCommand.ExecuteAsync(null));
         await second.Ui.Run(() => app.InfoMessage.Should().Contain("is the profile for 'penrith'"));
     }
+
+    [Fact]
+    public async Task Learned_signals_show_on_the_axis_and_bend_the_actual_lines()
+    {
+        await using var app = new TestApp(root: _root.FullName);
+        var vm = await ReplayToEnd(app);
+        await app.Ui.WaitUntil(() => Places(vm).Signals.Count > 0, "the learned places", seconds: 30);
+
+        // Learning hands the places to the forecast and the graph (S38): ticks by default.
+        await app.Ui.WaitUntil(() => vm.Scene?.Signals.Count > 0 && vm.Scene.InLayer(Graph.GraphLayer.Actual).Any(p => p.Signals != null), "signal ticks on the axis, and actual lines bent at signals", seconds: 30);
+        await app.Ui.Run(() =>
+        {
+            vm.SignalDisplay.Should().Be(Graph.SignalDisplay.Ticks);
+            vm.IsSignalTicks.Should().BeTrue();
+            vm.Scene!.SignalDisplay.Should().Be(Graph.SignalDisplay.Ticks);
+            vm.SetSignalDisplayCommand.Execute("Rows");
+        });
+        await app.Ui.WaitUntil(() => vm.Scene?.SignalDisplay == Graph.SignalDisplay.Rows, "signal rows", seconds: 30);
+        await app.Ui.Run(() => vm.SetSignalDisplayCommand.Execute("Off"));
+        await app.Ui.WaitUntil(() => vm.Scene?.Signals.Count == 0, "no signals", seconds: 30);
+        app.Settings.Load().SignalDisplay.Should().Be(Graph.SignalDisplay.Off, "remembered");
+    }
 }

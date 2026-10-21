@@ -29,6 +29,28 @@ public sealed class GapsCommandTests
         lines.Should().ContainMatch("  booked timing locations *68 *122 *347 *371");
         lines.Should().ContainMatch("  all timing locations *133 *83 *137 *150");
         lines.Should().ContainMatch("  with signals *461 *23 *54 *83");
+        lines.Should().NotContain(l => l.Contains("placed signals", StringComparison.Ordinal), "the generated profile has no learned places");
+    }
+
+    [Fact]
+    public async Task With_learned_places_the_gaps_between_placed_signals_are_measured_too()
+    {
+        var folder = Directory.CreateTempSubdirectory("stringline-gaps-");
+        try
+        {
+            var profile = Path.Combine(folder.FullName, "waterloo.json");
+            var root = new RootCommand { LearnCommand.Create() };
+            (await root.Parse(["learn", "--wtt", Wtt, "--log", Fixtures.Path(Fixtures.Waterloo1x), "--out", profile]).InvokeAsync(new InvocationConfiguration { Output = new StringWriter(), Error = new StringWriter() })).Should().Be(0);
+
+            var (exit, output, error) = await Run("--wtt", Wtt, "--log", Fixtures.Path(Fixtures.Waterloo1x), "--profile", profile);
+
+            exit.Should().Be(0, error);
+            output.Split(Environment.NewLine).Should().ContainMatch("  placed signals (S38) *269 *29 *107 *145", "learned from this one recording, the placed signals bring the median gap down from 83 s");
+        }
+        finally
+        {
+            folder.Delete(recursive: true);
+        }
     }
 
     [Fact]

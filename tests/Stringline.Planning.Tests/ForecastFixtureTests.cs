@@ -11,6 +11,7 @@ using Xunit.Abstractions;
 namespace Stringline.Planning.Tests;
 
 /// <summary>The forecaster over a real recording and its WTT: the properties of <c>06-…md</c> §6, and its speed.</summary>
+[Collection("Forecast fixtures")]
 public sealed class ForecastFixtureTests(ITestOutputHelper output)
 {
     private static readonly Lazy<WorkingTimetable> Waterloo = new(() => new WttReader().Read(Fixtures.Path("waterloo 2010.WTT")).Timetable);

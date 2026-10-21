@@ -1,6 +1,9 @@
 using System.CommandLine;
+using Stringline.Gateway;
+using Stringline.Gateway.Recording;
 using Stringline.Gateway.Tests;
 using Stringline.Network.Profiles;
+using Stringline.Persistence;
 
 namespace Stringline.Tools.Tests;
 
@@ -55,6 +58,30 @@ public sealed class LearnCommandTests : IDisposable
 
         exit.Should().Be(0);
         output.Should().Contain("(0 new)");
+    }
+
+    [Fact]
+    public async Task Learns_from_a_saved_live_session_as_from_its_recording()
+    {
+        // A live session keeps the signal and track circuit states too (S38), so it teaches what the recording does.
+        string path;
+        var parser = new MessageParser();
+        using (var writer = SessionWriter.Create(_folder, new SessionInfo { Kind = SavedSessionKind.Live, Host = "localhost", Port = 51515 }, new SessionWriterOptions { AutosaveInterval = TimeSpan.Zero }))
+        {
+            foreach (var frame in SslogRecording.Load(Fixtures.Path(Fixtures.Waterloo1x)).Messages)
+            {
+                var message = frame.ToGatewayMessage();
+                writer.OnMessage(message, parser.Parse(message));
+            }
+
+            writer.Flush();
+            path = writer.Path!;
+        }
+
+        var (exit, output, error) = await Run("--wtt", Wtt, "--log", path);
+
+        exit.Should().Be(0, error);
+        output.Split(Environment.NewLine)[0].Should().Be($"{Path.GetFileName(path)} (04:30:00 to 05:52:31): 139 runs between timing locations, 117 usable; samples: 297 signal, 521 track circuit, 306 berth (1124 new).");
     }
 
     [Fact]

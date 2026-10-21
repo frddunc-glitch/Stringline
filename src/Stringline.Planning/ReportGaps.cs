@@ -1,6 +1,8 @@
+using Stringline.Core;
 using Stringline.Core.Live;
 using Stringline.Core.Timetables;
 using Stringline.Network;
+using Stringline.Network.Profiles;
 
 namespace Stringline.Planning;
 
@@ -40,17 +42,22 @@ public sealed record GapStats(int Count, int Median, int P95, int Max)
 /// <param name="Signals">
 /// Gaps between any two reports (signals too) while the train is between two corridor locations: what S38 can reach.
 /// </param>
-public sealed record ReportGaps(int Workings, int TimingReports, int UnbookedReports, int UnbookedOnCorridor, GapStats Booked, GapStats Timing, GapStats Signals)
+/// <param name="Placed">
+/// The same, counting only corridor timing locations and the signals placed on a corridor from the profile's learned
+/// places (S38): what the graph and forecast use. Empty without places.
+/// </param>
+public sealed record ReportGaps(int Workings, int TimingReports, int UnbookedReports, int UnbookedOnCorridor, GapStats Booked, GapStats Timing, GapStats Signals, GapStats? Placed = null)
 {
     public double UnbookedShare => TimingReports == 0 ? 0 : (double)UnbookedReports / TimingReports;
 
-    public static ReportGaps Measure(WorkingTimetable timetable, IEnumerable<LiveTrain> trains, IEnumerable<Corridor> corridors)
+    /// <param name="places">The profile's usable learned places, for <see cref="Placed"/>; null leaves it out.</param>
+    public static ReportGaps Measure(WorkingTimetable timetable, IEnumerable<LiveTrain> trains, IEnumerable<Corridor> corridors, UsablePlaces? places = null)
     {
         ArgumentNullException.ThrowIfNull(timetable);
         ArgumentNullException.ThrowIfNull(trains);
         ArgumentNullException.ThrowIfNull(corridors);
         var onCorridor = corridors.SelectMany(c => c.Locations).Select(l => l.Tiploc).ToHashSet();
-        List<int> booked = [], timing = [], signals = [];
+        List<int> booked = [], timing = [], signals = [], placed = [];
         int workings = 0, reports = 0, unbooked = 0, unbookedOn = 0;
         foreach (var live in trains)
         {
@@ -91,15 +98,34 @@ public sealed record ReportGaps(int Workings, int TimingReports, int UnbookedRep
                 // Any report counts while the train is between corridor reports: from its first to its last.
                 var first = actuals.FindIndex(a => a.AtTimingPoint && onCorridor.Contains(a.Location));
                 var last = actuals.FindLastIndex(a => a.AtTimingPoint && onCorridor.Contains(a.Location));
-                ActualEvent? previous = null;
+                ActualEvent? previous = null, previousPlaced = null;
+                Tiploc? from = null;
                 for (var i = first; i >= 0 && i <= last; i++)
                 {
-                    Gap(signals, ref previous, actuals[i]);
+                    var a = actuals[i];
+                    Gap(signals, ref previous, a);
+                    if (places is null)
+                    {
+                        continue;
+                    }
+
+                    if (a.AtTimingPoint)
+                    {
+                        from = onCorridor.Contains(a.Location) ? a.Location : null;
+                        if (from is not null)
+                        {
+                            Gap(placed, ref previousPlaced, a);
+                        }
+                    }
+                    else if (from is { } f && places.SignalFrom(a.Location.Code, f).Any(p => onCorridor.Contains(p.To)))
+                    {
+                        Gap(placed, ref previousPlaced, a);
+                    }
                 }
             }
         }
 
-        return new ReportGaps(workings, reports, unbooked, unbookedOn, GapStats.Of(booked), GapStats.Of(timing), GapStats.Of(signals));
+        return new ReportGaps(workings, reports, unbooked, unbookedOn, GapStats.Of(booked), GapStats.Of(timing), GapStats.Of(signals), places is null ? null : GapStats.Of(placed));
     }
 
     /// <summary>Adds the gap since <paramref name="previous"/> if it was somewhere else (time at one place is a dwell).</summary>

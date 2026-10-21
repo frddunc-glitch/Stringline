@@ -106,10 +106,11 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         InitAssist();
         Snapshot = engine.Current;
         // Read them all first: setting any saves the view settings, which would overwrite the others.
-        var (byDelay, vertical, knockOn) = (_settings.ColourByDelay, _settings.VerticalGraph, _settings.ForecastKnockOn);
+        var (byDelay, vertical, knockOn, signals) = (_settings.ColourByDelay, _settings.VerticalGraph, _settings.ForecastKnockOn, _settings.SignalDisplay);
         IsVertical = vertical;
         ColourMode = byDelay ? GraphColourMode.Delay : GraphColourMode.Category;
         ForecastKnockOn = knockOn;
+        SignalDisplay = signals;
         ClockSize = _settings.ClockSize;
         engine.SetForecast(options: _settings.Planning.ToForecastOptions(knockOn), conflicts: _settings.Planning.ToConflictOptions());
         Trains.PropertyChanged += (_, e) =>
@@ -176,6 +177,21 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     [ObservableProperty]
     public partial bool ShowLiveHead { get; set; } = true;
+
+    /// <summary>How placed signals show on the location axis (View ▸ Signals: off, ticks or rows; S38). Remembered.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSignalsOff), nameof(IsSignalTicks), nameof(IsSignalRows))]
+    public partial SignalDisplay SignalDisplay { get; set; } = SignalDisplay.Ticks;
+
+    public bool IsSignalsOff => SignalDisplay == SignalDisplay.Off;
+
+    public bool IsSignalTicks => SignalDisplay == SignalDisplay.Ticks;
+
+    public bool IsSignalRows => SignalDisplay == SignalDisplay.Rows;
+
+    /// <summary>View ▸ Signals ▸ Off, Ticks or Rows (the parameter is the <see cref="Graph.SignalDisplay"/> name).</summary>
+    [RelayCommand]
+    private void SetSignalDisplay(string display) => SignalDisplay = Enum.Parse<SignalDisplay>(display);
 
     /// <summary>The forecast includes knock-on delay from other trains (headways, single lines). Remembered.</summary>
     [ObservableProperty]
@@ -303,6 +319,12 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     partial void OnShowForecastChanged(bool value) => RequestScene();
 
     partial void OnShowLiveHeadChanged(bool value) => RequestScene();
+
+    partial void OnSignalDisplayChanged(SignalDisplay value)
+    {
+        SaveViewSettings();
+        RequestScene();
+    }
 
     partial void OnForecastKnockOnChanged(bool value)
     {
@@ -677,9 +699,9 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private void SaveViewSettings()
     {
         var byDelay = ColourMode == GraphColourMode.Delay;
-        if (_settings.ColourByDelay != byDelay || _settings.VerticalGraph != IsVertical || _settings.ForecastKnockOn != ForecastKnockOn)
+        if (_settings.ColourByDelay != byDelay || _settings.VerticalGraph != IsVertical || _settings.ForecastKnockOn != ForecastKnockOn || _settings.SignalDisplay != SignalDisplay)
         {
-            _settings = _settings with { ColourByDelay = byDelay, VerticalGraph = IsVertical, ForecastKnockOn = ForecastKnockOn };
+            _settings = _settings with { ColourByDelay = byDelay, VerticalGraph = IsVertical, ForecastKnockOn = ForecastKnockOn, SignalDisplay = SignalDisplay };
             _settingsStore.Save(_settings);
         }
     }
@@ -705,7 +727,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         HasTimetable = true;
         _engine.SetTimetable(loaded.Timetable);
         Store?.SetTimetable(loaded.Path, loaded.Timetable.Header.Name, loaded.Timetable.AreaId, loaded.Profile.SimName(loaded.Timetable.Header), loaded.Timetable.Header.TimetableVersion);
-        _engine.SetForecast(await Task.Run(() => ForecastNetwork.For(loaded.Profile, loaded.Timetable)));
+        _engine.SetForecast(await Task.Run(() => ForecastNetwork.For(loaded.Profile, loaded.Timetable, _settings.LearnMinSamples)));
         var area = loaded.Timetable.AreaId;
         if (area.Length > 0)
         {
@@ -1019,6 +1041,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             ShowActual = ShowActual,
             ShowForecast = ShowForecast,
             ShowLiveHead = ShowLiveHead,
+            Signals = SignalDisplay,
             ShowDisruptions = ShowDisruptions,
             ShowConflicts = ShowConflicts,
             ColourMode = ColourMode,

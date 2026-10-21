@@ -48,6 +48,10 @@ public readonly record struct GraphVertex(double Time, double Axis);
 /// The category's line style (S14a) on the WTT, plan and actual layers. The forecast layer keeps its own dash-dot, so it
 /// is always <see cref="LineStyle.Solid"/> there.
 /// </param>
+/// <param name="Signals">
+/// For an actual or forecast path that bends at learned places (S38): the signal (or track circuit or berth) at each
+/// vertex, null at a timing location. Null if it has none.
+/// </param>
 /// <remarks>The bounds are worked out once, when the path is made; do not copy a path <c>with</c> new vertices.</remarks>
 public sealed record GraphPath(
     string Key,
@@ -63,7 +67,8 @@ public sealed record GraphPath(
     IReadOnlyList<Colour>? SegmentColours = null,
     IReadOnlyList<int>? Points = null,
     bool IsCancelled = false,
-    LineStyle Style = LineStyle.Solid)
+    LineStyle Style = LineStyle.Solid,
+    IReadOnlyList<string?>? Signals = null)
 {
     public double TimeMin => Vertices[0].Time;
 
@@ -72,6 +77,9 @@ public sealed record GraphPath(
     public double AxisMin { get; } = Vertices.Count == 0 ? 0 : Vertices.Min(v => v.Axis);
 
     public double AxisMax { get; } = Vertices.Count == 0 ? 0 : Vertices.Max(v => v.Axis);
+
+    /// <summary>The learned place at vertex <paramref name="vertex"/> (S38), or null at a timing location.</summary>
+    public string? SignalAt(int vertex) => Signals is { } signals && vertex >= 0 && vertex < signals.Count ? signals[vertex] : null;
 
     /// <summary>The plan point index of vertex <paramref name="vertex"/>, if the path has them.</summary>
     public int? PointAt(int vertex) => Points is { } points && vertex >= 0 && vertex < points.Count ? points[vertex] : null;
@@ -169,6 +177,26 @@ public sealed record GraphLiveHead(string Key, TrainId Train, Headcode Headcode,
 /// </param>
 public sealed record GraphLocation(Tiploc Tiploc, string Name, double Axis, bool IsStation, int Platforms, bool IsMinor = false);
 
+/// <summary>How placed signals show on the location axis (View ▸ Signals, S38).</summary>
+public enum SignalDisplay
+{
+    /// <summary>Not shown.</summary>
+    Off,
+
+    /// <summary>A short tick at the plot's edge for each: Down signals on the location labels' side, Up on the other.</summary>
+    Ticks,
+
+    /// <summary>A faint dotted row across the plot for each, as a minor row (S36).</summary>
+    Rows,
+}
+
+/// <summary>A placed signal on the corridor (S38): where it is on the axis, and what it was learned from.</summary>
+/// <param name="Axis">Its axis position (0..1), as far between <paramref name="From"/> and <paramref name="To"/> as its fraction.</param>
+/// <param name="Direction">The direction trains pass it in.</param>
+/// <param name="Run">The kind of run the drawn place is for.</param>
+/// <param name="Samples">Trains it was learned from.</param>
+public sealed record GraphSignal(string Id, double Axis, TrackDirection Direction, Tiploc From, Tiploc To, double Fraction, RunKind Run, int Samples, bool HandSet = false);
+
 /// <summary>
 /// Everything one corridor's graph shows, in world coordinates, independent of the viewport: build it once per data
 /// change and render it at any pan and zoom.
@@ -193,6 +221,12 @@ public sealed record GraphScene(
 
     /// <summary>Running trains' live heads (S36), drawn from <see cref="Now"/> each frame.</summary>
     public IReadOnlyList<GraphLiveHead> LiveHeads { get; init; } = [];
+
+    /// <summary>The placed signals on this corridor (S38), in axis order; empty when <see cref="SignalDisplay"/> is off.</summary>
+    public IReadOnlyList<GraphSignal> Signals { get; init; } = [];
+
+    /// <summary>How <see cref="Signals"/> are drawn.</summary>
+    public SignalDisplay SignalDisplay { get; init; } = SignalDisplay.Off;
 
     public IEnumerable<GraphPath> InLayer(GraphLayer layer) => Paths.Where(p => p.Layer == layer);
 }

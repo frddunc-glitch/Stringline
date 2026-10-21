@@ -31,6 +31,27 @@ public sealed class LiveStateTests
     private static TrainId Id(string id) => new(id);
 
     [Fact]
+    public void Signals_and_track_circuits_go_to_the_line_side_without_changing_the_version()
+    {
+        var state = State(Clock("06:00"), Location("1", "1A01", "WLOO", "06:00", TrainLocationAction.Depart));
+        var version = state.Version;
+
+        state.Apply(new SignallingStateEvent(T0, "waterloo", SignallingObjectType.Track, "track", "T1", SimTime.Parse("06:00:10"), new Dictionary<string, string> { ["clear"] = "False" }));
+        state.Apply(new SignallingStateEvent(T0, "waterloo", SignallingObjectType.Signal, "signal", "S1", null, new Dictionary<string, string> { ["aspect"] = "0" }));
+
+        state.Version.Should().Be(version, "line-side changes come many times a second (S38)");
+        state.LineSideVersion.Should().Be(2);
+        state.LineSide.Track("T1")!.Value.Clear.Should().BeFalse();
+        state.LineSide.Signal("S1").Should().Be(new SignalState(0, SimTime.Parse("06:00")), "no time: the clock's");
+
+        state.Apply(Location("1", "1A01", "S3", "06:00:20") with { AspectPassed = 2, AspectApproach = 0 });
+        state.Find("1")!.Last.Should().Be(new ActualEvent(new Tiploc("S3"), TrainLocationAction.Pass, SimTime.Parse("06:00:20"), "", false, 0, 2, 0));
+
+        state.Reset();
+        state.LineSide.IsEmpty.Should().BeTrue();
+    }
+
+    [Fact]
     public void Starts_empty()
     {
         var state = State();

@@ -71,6 +71,9 @@ internal sealed partial class MainViewModel
                 LogLearnSaveFailed(error);
             }
 
+            // S38: the graph and forecast use what was just learned.
+            _engine.SetForecast(ForecastNetwork.For(outcome.Profile, timetable, _settings.LearnMinSamples));
+
             var summary = outcome.Describe(id);
             LogLearned(summary);
         }

@@ -7,11 +7,16 @@ namespace Stringline.Benchmarks;
 /// <summary>
 /// A busy made-up corridor for the GR-9 budget: <c>trains</c> trains spread over a 6 hour window, half Down and half
 /// Up, each with a WTT path and, if it has started by now, an actual path coloured by delay band segment by segment
-/// (the most runs per path), and a live head for each train running at now. Seeded, so every run draws the same scene.
+/// (the most runs per path), and a live head for each train running at now. Since S38 each actual path also bends at
+/// <see cref="SignalsPerSection"/> placed signals between locations, and the axis has their ticks. Seeded, so every run
+/// draws the same scene.
 /// </summary>
 public static class SyntheticGraph
 {
     public const int Locations = 30;
+
+    /// <summary>Placed signals between two locations, each way (S38).</summary>
+    public const int SignalsPerSection = 3;
 
     /// <summary>The window: 06:00 to 12:00, with now at 08:00 (a third of the way, as the app follows).</summary>
     public static readonly SimTime Start = SimTime.FromClock(6, 0);
@@ -47,14 +52,29 @@ public static class SyntheticGraph
             var booked = new List<GraphVertex>();
             var actual = new List<GraphVertex>();
             var delays = new List<int>();
+            var signalIds = new List<string?>();
             var delay = random.Next(-60, 120);
             for (var i = 0; i < Locations; i++)
             {
                 var axis = locations[down ? i : Locations - 1 - i].Axis;
                 var stops = i % 3 == 0 && i > 0 && i < Locations - 1;
+                if (i > 0)
+                {
+                    // The signals passed since the last location (S38), evenly through the run.
+                    var from = actual[^1];
+                    for (var s = 1; s <= SignalsPerSection; s++)
+                    {
+                        var share = s / (SignalsPerSection + 1.0);
+                        actual.Add(new GraphVertex(from.Time + (share * (time + delay - from.Time)), from.Axis + (share * (axis - from.Axis))));
+                        delays.Add(delays[^1]);
+                        signalIds.Add($"S{i}{s}");
+                    }
+                }
+
                 booked.Add(new GraphVertex(time, axis));
                 actual.Add(new GraphVertex(time + delay, axis));
                 delays.Add(delay);
+                signalIds.Add(null);
                 if (stops)
                 {
                     time += 60;
@@ -62,6 +82,7 @@ public static class SyntheticGraph
                     delay = Math.Max(-60, delay + random.Next(-30, 90));
                     actual.Add(new GraphVertex(time + delay, axis));
                     delays.Add(delay);
+                    signalIds.Add(null);
                 }
 
                 time += random.Next(90, 150);
@@ -76,7 +97,7 @@ public static class SyntheticGraph
                 var segments = Enumerable.Range(1, seen - 1).Select(i => DelayBands.ColourOfSeconds(delays[i])).ToList();
                 paths.Add(new GraphPath($"act:{t}/0", GraphLayer.Actual, id, headcode, segments[^1], actual.Take(seen).ToList(),
                     Direction: down ? Network.TrackDirection.Down : Network.TrackDirection.Up, LiveUid: t.ToString(System.Globalization.CultureInfo.InvariantCulture), Working: 0,
-                    SegmentColours: segments));
+                    SegmentColours: segments, Signals: signalIds.Take(seen).ToList()));
                 if (seen < actual.Count)
                 {
                     // A live head (S36) from its last report towards the next point, drawn every frame from the clock.
@@ -85,7 +106,15 @@ public static class SyntheticGraph
             }
         }
 
-        return new GraphScene("main", "Synthetic — 500 trains", locations, paths, Now) { LiveHeads = heads };
+        var signals = Enumerable.Range(1, Locations - 1)
+            .SelectMany(i => Enumerable.Range(1, SignalsPerSection).SelectMany(s => new[]
+            {
+                new GraphSignal($"S{i}{s}", (i - 1 + (s / (SignalsPerSection + 1.0))) / (Locations - 1), Network.TrackDirection.Down, locations[i - 1].Tiploc, locations[i].Tiploc, s / (SignalsPerSection + 1.0), RunKind.Through, 10),
+                new GraphSignal($"S{i}{s}U", (i - (s / (SignalsPerSection + 1.0))) / (Locations - 1), Network.TrackDirection.Up, locations[i].Tiploc, locations[i - 1].Tiploc, s / (SignalsPerSection + 1.0), RunKind.Through, 10),
+            }))
+            .OrderBy(s => s.Axis)
+            .ToList();
+        return new GraphScene("main", "Synthetic — 500 trains", locations, paths, Now) { LiveHeads = heads, Signals = signals, SignalDisplay = SignalDisplay.Ticks };
     }
 
     /// <summary>The window above on a full-HD surface.</summary>

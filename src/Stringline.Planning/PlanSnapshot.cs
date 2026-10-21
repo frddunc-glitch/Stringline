@@ -40,7 +40,8 @@ public sealed class PlanSnapshot(
     Forecast? Forecast = null,
     ConflictSet? Conflicts = null,
     ForecastSettings? Settings = null,
-    SignallingIndex? Signalling = null)
+    SignallingIndex? Signalling = null,
+    LineSideState? LineSide = null)
 {
     private Dictionary<TrainId, (LiveTrain Train, int Working)>? _byTrain;
     private Dictionary<string, LiveTrain>? _byUid;
@@ -74,6 +75,9 @@ public sealed class PlanSnapshot(
     public ForecastSettings Settings { get; } = Settings ?? ForecastSettings.Default;
 
     public SignallingIndex Signalling { get; } = Signalling ?? SignallingIndex.Empty;
+
+    /// <summary>The signals, track circuits and berths as last reported (S38).</summary>
+    public LineSideState LineSide { get; } = LineSide ?? LineSideState.Empty;
 
     /// <summary>Before anything has happened.</summary>
     public static PlanSnapshot Empty { get; } = new(0, null, [], SimClockReading.None, new MatchSummary(0, 0, 0, 0, 0, new Dictionary<MatchMethod, int>()), 0, null);

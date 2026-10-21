@@ -95,6 +95,14 @@ public sealed record SignallingPlace
     /// </summary>
     public string? Signal { get; init; }
 
+    /// <summary>
+    /// A signal: the signals trains passed next after it on the way to <see cref="To"/>, with how many (S38), so the
+    /// signal ahead of a train is the one on its line, not a parallel one at a similar place. Null if none was seen
+    /// (the last signal before <see cref="To"/>, or a place learned before S38).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, int>? Next { get; init; }
+
     /// <summary>The latest samples (0–1), oldest first.</summary>
     public IReadOnlyList<double> Samples { get; init; } = [];
 
@@ -141,7 +149,8 @@ public sealed record LearnedSession(string Id, SimTime UpTo);
 /// <param name="At">When the run it came from reached <paramref name="To"/>.</param>
 /// <param name="End">A track circuit's end, if it cleared before the train reached <paramref name="To"/>.</param>
 /// <param name="Line">The line or platform reported at <paramref name="From"/>, if any.</param>
-public sealed record PlaceSample(SignallingKind Kind, string Id, Tiploc From, Tiploc To, double Fraction, SimTime At, double? End = null, string? Line = null, string? Signal = null, RunKind Run = RunKind.Through);
+/// <param name="Next">A signal: the signal the train passed next before reaching <paramref name="To"/>, if any (S38).</param>
+public sealed record PlaceSample(SignallingKind Kind, string Id, Tiploc From, Tiploc To, double Fraction, SimTime At, double? End = null, string? Line = null, string? Signal = null, RunKind Run = RunKind.Through, string? Next = null);
 
 /// <summary>
 /// The signals, track circuits and TD berths learned for a sim (S37, #19), kept in its profile so they can be shared.
@@ -273,6 +282,7 @@ public sealed record SignallingPlaces
                     SampleCount = mine.SampleCount + theirs.SampleCount,
                     Direction = mine.Direction ?? theirs.Direction,
                     Signal = mine.Signal ?? theirs.Signal,
+                    Next = Counted(mine.Next, theirs.Next?.Select(n => (n.Key, n.Value)) ?? []),
                     Line = mine.Line == theirs.Line || theirs.Line is null ? mine.Line : mine.Line is null && !mine.MixedLines ? theirs.Line : null,
                     MixedLines = mine.MixedLines || theirs.MixedLines || (mine.Line is not null && theirs.Line is not null && mine.Line != theirs.Line),
                     LastLearned = Later(mine.LastLearned, theirs.LastLearned),
@@ -471,6 +481,7 @@ public sealed record SignallingPlaces
             LastLearned = Later(place.LastLearned, samples[^1].At),
             LastSession = sessionId,
             Signal = samples.LastOrDefault(s => s.Signal is not null)?.Signal ?? place.Signal,
+            Next = Counted(place.Next, samples.Where(s => s.Next is not null).Select(s => (s.Next!.Trim(), 1))),
             Line = line,
             MixedLines = mixed,
         };
@@ -482,6 +493,18 @@ public sealed record SignallingPlaces
         Fraction = Math.Round(Median(place.Samples), 4),
         EndFraction = place.EndSamples.Count == 0 ? null : Math.Round(Median(place.EndSamples), 4),
     };
+
+    /// <summary>Counts of next signals with more added; null if there are none.</summary>
+    private static Dictionary<string, int>? Counted(IReadOnlyDictionary<string, int>? counts, IEnumerable<(string Id, int Count)> more)
+    {
+        var result = counts is null ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase) : new Dictionary<string, int>(counts, StringComparer.OrdinalIgnoreCase);
+        foreach (var (id, count) in more)
+        {
+            result[id] = result.GetValueOrDefault(id) + count;
+        }
+
+        return result.Count == 0 ? null : result;
+    }
 
     private static List<double> Keep(IEnumerable<double> samples) => samples.Select(s => Math.Round(Math.Clamp(s, 0, 1), 4)).TakeLast(MaxKeptSamples).ToList();
 

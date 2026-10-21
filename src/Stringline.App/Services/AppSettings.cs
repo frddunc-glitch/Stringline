@@ -50,6 +50,10 @@ internal sealed record AppSettings
     /// <summary>The forecast includes knock-on delay from other trains (the interaction pass). On unless turned off.</summary>
     public bool ForecastKnockOn { get; init; } = true;
 
+    /// <summary>How placed signals show on the location axis (View ▸ Signals, S38): ticks unless changed.</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<Graph.SignalDisplay>))]
+    public Graph.SignalDisplay SignalDisplay { get; init; } = Graph.SignalDisplay.Ticks;
+
     /// <summary>Suggestions may terminate a train short or cancel it, for a block (S15). Off unless turned on.</summary>
     public bool SuggestCancellations { get; init; }
 

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Stringline.Core;
 using Stringline.Graph;
@@ -323,7 +324,11 @@ internal sealed partial class TrainDetailViewModel : ObservableObject
                 parts.Add($"{PlanText.Duration(f.KnockOnSeconds)} knock-on");
             }
 
-            if (f.PossiblyStopped)
+            if (f.Standing is { } standing)
+            {
+                parts.Add($"standing at {standing.Signal} since {standing.Since.ToString("H", CultureInfo.InvariantCulture)}");
+            }
+            else if (f.PossiblyStopped)
             {
                 parts.Add("possibly stopped");
             }

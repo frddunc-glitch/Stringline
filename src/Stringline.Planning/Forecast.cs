@@ -1,4 +1,5 @@
 using Stringline.Core;
+using Stringline.Network.Profiles;
 
 namespace Stringline.Planning;
 
@@ -101,6 +102,12 @@ public sealed record TrainForecast(
     /// </summary>
     public ProgressAnchor? Anchor { get; init; }
 
+    /// <summary>
+    /// The train is standing at a red signal between timing points (S38), not running late: its run on is forecast
+    /// from when it can move. Null otherwise.
+    /// </summary>
+    public StandingAtSignal? Standing { get; init; }
+
     /// <summary>The index in <see cref="Points"/> of the first point with a forecast time, or -1 if none.</summary>
     public int FirstForecast
     {
@@ -142,9 +149,52 @@ public sealed record TrainForecast(
 /// <param name="After">The plan point the train last reported before it.</param>
 /// <param name="Before">The next timed plan point, which the run is forecast to.</param>
 /// <param name="Share">How far along the run from <paramref name="After"/> to <paramref name="Before"/> it lies, in minimum run time (0–1).</param>
+/// <remarks>
+/// Since S38 an anchor can also be a learned place (<see cref="Place"/>): a signal the train passed, a track circuit
+/// it entered or a berth its description stepped into. <see cref="Location"/> is then the place's ID.
+/// </remarks>
 public sealed record ProgressAnchor(Tiploc Location, SimTime Time, int After, int Before, double Share)
 {
-    public override string ToString() => $"passed {Location} {Time} (not booked)";
+    /// <summary>The learned place the train was last known at (S38), or null for an unbooked timing location.</summary>
+    public AnchorPlace? Place { get; init; }
+
+    public override string ToString() => Place is { } place ? $"{place} {Time}" : $"passed {Location} {Time} (not booked)";
+}
+
+/// <summary>A learned place a train's progress was measured at (S38): between two timing locations, as far as its fraction.</summary>
+/// <param name="From">The timing location the train last reported.</param>
+/// <param name="To">The next timing location the place was learned to.</param>
+/// <param name="Fraction">Its place between them, in run time (<c>SignallingPlace.Fraction</c>).</param>
+/// <param name="FromTime">When the train left (or reached) <paramref name="From"/>.</param>
+/// <param name="FromShare">How far along the run <paramref name="From"/> is (0 unless it is an unbooked timing location).</param>
+/// <param name="Aspect">At a signal passed: the aspect it showed (<c>SignalAspects</c>), if given.</param>
+public sealed record AnchorPlace(SignallingKind Kind, string Id, Tiploc From, Tiploc To, double Fraction, RunKind Run, SimTime FromTime, double FromShare, int? Aspect = null)
+{
+    /// <summary>
+    /// A track circuit: the signal at the start of its block. A berth: the signal it belongs to, at the end of its
+    /// block (<c>SignallingPlace.Signal</c>). Null for a signal.
+    /// </summary>
+    public string? Block { get; init; }
+
+    public override string ToString() => Kind switch
+    {
+        SignallingKind.Signal => $"passed {Id}",
+        SignallingKind.TrackCircuit => $"entered track circuit {Id}",
+        _ => $"stepped into berth {Id}",
+    };
+}
+
+/// <summary>
+/// A train standing at a red signal between timing points (S38): the signal ahead of where it was last known shows red,
+/// and it is overdue there.
+/// </summary>
+/// <param name="Signal">The signal's ID.</param>
+/// <param name="Since">When it is reckoned to have got there.</param>
+/// <param name="Leaves">The earliest it is forecast to move: now, or later if the train ahead holds it.</param>
+/// <param name="AspectKnown">True if the sim reported the signal at red (TD topic); false if worked out from the aspect passed before it.</param>
+public sealed record StandingAtSignal(string Signal, SimTime Since, Tiploc From, Tiploc To, double Fraction, SimTime Leaves, bool AspectKnown)
+{
+    public override string ToString() => $"standing at {Signal} since {Since:T}";
 }
 
 /// <summary>A train held by a block (<c>06-…md</c> §2): it would have left point <paramref name="Index"/> at <paramref name="Departure"/>, into the block.</summary>
@@ -177,6 +227,15 @@ public sealed record ForecastOptions
     /// <see cref="TrainForecast.Anchor"/>); false forecasts from its last booked report only, as before S36.
     /// </summary>
     public bool UnbookedAnchors { get; init; } = true;
+
+    /// <summary>
+    /// Forecast a running train on from the learned signals, track circuits and berths it has passed (S38), and tell a
+    /// train standing at a red signal from a late one (<see cref="TrainForecast.Standing"/>).
+    /// </summary>
+    public bool SignalPlaces { get; init; } = true;
+
+    /// <summary>A run is reckoned at most this much slower than its minimum from the train's running so far in it (S38).</summary>
+    public double MaxPace { get; init; } = 1.5;
 }
 
 /// <summary>

@@ -18,6 +18,12 @@ public sealed record PlanningEngineOptions
     /// </summary>
     public TimeSpan PublishInterval { get; init; } = TimeSpan.FromMilliseconds(100);
 
+    /// <summary>
+    /// A change only to the signals and track circuits (S38) publishes at most this often, unless something else
+    /// changed too: they come many times a second, and each publish re-forecasts.
+    /// </summary>
+    public TimeSpan LineSideInterval { get; init; } = TimeSpan.FromSeconds(1);
+
     public MatcherOptions? Matcher { get; init; }
 
     /// <summary>The forecaster's settings to start with; <see cref="PlanningEngine.SetForecast"/> changes them.</summary>
@@ -68,6 +74,7 @@ public sealed partial class PlanningEngine
     private PlanSnapshot _current = PlanSnapshot.Empty;
     private long _sequence;
     private long _publishedVersion;
+    private long _publishedLineSide;
     private SignallingIndex _signalling = SignallingIndex.Empty;
     private SignallingIndex _publishedSignalling = SignallingIndex.Empty;
     private DateTimeOffset _lastPublish = DateTimeOffset.MinValue;
@@ -76,7 +83,7 @@ public sealed partial class PlanningEngine
     private ForecastOptions _forecastOptions;
     private ConflictOptions _conflictOptions;
     private long _forecastSettingsVersion;
-    private (long State, long Plan, long Settings) _forecastKey = (-1, -1, -1);
+    private (long State, long LineSide, long Plan, long Settings) _forecastKey = (-1, -1, -1, -1);
     private Forecast _forecast = Forecast.Empty;
     private ConflictSet _conflicts = ConflictSet.Empty;
     private ForecastSettings _settings = ForecastSettings.Default;
@@ -181,12 +188,18 @@ public sealed partial class PlanningEngine
             while (await reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 var forced = Drain(reader);
+                var wait = _lastPublish + _options.PublishInterval - _time.GetUtcNow();
                 if (!forced && _state.Version == _publishedVersion && ReferenceEquals(_signalling, _publishedSignalling))
                 {
-                    continue;
+                    if (_state.LineSideVersion == _publishedLineSide)
+                    {
+                        continue;
+                    }
+
+                    // Only signals and track circuits changed (S38): they come many times a second, so wait longer.
+                    wait = _lastPublish + _options.LineSideInterval - _time.GetUtcNow();
                 }
 
-                var wait = _lastPublish + _options.PublishInterval - _time.GetUtcNow();
                 if (!forced && wait > TimeSpan.Zero)
                 {
                     // Coalesce: whatever arrives while we wait goes into the same snapshot.
@@ -272,7 +285,7 @@ public sealed partial class PlanningEngine
         {
             _history.Clear();
         }
-        else if (e is ClockEvent or TrainLocationEvent or TrainDelayEvent or TdStepEvent or TimetableSummaryEvent)
+        else if (IsKept(e))
         {
             _history.Add(e);
         }
@@ -292,6 +305,14 @@ public sealed partial class PlanningEngine
             LogApplyFailed(ex, e.GetType().Name);
         }
     }
+
+    /// <summary>
+    /// The events the live state is built from, kept for a rebuild and by the session store: movements, the clock, TD
+    /// steps, and since S38 the signal and track circuit <c>SG_MSG</c>s (held trains, progress between timing points).
+    /// </summary>
+    public static bool IsKept(GatewayEvent e) =>
+        e is ClockEvent or TrainLocationEvent or TrainDelayEvent or TdStepEvent or TimetableSummaryEvent
+            or SignallingStateEvent { ObjectType: SignallingObjectType.Signal or SignallingObjectType.Track };
 
     private bool Execute(IPlanCommand command, TaskCompletionSource<PlanCommandResult> result)
     {
@@ -563,8 +584,10 @@ public sealed partial class PlanningEngine
             _forecast,
             _conflicts,
             _settings,
-            _signalling);
+            _signalling,
+            _state.LineSide);
         _publishedVersion = _state.Version;
+        _publishedLineSide = _state.LineSideVersion;
         _publishedSignalling = _signalling;
         _lastPublish = _time.GetUtcNow();
         Volatile.Write(ref _current, snapshot);
@@ -591,7 +614,7 @@ public sealed partial class PlanningEngine
     /// <summary>Re-forecasts if the live state, the plan or the forecast settings changed since the last one.</summary>
     private void UpdateForecast(IReadOnlyList<LiveTrain> trains, SimClockReading clock)
     {
-        var key = (_state.Version, _planVersion, _forecastSettingsVersion);
+        var key = (_state.Version, _state.LineSideVersion, _planVersion, _forecastSettingsVersion);
         if (key == _forecastKey)
         {
             return;
@@ -611,6 +634,7 @@ public sealed partial class PlanningEngine
                 EntryDelays = _entryDelays,
                 Network = _network,
                 Options = _forecastOptions,
+                LineSide = _state.LineSide,
             });
         }
 #pragma warning disable CA1031 // A forecaster fault must not stop the live picture: the forecast is dropped.

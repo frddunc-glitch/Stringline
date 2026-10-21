@@ -107,12 +107,12 @@ internal sealed partial class MainViewModel
         ForecastKnockOn = next.ForecastKnockOn;
         ClockSize = next.ClockSize;
         SuggestionPanel.AllowCancellation = next.SuggestCancellations;
-        if (before.Planning.DefaultHeadwaySeconds != next.Planning.DefaultHeadwaySeconds && _timetable is { } loaded)
+        if ((before.Planning.DefaultHeadwaySeconds != next.Planning.DefaultHeadwaySeconds || before.LearnMinSamples != next.LearnMinSamples) && _timetable is { } loaded)
         {
-            // #7: the sections on the default headway take the new one.
+            // #7: the sections on the default headway take the new one; S38: the places used change with the samples needed.
             var profile = WithGlobalHeadway(loaded.Profile);
             _timetable = loaded with { Profile = profile };
-            _engine.SetForecast(ForecastNetwork.For(profile, loaded.Timetable));
+            _engine.SetForecast(ForecastNetwork.For(profile, loaded.Timetable, next.LearnMinSamples));
         }
 
         if (before.Planning != next.Planning)
