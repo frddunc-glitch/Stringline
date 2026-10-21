@@ -114,6 +114,9 @@ public sealed record ReplanStep(SuggestionKind Kind, TrainId Train, Headcode Hea
     /// <summary>For a swap, the train that goes first.</summary>
     public Headcode? Other { get; init; }
 
+    /// <summary>For a hold at a signal (S33), the signal, before <see cref="Location"/>; null at a timing point.</summary>
+    public string? Signal { get; init; }
+
     /// <summary>The step of a suggestion the rules applied.</summary>
     public static ReplanStep Of(Suggestion suggestion)
     {
@@ -125,6 +128,7 @@ public sealed record ReplanStep(SuggestionKind Kind, TrainId Train, Headcode Hea
             Platform = suggestion.Platform,
             Line = suggestion.Line,
             Other = suggestion.Other,
+            Signal = suggestion.Signal,
         };
     }
 
@@ -139,6 +143,7 @@ public sealed record ReplanStep(SuggestionKind Kind, TrainId Train, Headcode Hea
         var until = Until is { } u ? time(u) : "?";
         return Kind switch
         {
+            SuggestionKind.Hold or SuggestionKind.Swap when Signal is { } signal => $"Hold {Headcode} at {signal} before {at} until {until} ({PlanText.WithSign(HoldSeconds)})" + (Kind == SuggestionKind.Swap ? $" so {Other} goes first" : string.Empty),
             SuggestionKind.Hold => $"Hold {Headcode} at {at} until {until} ({PlanText.WithSign(HoldSeconds)})",
             SuggestionKind.Swap => $"Hold {Headcode} at {at} until {until} ({PlanText.WithSign(HoldSeconds)}) so {Other} goes first",
             SuggestionKind.Platform => $"{Headcode} into platform {Platform} at {at}",

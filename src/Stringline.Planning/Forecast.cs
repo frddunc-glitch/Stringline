@@ -93,6 +93,12 @@ public sealed record TrainForecast(
     /// </summary>
     public IReadOnlyList<RuleHold> RuleHolds { get; init; } = [];
 
+    /// <summary>
+    /// Where the plan holds the train at a signal (S33, <see cref="TrainPlan.SignalHolds"/>) and the forecast stops it
+    /// there, in the order they happen. A hold the train gets to after its time, or has passed, is left out.
+    /// </summary>
+    public IReadOnlyList<SignalHoldForecast> SignalHolds { get; init; } = [];
+
     /// <summary>Why the train is <see cref="TrainForecastStatus.NotRunning"/>; null otherwise.</summary>
     public NotRunningReason? NotRunning { get; init; }
 

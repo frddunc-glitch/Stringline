@@ -14,7 +14,7 @@ A place is measured in **run time**, the way the graph's corridors are spaced. A
 - **Track circuits** are put to the train last at the signal before them, when only one train is near. The place is where its front enters the track circuit, and the end is where the track circuit clears behind it. A track circuit occupied with no train near (a failure, say) teaches nothing.
 - **Berths** are placed by the train whose headcode steps into them. Berth `0457` goes with signal `S457`.
 
-A place is **used** once enough trains have passed it (three, unless you change it) and their samples are close together (the middle half of them within a tenth of the section). Until then it is still **learning**. Later versions of Stringline draw and forecast with used places.
+A place is **used** once enough trains have passed it (three, unless you change it) and their samples are close together (the middle half of them within a tenth of the section). Until then it is still **learning**. Stringline draws and forecasts with used places (and those set by hand), and offers them for [holding a train at a signal](re-planning.md#holding-at-a-signal); a place still learning is not offered.
 
 Learning happens in every live session, replay and review, without slowing the graph. What a session taught goes into the profile when the session ends (or the replay finishes), and when you save the profile in the editor. Stringline remembers each session and how far it learned from it, so resuming, reviewing or replaying it again never counts the same train twice. Track circuits and berths need the **Subscribe to the TD topic** box ticked in the Connect dialog. Signals do not.
 

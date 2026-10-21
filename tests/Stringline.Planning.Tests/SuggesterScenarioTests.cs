@@ -1,6 +1,7 @@
 using Stringline.Core;
 using Stringline.Core.Live;
 using Stringline.Core.Timetables;
+using Stringline.Network.Profiles;
 using static Stringline.Planning.Tests.ForecastTesting;
 using static Stringline.Timetable.Tests.Live.TestTimetable;
 
@@ -107,6 +108,38 @@ public sealed class SuggesterScenarioTests
 
         (suggestion.Kind, suggestion.Train, suggestion.Until).Should().Be((SuggestionKind.Swap, Stopper, SimTime.Parse("08:12")));
         suggestion.Resolves.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Headway_a_train_already_on_its_way_is_held_at_a_signal_before_the_loop()
+    {
+        // S33: as above, but with signal S12 placed three quarters of the way from A to B (hand-set, so used). 1F01
+        // gets there at 08:08; held until 08:10 it passes B at 08:11 and follows 2S01 out of the loop at the headway.
+        // The knock-on pass already has it 2 min later at C, so the hold costs nothing more than the swap's +2 min.
+        var timetable = LoopTimetable();
+        var places = SignallingPlaces.Empty.SetByHand(SignallingKind.Signal, "S12", new Tiploc("A"), new Tiploc("B"), 0.75);
+        var network = LoopNetwork(timetable).WithPlaces(UsablePlaces.Of(places));
+        var test = Make(WorkingPlan.FromTimetable(timetable), network, "08:05",
+            Running("10", "1F01", Passed("A", "08:05")), Running("11", "2S01", Dep("A", "07:55"), Arr("B", "07:59")));
+
+        var suggestions = test.Suggest(test.Conflicts.All.Single());
+
+        var hold = suggestions[0];
+        (hold.Kind, hold.Train, hold.Signal, hold.Location, hold.Index).Should().Be((SuggestionKind.Hold, Fast, "S12", new Tiploc("B"), 0));
+        hold.Commands.Should().Equal(new HoldAtSignal(Fast, new SignalHold(0, "S12", new Tiploc("A"), new Tiploc("B"), 0.75, 0.75, SimTime.Parse("08:10"))));
+        (hold.Until, hold.HoldSeconds).Should().Be((SimTime.Parse("08:10"), 120));
+        hold.Resolves.Should().BeTrue();
+        hold.WeightedDelaySeconds.Should().Be(0);
+        hold.Describe().Should().Be("Hold 1F01 at S12 before B until 08:10 (+2 min)");
+        hold.Id.Should().EndWith("|Hold:1F01:0:S12");
+        test.After(hold).Count.Should().Be(0);
+        suggestions.Should().Contain(s => s.Kind == SuggestionKind.Swap);
+
+        // A signal still learning (one sample) is not offered.
+        var learning = places.With(SignallingKind.Signal, [places.Signals[0] with { HandSet = false, Samples = [0.75], SampleCount = 1 }]);
+        var unsure = Make(WorkingPlan.FromTimetable(timetable), LoopNetwork(timetable).WithPlaces(UsablePlaces.Of(learning)), "08:05",
+            Running("10", "1F01", Passed("A", "08:05")), Running("11", "2S01", Dep("A", "07:55"), Arr("B", "07:59")));
+        unsure.Suggest(unsure.Conflicts.All.Single()).Should().ContainSingle().Which.Kind.Should().Be(SuggestionKind.Swap);
     }
 
     [Fact]

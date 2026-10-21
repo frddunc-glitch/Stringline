@@ -44,6 +44,11 @@ internal sealed record RegulationRowViewModel(
             RegulationMove.Terminate => "terminates",
             _ => r.PlannedArrive is { } arrive ? $"calls {PlanInput.Format(arrive)}–" : "calls",
         };
+        if (r.SignalHold is { } held)
+        {
+            move = $"hold at {held.Signal} until {PlanInput.Format(held.Until)}, then {move}";
+        }
+
         var order = r.Ahead.Count > 0 ? $"Ahead of {Names(r.Ahead)}"
             : r.Behind.Count > 0 ? $"Behind {Names(r.Behind)}"
             : r.IsAdded ? "Added"
@@ -64,6 +69,11 @@ internal sealed record RegulationRowViewModel(
         if (!string.IsNullOrWhiteSpace(r.Line))
         {
             tip.Add($"Line out: {r.Line}");
+        }
+
+        if (r.SignalHold is { } hold)
+        {
+            tip.Add($"Hold {r.Headcode} at {hold.Signal} until {PlanInput.Format(hold.Until)}: a reminder only, as SimSig has no gateway command to hold a train at a signal. Hold it on the panel.");
         }
 
         if (r.Ahead.Count > 0)

@@ -59,6 +59,8 @@ public sealed record ForecastRequest(WorkingPlan Plan)
 /// allowances until it is back on time, and an early one stays early only where it passes.</item>
 /// <item>At a stop it leaves after the shortest dwell, and not before its planned departure.</item>
 /// <item>A block in force over the run holds the train until the block ends.</item>
+/// <item>A hold at a signal on the run (S33, <see cref="SignalHold"/>) stops the train there until its time; the rest
+/// of the run is run from the signal.</item>
 /// <item>With the interaction pass on, the run is checked against the trains already through each section on it (see
 /// <see cref="ForecastNetwork"/>), and the train is held until it can go: behind a train the same way by the headway
 /// at both ends, on another track if there is one free; on a single line, after an opposing train has cleared. No
@@ -415,37 +417,7 @@ public static class Forecaster
             UnbookedShare(r, c, n, report.Location) is { } share ? new ProgressAnchor(report.Location, report.Time, c, n, share) : null;
 
         /// <summary>An unbooked timing location's share of the run from <paramref name="c"/> to <paramref name="n"/>, as <see cref="AnchorAt"/> finds it; null if not on the way.</summary>
-        private double? UnbookedShare(Runner r, int c, int n, Tiploc via)
-        {
-            var points = r.Points;
-            var mins = _plan.MinRuns;
-            var network = _request.Network;
-            for (var j = c; j < n; j++)
-            {
-                var (a, b) = (points[j].Location, points[j + 1].Location);
-                var share = network.ShareAt(a, via, b);
-                if (share is null && network.Links(a, via, b))
-                {
-                    share = mins.Between(a, via) is { } x && mins.Between(via, b) is { } y && x + y > 0 ? (double)x / (x + y)
-                        : mins.Between(via, b) is { } rest && mins.Between(a, b) is { } all && all > 0 ? Math.Clamp(1 - ((double)rest / all), 0, 1)
-                        : null;
-                }
-
-                if (share is not { } s)
-                {
-                    continue;
-                }
-
-                // As a share of the whole run from c to n: the steps before j, then its part of this one.
-                double before = j == c ? 0 : mins.Along(points, c, j) ?? 0;
-                double step = mins.Along(points, j, j + 1) ?? 0;
-                double after = j + 1 < n ? mins.Along(points, j + 1, n) ?? 0 : 0;
-                var whole = before + step + after;
-                return Math.Clamp(whole > 0 ? (before + (s * step)) / whole : s, 0, 1);
-            }
-
-            return null;
-        }
+        private double? UnbookedShare(Runner r, int c, int n, Tiploc via) => RunShares.Unbooked(r.Points, _plan.MinRuns, _request.Network, c, n, via);
 
         /// <summary>
         /// The run from <paramref name="c"/> to <paramref name="n"/> of a train already past an unbooked anchor (S36),
@@ -634,38 +606,7 @@ public static class Forecaster
         /// 0 at c, a plan point's share of the minimums (else of the planned times), or an unbooked location's share as
         /// an anchor would have it. Null if it is not on the way.
         /// </summary>
-        private double? LocationShare(Runner r, int c, int n, Tiploc location)
-        {
-            var points = r.Points;
-            if (location == points[c].Location)
-            {
-                return 0;
-            }
-
-            for (var j = c + 1; j <= n; j++)
-            {
-                if (points[j].Location != location)
-                {
-                    continue;
-                }
-
-                if (j == n)
-                {
-                    return 1;
-                }
-
-                if (_plan.MinRuns.Along(points, c, n) is { } whole && whole > 0 && _plan.MinRuns.Along(points, c, j) is { } part)
-                {
-                    return (double)part / whole;
-                }
-
-                return points[j].FirstTime is { } t && points[c].LastTime is { } d && points[n].FirstTime is { } a && a > d
-                    ? Math.Clamp((double)(t - d) / (a - d), 0, 1)
-                    : null;
-            }
-
-            return UnbookedShare(r, c, n, location);
-        }
+        private double? LocationShare(Runner r, int c, int n, Tiploc location) => RunShares.Of(r.Points, _plan.MinRuns, _request.Network, c, n, location);
 
         /// <summary>
         /// The run from <paramref name="c"/> to <paramref name="n"/> of a train past a learned place (S38), as the time
@@ -882,11 +823,15 @@ public static class Forecaster
 
             var d = Math.Max(r.Departure, ruled ?? int.MinValue);
             int run = plannedRun;
+            List<SignalHoldForecast>? signalHolds = null;
             for (var settle = 0; settle < MaxSettle; settle++)
             {
-                run = r.FixedDeparture && r.Anchor is { } anchor && anchor.After == c
-                    ? AnchoredRun(r, anchor, c, n, d, plannedRun, plannedArrive)
+                var anchored = r.FixedDeparture && r.Anchor is { } anchor && anchor.After == c;
+                run = anchored
+                    ? AnchoredRun(r, r.Anchor!, c, n, d, plannedRun, plannedArrive)
                     : RunTime(r, c, n, d, plannedRun, plannedArrive);
+                signalHolds?.Clear();
+                run = AtSignals(r, c, n, d, run, plannedRun, plannedArrive, anchored, ref signalHolds);
                 if (r.FixedDeparture)
                 {
                     break;
@@ -932,8 +877,65 @@ public static class Forecaster
                 HoldAt(r, c, d);
             }
 
+            if (signalHolds is { Count: > 0 })
+            {
+                r.SignalHolds.AddRange(signalHolds);
+            }
+
             Fire(r, c, RuleEdge.Last, d);
             ArriveAt(r, n, arrive);
+        }
+
+        /// <summary>
+        /// The run from <paramref name="c"/> to <paramref name="n"/> with the plan's holds at signals on it (S33): the
+        /// train gets to each signal as far into the run as its share (from where it was last known, if
+        /// <paramref name="anchored"/>), waits there until the hold's time, and runs the rest as <see cref="RunTime"/>
+        /// does from there. A hold it gets to after its time, or has passed, changes nothing.
+        /// </summary>
+        private int AtSignals(Runner r, int c, int n, int d, int run, int plannedRun, int plannedArrive, bool anchored, ref List<SignalHoldForecast>? held)
+        {
+            var holds = r.Train.SignalHolds;
+            if (holds.Count == 0)
+            {
+                return run;
+            }
+
+            var arrive = d + run;
+
+            // From the run's start, or where the train was last known on it: a place passed, or a signal it stands at.
+            var (from, share) = anchored && r.Anchor is { } anchor ? (r.Standing?.Leaves.Seconds ?? anchor.Time.Seconds, anchor.Share) : (d, 0.0);
+            foreach (var hold in holds.Where(h => h.Index == c).OrderBy(h => h.Share))
+            {
+                int reaches;
+                if (anchored && r.Standing is { } standing && string.Equals(standing.Signal, hold.Signal, StringComparison.OrdinalIgnoreCase))
+                {
+                    reaches = standing.Since.Seconds;
+                }
+                else if (hold.Share <= share + 1e-6)
+                {
+                    continue; // passed it already
+                }
+                else
+                {
+                    // Not before now: a train that has not reported passing the signal has not passed it.
+                    reaches = (int)Math.Round(from + ((arrive - from) * (hold.Share - share) / (1 - share)));
+                    reaches = _now is { } now && anchored ? Math.Max(reaches, now) : reaches;
+                }
+
+                var until = hold.Until.Seconds;
+                if (reaches >= until)
+                {
+                    continue;
+                }
+
+                var full = _plan.MinRuns.Along(r.Points, c, n, new SimTime(d), _plan.Disruptions, plannedRun) ?? plannedRun;
+                var rest = (int)Math.Round(Math.Max(full * (1 - hold.Share), Math.Min(plannedRun * (1 - hold.Share), plannedArrive - until)));
+                arrive = Math.Max(arrive, until + rest);
+                (from, share) = (Math.Max(until, from), hold.Share);
+                (held ??= []).Add(new SignalHoldForecast(hold, n, new SimTime(reaches)));
+            }
+
+            return arrive - d;
         }
 
         /// <summary>The run time from <paramref name="c"/> to <paramref name="n"/> leaving at <paramref name="d"/> (see the class remarks).</summary>
@@ -1397,6 +1399,9 @@ public static class Forecaster
         /// <summary>Where a timetable rule held the train (<see cref="TrainForecast.RuleHolds"/>).</summary>
         public List<RuleHold> RuleHolds { get; } = [];
 
+        /// <summary>Where the plan held the train at a signal (<see cref="TrainForecast.SignalHolds"/>).</summary>
+        public List<SignalHoldForecast> SignalHolds { get; } = [];
+
         /// <summary>Not started: its start has been worked out (<c>Prepare</c>), so it may begin once nothing holds it.</summary>
         public bool Prepared { get; set; }
 
@@ -1475,6 +1480,7 @@ public static class Forecaster
             {
                 BlockHolds = BlockHolds.Count == 0 ? [] : [.. BlockHolds],
                 RuleHolds = RuleHolds.Count == 0 ? [] : [.. RuleHolds],
+                SignalHolds = SignalHolds.Count == 0 ? [] : [.. SignalHolds],
                 NotSeen = NotSeen && Status == TrainForecastStatus.NotStarted,
                 Anchor = Status == TrainForecastStatus.Running ? Anchor : null,
                 Standing = Status == TrainForecastStatus.Running ? Standing : null,

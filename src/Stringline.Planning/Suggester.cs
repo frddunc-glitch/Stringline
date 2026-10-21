@@ -139,6 +139,12 @@ public sealed record Suggestion(string Id, SuggestionKind Kind, TrainId Train, H
     /// <summary>For a line change, the new line.</summary>
     public string? Line { get; init; }
 
+    /// <summary>
+    /// For a hold or swap at a signal (S33), the signal: the train is already on its way, and waits there before
+    /// <see cref="Location"/>, the next timing point. Null for a hold at a timing point.
+    /// </summary>
+    public string? Signal { get; init; }
+
     /// <summary>Σ weight × added delay over the trains in the horizon, in weighted seconds (negative if trains gain).</summary>
     public double WeightedDelaySeconds { get; init; }
 
@@ -184,6 +190,8 @@ public sealed record Suggestion(string Id, SuggestionKind Kind, TrainId Train, H
         var until = Until is { } u ? time(u) : "?";
         return Kind switch
         {
+            SuggestionKind.Hold when Signal is { } signal => $"Hold {Headcode} at {signal} before {at} until {until} ({PlanText.WithSign(HoldSeconds)})",
+            SuggestionKind.Swap when Signal is { } signal => $"Hold {Headcode} at {signal} before {at} until {until} ({PlanText.WithSign(HoldSeconds)}) so {Other} goes first",
             SuggestionKind.Hold => $"Hold {Headcode} at {at} until {until} ({PlanText.WithSign(HoldSeconds)})",
             SuggestionKind.Swap => $"Hold {Headcode} at {at} until {until} ({PlanText.WithSign(HoldSeconds)}) so {Other} goes first",
             SuggestionKind.Platform => $"{Headcode} into platform {Platform} at {at}",
@@ -208,7 +216,9 @@ public sealed record Suggestion(string Id, SuggestionKind Kind, TrainId Train, H
 /// <list type="bullet">
 /// <item><b>Hold</b> the train that gives way at the last point before the clash where it can wait (a stop, a platform
 /// it passes, or its origin), and not one it has already left. The hold starts at the delay the conflict needs; if the
-/// forecast with it still clashes (the train makes up time on the way), what is missing is added, a few times.</item>
+/// forecast with it still clashes (the train makes up time on the way), what is missing is added, a few times. A train
+/// already past its last such point is held instead at the last placed signal before the next timing point (S33), from
+/// when it would get there.</item>
 /// <item><b>Swap</b>: hold the other train instead, until the first can go ahead of it with its spacing.</item>
 /// <item><b>Platform</b> (platform conflicts): another platform used at the location that is free while the train is
 /// there, nearest the booked one first. A train formed from it in the platform moves with it.</item>
@@ -328,10 +338,15 @@ public static class Suggester
         /// </summary>
         private Suggestion? Hold(SuggestionKind kind, TrainId train, int reference, bool strict, int initial, Func<Outcome, int?> remaining, Headcode? other)
         {
-            if (_plan.Find(train) is not { Cancelled: false } plan || _baseline.Independent.Find(train) is not { } forecast ||
-                HoldPoint(plan, forecast, reference, strict) is not { } k || forecast.Points[k].LastTime is not { } departs)
+            if (_plan.Find(train) is not { Cancelled: false } plan || _baseline.Independent.Find(train) is not { } forecast)
             {
                 return null;
+            }
+
+            if (HoldPoint(plan, forecast, reference, strict) is not { } k || forecast.Points[k].LastTime is not { } departs)
+            {
+                // Already past its last timing point before the clash: hold it at a signal on the way instead (S33).
+                return AtSignal(kind, plan, forecast, reference, strict, initial, remaining, other);
             }
 
             // A block the forecast holds it for there already makes it leave later: hold from when it would have left.
@@ -346,6 +361,38 @@ public static class Suggester
 
             var until = Until(amount);
             return Make(kind, train, k, outcome, commands, 0) with { Until = until, HoldSeconds = until - leaves, Other = other };
+        }
+
+        /// <summary>
+        /// Hold a train on its way at the last placed signal (used or hand-set, S37) it has not yet passed before the next
+        /// timing point (Fred, S33), as <see cref="Hold"/> does at a timing point: from when it would get there. Only on
+        /// the run it is on now, and (if <paramref name="strict"/>) one ending no later than <paramref name="reference"/>.
+        /// </summary>
+        private Suggestion? AtSignal(SuggestionKind kind, TrainPlan plan, TrainForecast forecast, int reference, bool strict, int initial, Func<Outcome, int?> remaining, Headcode? other)
+        {
+            var ahead = SignalHolds.Ahead(plan, forecast, _plan.MinRuns, _request.Forecast.Network);
+            if (ahead.Count == 0 || ahead[^1] is not { } signal || signal.Index > reference || (strict && signal.ToIndex > reference) ||
+                SignalHolds.Reaches(forecast, signal, _baseline.Now) is not { } reaches)
+            {
+                return null;
+            }
+
+            SimTime Until(int amount) => RoundUp(reaches + Math.Max(amount, _options.StepSeconds));
+            var settled = Settle(initial, amount => [new HoldAtSignal(plan.Id, signal.Hold(Until(amount)))], remaining);
+            if (settled is not var (outcome, commands, amount))
+            {
+                return null;
+            }
+
+            var until = Until(amount);
+            return Make(kind, plan.Id, signal.Index, outcome, commands, 0, signal.Signal) with
+            {
+                Location = plan.Points[signal.ToIndex].Location,
+                Until = until,
+                HoldSeconds = until - reaches,
+                Other = other,
+                Signal = signal.Signal,
+            };
         }
 
         /// <summary>Hold the other train instead, until the one that would give way has gone ahead with its spacing.</summary>
@@ -759,7 +806,7 @@ public static class Suggester
         private ConflictSet Detect(WorkingPlan plan, Forecast forecast) =>
             ConflictDetector.Detect(new ConflictRequest(plan, forecast) { Network = _request.Forecast.Network, Options = _request.Conflicts });
 
-        private Suggestion Make(SuggestionKind kind, TrainId train, int index, Outcome o, IReadOnlyList<IPlanCommand> commands, double penalty)
+        private Suggestion Make(SuggestionKind kind, TrainId train, int index, Outcome o, IReadOnlyList<IPlanCommand> commands, double penalty, string? signal = null)
         {
             var impacts = new List<SuggestionImpact>();
             foreach (var (id, reference) in _references)
@@ -796,7 +843,7 @@ public static class Suggester
             var detail = kind switch
             {
                 SuggestionKind.Platform or SuggestionKind.Line => string.Join(",", commands.Select(x => x switch { ChangePlatform p => p.Platform, ChangeLine l => l.Line, _ => null }).OfType<string>().Take(1)),
-                _ => string.Empty,
+                _ => signal ?? string.Empty,
             };
             return new Suggestion(
                 string.Create(CultureInfo.InvariantCulture, $"{c.Id}|{kind}:{train}:{index}{(detail.Length > 0 ? ":" + detail : string.Empty)}"),

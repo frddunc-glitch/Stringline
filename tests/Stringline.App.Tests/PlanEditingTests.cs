@@ -133,6 +133,58 @@ public sealed class PlanEditingTests
     }
 
     [Fact]
+    public async Task A_hold_at_a_signal_shows_in_the_detail_and_the_menu_releases_it()
+    {
+        // S33. Waterloo's profile has no learned places, so no hold is offered, but one made (as by a suggestion) is
+        // listed on the train and can be released from its menu.
+        await using var app = new TestApp();
+        var vm = await LoadWaterloo(app);
+        var (hit, train, index) = await app.Ui.Run(() =>
+        {
+            var (hit, _) = FindLine(vm);
+            vm.SelectPath(hit);
+            var plan = vm.Snapshot.Plan.Get(hit.Path.Train!.Value);
+            var k = Enumerable.Range(0, plan.Points.Count).First(i => plan.Points[i].IsTimed);
+            vm.MenuFor(hit).Select(i => i.Header).Should().NotContain("Hold at si_gnal…", "no signals are placed");
+            return (hit, plan.Id, k);
+        });
+
+        var plan = await app.Ui.Run(() => vm.Snapshot.Plan.Get(train));
+        var next = Enumerable.Range(index + 1, plan.Points.Count - index - 1).First(i => plan.Points[i].IsTimed);
+        var until = plan.Points[index].LastTime!.Value + 600;
+        var hold = new SignalHold(index, "S999", plan.Points[index].Location, plan.Points[next].Location, 0.5, 0.5, until);
+        (await await app.Ui.Run(() => vm.ExecuteAsync(new HoldAtSignal(train, hold)))).Applied.Should().BeTrue();
+        await app.Ui.WaitUntil(() => vm.Snapshot.History.Done.Count == 1 && vm.Detail.StatusText.Contains("hold at S999", StringComparison.Ordinal), "the hold applied");
+
+        var release = await app.Ui.Run(() =>
+        {
+            vm.Detail.StatusText.Should().Contain($"hold at S999 until {until.ToString("H", System.Globalization.CultureInfo.InvariantCulture)}");
+            vm.History.Entries.Single().Description.Should().StartWith($"Hold {plan.Headcode} at S999 until ");
+            return vm.MenuFor(hit).Single(i => i.Header == "Release hold at S999").Command!;
+        });
+        await app.Ui.RunAsync(() => ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand)release).ExecuteAsync(null));
+        await app.Ui.WaitUntil(() => vm.Snapshot.History.Done.Count == 2, "the release");
+        (await app.Ui.Run(() => vm.Snapshot.Plan.Get(train).SignalHolds)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void The_regulation_list_row_reminds_of_a_hold_at_a_signal()
+    {
+        var hold = new SignalHold(0, "S457", new Tiploc("VAUX"), new Tiploc("CLPHMJN"), 0.6, 0.6, SimTime.Parse("09:12"));
+        var row = new RegulationRow(new TrainId("1A23"), new Headcode("1A23"), 1, RegulationMove.Pass, SimTime.Parse("09:10"), null, SimTime.Parse("09:10"), SimTime.Parse("09:14"), null, null)
+        {
+            SignalHold = hold,
+            IsChanged = true,
+        };
+
+        var shown = RegulationRowViewModel.Of(row);
+
+        shown.Move.Should().Be("hold at S457 until 09:12, then passes");
+        shown.Tip.Should().Contain("Hold 1A23 at S457 until 09:12: a reminder only, as SimSig has no gateway command to hold a train at a signal. Hold it on the panel.");
+        shown.IsChanged.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task A_bad_time_or_a_refused_edit_is_shown_in_the_info_bar()
     {
         await using var app = new TestApp();

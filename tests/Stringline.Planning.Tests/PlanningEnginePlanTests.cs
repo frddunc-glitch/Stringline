@@ -158,6 +158,23 @@ public sealed class PlanningEnginePlanTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task A_hold_at_a_signal_is_undone_and_redone()
+    {
+        await Loaded();
+        var hold = new SignalHold(0, "S1", new Tiploc("A"), new Tiploc("B"), 0.5, 0.5, SimTime.Parse("06:04"));
+        (await Run(new HoldAtSignal(Fast, hold))).Applied.Should().BeTrue();
+        var held = await Snapshot(s => s.History.Done.Count == 1);
+        held.Plan.Get(Fast).SignalHolds.Should().Equal(hold);
+        held.History.UndoDescription.Should().Be("Hold 1A01 at S1 until 06:04 on from A");
+
+        (await _engine.Undo().WaitAsync(Timeout)).Should().BeTrue();
+        (await Snapshot(s => s.History.Done.Count == 0)).Plan.Get(Fast).SignalHolds.Should().BeEmpty();
+
+        (await _engine.Redo().WaitAsync(Timeout)).Should().BeTrue();
+        (await Snapshot(s => s.History.Done.Count == 1)).Plan.Get(Fast).SignalHolds.Should().Equal(hold);
+    }
+
+    [Fact]
     public async Task A_new_command_clears_the_redo_list()
     {
         await Loaded();

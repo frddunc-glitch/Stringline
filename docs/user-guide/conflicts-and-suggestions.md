@@ -46,7 +46,7 @@ Focusing a conflict opens a panel under the list, "Resolve: 1F01 too close behin
 - **Preview** draws the trains it changes as ghosts on the graph.
 - **Apply** makes the change, as one edit you can undo.
 
-Suggestions hold the train that gives way at the last place before the clash where it can wait, or hold the other train instead so that the order swaps; for a platform clash they try another platform, and for a block another line. **Allow cancelling** also suggests terminating a train short, or cancelling one not yet started, to get round a block. What each kind of change costs when the suggestions are ranked is set in [Tools ▸ Options ▸ Suggestions](settings.md#suggestions).
+Suggestions hold the train that gives way at the last place before the clash where it can wait, or hold the other train instead so that the order swaps. A train already past its last such place is held at the last [placed signal](signal-places.md) before the next timing point instead ([holding at a signal](re-planning.md#holding-at-a-signal)). For a platform clash they try another platform, and for a block another line. **Allow cancelling** also suggests terminating a train short, or cancelling one not yet started, to get round a block. What each kind of change costs when the suggestions are ranked is set in [Tools ▸ Options ▸ Suggestions](settings.md#suggestions).
 
 "No suggestion" means neither train can wait anywhere before the clash. Re-plan by hand with the [grips](re-planning.md#grips).
 
@@ -60,7 +60,7 @@ Suggestions hold the train that gives way at the last place before the clash whe
 
 The plan is worked out on the sim as it stood when you asked. Unlike suggestions it is not worked out again as the sim moves on, and Apply refuses it once the plan has changed: re-plan again. Picking a conflict shows that conflict's suggestions instead; **Close** shuts the re-plan.
 
-It holds trains where suggestions do: at a stop, at their first point, or at a platform they pass. It clears clashes between trains (headways, single lines, platforms). Blocks and runs planned too fast are left to their own suggestions. "Nothing better found" means no train that could wait or move clears the clashes: trains arriving now, say.
+It holds trains where suggestions do: at a stop, at their first point, at a platform they pass, or (for a train already on its way) at the last placed signal before its next timing point. It clears clashes between trains (headways, single lines, platforms). Blocks and runs planned too fast are left to their own suggestions. "Nothing better found" means no train that could wait or move clears the clashes: trains arriving now, say.
 
 How far ahead it looks, how long it thinks, whether it may change platforms, and whether it uses the optimiser or the suggestion rules (one conflict at a time) are in [Tools ▸ Options ▸ Suggestions](settings.md#suggestions).
 

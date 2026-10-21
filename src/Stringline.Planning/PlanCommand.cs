@@ -30,6 +30,8 @@ namespace Stringline.Planning;
 [JsonDerivedType(typeof(UnlinkLiveTrain), "unlinkLiveTrain")]
 [JsonDerivedType(typeof(AcceptSuggestion), "acceptSuggestion")]
 [JsonDerivedType(typeof(ExpectToRun), "expectToRun")]
+[JsonDerivedType(typeof(HoldAtSignal), "holdAtSignal")]
+[JsonDerivedType(typeof(ReleaseSignalHold), "releaseSignalHold")]
 public interface IPlanCommand
 {
     /// <summary>Applies the command. An error result must leave nothing changed (the builder rolls back for it).</summary>
@@ -212,6 +214,71 @@ public sealed record AddStop(TrainId Train, int Index, int DwellSeconds) : IPlan
 
     public string Describe(WorkingPlan plan) =>
         $"{Checks.Name(plan, Train)} stops at {Checks.Where(plan, Train, Index)} for {PlanText.Duration(DwellSeconds)}";
+}
+
+/// <summary>
+/// Holds a train at a signal between two of its points until a time (S33, Q12), as SimSig can: the forecast stops it
+/// there, on the run from <see cref="SignalHold.Index"/>, until <see cref="SignalHold.Until"/>. A hold at the same
+/// signal on the same run is replaced. The gateway has no command for it, so with assist it is a reminder only.
+/// </summary>
+public sealed record HoldAtSignal(TrainId Train, SignalHold Hold) : IPlanCommand
+{
+    public PlanCommandResult Apply(WorkingPlanBuilder b)
+    {
+        ArgumentNullException.ThrowIfNull(b);
+        if (Hold is null)
+        {
+            return PlanCommandResult.Fail("No signal hold given.");
+        }
+
+        if (Checks.Point(b, Train, Hold.Index, out var plan) is { } error)
+        {
+            return PlanCommandResult.Fail(error);
+        }
+
+        if (string.IsNullOrWhiteSpace(Hold.Signal))
+        {
+            return PlanCommandResult.Fail("A hold at a signal needs the signal's ID.");
+        }
+
+        if (Hold.From == Hold.To || double.IsNaN(Hold.Share) || Hold.Share is <= 0 or >= 1 || double.IsNaN(Hold.Fraction) || Hold.Fraction is < 0 or > 1)
+        {
+            return PlanCommandResult.Fail($"{Hold.Signal} is not placed between two of {plan.Headcode}'s points.");
+        }
+
+        var points = plan.RunningPoints;
+        if (!points[Hold.Index].IsTimed || !points.Skip(Hold.Index + 1).Any(p => p.IsTimed))
+        {
+            return PlanCommandResult.Fail($"{plan.Headcode} does not run on from {points[Hold.Index].Location} to a timed point.");
+        }
+
+        var hold = Hold with { Signal = Hold.Signal.Trim() };
+        var holds = plan.SignalHolds.Where(h => !h.Is(hold.Index, hold.Signal)).Append(hold).ToArray();
+        return PlanCommandResult.From(b.Update(plan with { SignalHolds = holds }));
+    }
+
+    public string Describe(WorkingPlan plan) =>
+        Hold is null ? $"Hold {Checks.Name(plan, Train)} at a signal"
+        : $"Hold {Checks.Name(plan, Train)} at {Hold.Signal} until {Hold.Until.ToString("H", CultureInfo.InvariantCulture)} on from {Checks.Where(plan, Train, Hold.Index)}";
+}
+
+/// <summary>Takes away a train's hold at a signal (S33), so it runs on through it as forecast.</summary>
+public sealed record ReleaseSignalHold(TrainId Train, int Index, string Signal) : IPlanCommand
+{
+    public PlanCommandResult Apply(WorkingPlanBuilder b)
+    {
+        ArgumentNullException.ThrowIfNull(b);
+        if (Checks.Train(b, Train, out var plan) is { } error)
+        {
+            return PlanCommandResult.Fail(error);
+        }
+
+        return plan.SignalHolds.Any(h => h.Is(Index, Signal))
+            ? PlanCommandResult.From(b.Update(plan with { SignalHolds = plan.SignalHolds.Where(h => !h.Is(Index, Signal)).ToArray() }))
+            : PlanCommandResult.Fail($"{plan.Headcode} is not held at {Signal}.");
+    }
+
+    public string Describe(WorkingPlan plan) => $"Release {Checks.Name(plan, Train)} from its hold at {Signal}";
 }
 
 /// <summary>Terminates a train short at an intermediate point; it no longer runs to the points after it.</summary>

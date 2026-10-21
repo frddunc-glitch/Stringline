@@ -45,8 +45,14 @@ public sealed record RegulationRow(
     /// <summary>A train the WTT does not have (a clone).</summary>
     public bool IsAdded => Booked is null;
 
-    /// <summary>The plan differs from the WTT here (time or platform).</summary>
+    /// <summary>The plan differs from the WTT here (time or platform, or a hold at a signal before it).</summary>
     public bool IsChanged { get; init; }
+
+    /// <summary>
+    /// The plan holds the train at a signal on the way here (S33): "hold 1A23 at S457 until 09:12". A reminder only, as
+    /// the gateway has no command to hold a train at a signal; the signaller holds it on the panel.
+    /// </summary>
+    public SignalHold? SignalHold { get; init; }
 
     /// <summary>True if the plan has it in a different order from the WTT.</summary>
     public bool OutOfOrder => Ahead.Count > 0 || Behind.Count > 0;
@@ -116,11 +122,13 @@ public static class RegulationList
 
                 var booked = wtt is not null && k < wtt.Points.Count ? wtt.Points[k] : null;
                 var bookedTime = booked is null ? null : move == RegulationMove.Terminate ? booked.FirstTime : Key(booked.Arrive, booked.Depart);
-                var changed = booked is not null && (booked.Arrive != p.Arrive || booked.Depart != p.Depart ||
-                    !string.Equals(booked.Platform?.Trim(), p.Platform?.Trim(), StringComparison.OrdinalIgnoreCase));
+                var held = HeldBefore(train, k);
+                var changed = held is not null || (booked is not null && (booked.Arrive != p.Arrive || booked.Depart != p.Depart ||
+                    !string.Equals(booked.Platform?.Trim(), p.Platform?.Trim(), StringComparison.OrdinalIgnoreCase)));
                 rows.Add((new RegulationRow(train.Id, train.Headcode, k, move, planned, move == RegulationMove.Call ? p.Arrive : null, bookedTime, forecastTime, p.Platform, p.Line)
                 {
                     IsChanged = changed,
+                    SignalHold = held,
                 }, order));
             }
         }
@@ -147,6 +155,24 @@ public static class RegulationList
         }
 
         return rows.Select((r, i) => ahead[i] is null && behind[i] is null ? r.Row : r.Row with { Ahead = ahead[i] ?? [], Behind = behind[i] ?? [] }).ToList();
+    }
+
+    /// <summary>The train's latest hold at a signal on the run into point <paramref name="k"/>, if any (S33).</summary>
+    private static SignalHold? HeldBefore(TrainPlan train, int k)
+    {
+        if (train.SignalHolds.Count == 0)
+        {
+            return null;
+        }
+
+        var points = train.RunningPoints;
+        var c = k - 1;
+        while (c >= 0 && !points[c].IsTimed)
+        {
+            c--;
+        }
+
+        return train.SignalHolds.Where(h => h.Index == c).MaxBy(h => h.Share);
     }
 
     /// <summary>When a train goes from a point: its departure or pass, else its arrival.</summary>

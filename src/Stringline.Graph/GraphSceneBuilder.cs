@@ -445,6 +445,19 @@ public static class GraphSceneBuilder
         for (var k = first; k < forecast.Points.Count; k++)
         {
             var p = forecast.Points[k];
+            foreach (var hold in forecast.SignalHolds)
+            {
+                // Held at a signal on the run in (S33): a short flat step at the signal's place.
+                if (hold.ToIndex == k && SignalHoldAxis(corridor, forecast, hold) is var (from, axis))
+                {
+                    // Standing there already, the line has come to the signal: the step goes on from there.
+                    var reaches = forecast.Standing is { } standing && string.Equals(standing.Signal, hold.Signal, StringComparison.OrdinalIgnoreCase)
+                        ? SimTime.Max(hold.Reaches, standing.Leaves) : hold.Reaches;
+                    builder.AddPlace(from, axis, reaches, null, hold.Signal, hold.Hold.Index);
+                    builder.AddPlace(from, axis, SimTime.Max(reaches, hold.Until), null, hold.Signal, hold.Hold.Index);
+                }
+            }
+
             if (p.Arrive is { } arrive && p.Depart is { } depart && depart > arrive)
             {
                 builder.Add(p.Location, arrive, p.DelaySeconds, p.Index);
@@ -463,6 +476,24 @@ public static class GraphSceneBuilder
             paths.Add(new GraphPath(count == 1 ? key : $"{key}#{index}", GraphLayer.Forecast, forecast.Train, forecast.Headcode, pathColour,
                 segment.Vertices, Direction: corridor.DirectionOf(segment.Locations), LiveUid: forecast.LiveUid, SegmentColours: segmentColours, Points: segment.Indices, Signals: segment.Signals));
         }
+    }
+
+    /// <summary>
+    /// Where a hold at a signal draws (S33): at the signal's learned place if both its locations are on the corridor
+    /// (where View ▸ Signals shows it), else as far between the run's two points as its share. Null if off the corridor.
+    /// </summary>
+    private static (Tiploc From, double Axis)? SignalHoldAxis(Corridor corridor, TrainForecast forecast, SignalHoldForecast held)
+    {
+        var hold = held.Hold;
+        if (corridor.PositionOf(hold.From) is not null && UsablePlaces.PositionOn(corridor, hold.From, hold.To, hold.Fraction) is { } placed)
+        {
+            return (hold.From, placed);
+        }
+
+        var from = forecast.Points[hold.Index].Location;
+        return corridor.PositionOf(from) is { } a && corridor.PositionOf(forecast.Points[held.ToIndex].Location) is { } b
+            ? (from, a + (hold.Share * (b - a)))
+            : null;
     }
 
     /// <summary>A booked or planned point: one vertex for a pass or a point with one time, two for a stop with a dwell.</summary>

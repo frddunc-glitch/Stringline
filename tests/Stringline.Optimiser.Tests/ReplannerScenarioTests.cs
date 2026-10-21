@@ -1,6 +1,7 @@
 using Stringline.Core;
 using Stringline.Core.Live;
 using Stringline.Core.Timetables;
+using Stringline.Network.Profiles;
 using Stringline.Planning;
 using Xunit.Abstractions;
 using static Stringline.Planning.Tests.ForecastTesting;
@@ -101,6 +102,31 @@ public sealed class ReplannerScenarioTests(ITestOutputHelper output)
         result.Method.Should().Be("rules");
         result.Commands.Should().Equal(new ShiftTrain(Fast, 0, 7 * 60));
         result.Steps.Should().ContainSingle().Which.Describe().Should().Be("Hold 1F01 at A until 08:07 (+2 min)");
+        result.After.Should().BeEmpty();
+        test.After(result).Count.Should().Be(0);
+    }
+
+    [Theory]
+    [MemberData(nameof(Methods))]
+    public void A_train_on_its_way_is_held_at_a_signal(string method)
+    {
+        // S33: 1F01 passed A 5 min late, so it cannot wait at a timing point before the clash out of the loop. With S12
+        // placed three quarters of the way to B, both hold it there until 08:10 (2 min, as the swap would cost 2S01 4).
+        var timetable = LoopTimetable();
+        var places = SignallingPlaces.Empty.SetByHand(SignallingKind.Signal, "S12", new Tiploc("A"), new Tiploc("B"), 0.75);
+        var network = LoopNetwork(timetable).WithPlaces(UsablePlaces.Of(places));
+        var test = Make(WorkingPlan.FromTimetable(timetable), network, "08:05",
+            Running("10", "1F01", Passed("A", "08:05")), Running("11", "2S01", Dep("A", "07:55"), Arr("B", "07:59")));
+        test.Conflicts.All.Should().ContainSingle();
+
+        var result = test.Replan(Replanner(method));
+        Show(result);
+
+        result.Outcome.Should().Be(ReplanOutcome.Improved);
+        result.Commands.Should().Equal(new HoldAtSignal(Fast, new SignalHold(0, "S12", new Tiploc("A"), new Tiploc("B"), 0.75, 0.75, SimTime.Parse("08:10"))));
+        var step = result.Steps.Should().ContainSingle().Subject;
+        (step.Kind, step.Signal, step.Location, step.Until, step.HoldSeconds).Should().Be((SuggestionKind.Hold, "S12", new Tiploc("B"), SimTime.Parse("08:10"), 120));
+        step.Describe().Should().Be("Hold 1F01 at S12 before B until 08:10 (+2 min)");
         result.After.Should().BeEmpty();
         test.After(result).Count.Should().Be(0);
     }

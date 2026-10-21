@@ -107,6 +107,12 @@ internal sealed class ModelTrain(int number, TrainPlan plan, Train? wtt, TrainFo
     /// </summary>
     public List<(int Index, EventKey After, int Gap)> RuleFloors { get; } = [];
 
+    /// <summary>
+    /// For a train on its way between two points (S33): the last placed signal before the next one that it has not
+    /// passed, where it can be held, and when it gets there by the base forecast. Null if none.
+    /// </summary>
+    public (SignalOnRun Signal, int Reaches)? SignalHold { get; set; }
+
     public TrainId Id => Plan.Id;
 
     /// <summary>The first timed point of its plan: where it starts, or enters the area.</summary>
@@ -185,6 +191,9 @@ internal sealed record Stay(ModelTrain Train, int Index, string Platform, int St
 /// <summary>What a solve found: every event's time, each hold and platform change.</summary>
 internal sealed record ModelSolution(Dictionary<EventKey, long> Times, Dictionary<EventKey, long> Holds, Dictionary<(int Train, int Index), string> Platforms, bool Optimal)
 {
+    /// <summary>The seconds each train on its way is held at its signal (<see cref="ModelTrain.SignalHold"/>, S33), by train.</summary>
+    public Dictionary<int, long> SignalHolds { get; init; } = [];
+
     /// <summary>The pairs the model could not keep apart, by key, and by how much (for the log and tests).</summary>
     public Dictionary<string, long> Clashes { get; init; } = [];
 }
@@ -198,7 +207,8 @@ internal sealed record ModelSolution(Dictionary<EventKey, long> Times, Dictionar
 /// <para><b>Trains</b> follow the forecaster's rules exactly, so with no holds the model gives the base forecast: a
 /// run takes <c>max(min, min(planned run, planned arrival − departure))</c> (a late train uses up its allowances); a
 /// train leaves a stop after its dwell and not before its planned departure. It can be held (made to leave later)
-/// where suggestions hold trains: at a call, at its first point, or at a platform it passes.</para>
+/// where suggestions hold trains: at a call, at its first point, or at a platform it passes; and a train already on
+/// its way at the last placed signal before its next point (S33), which makes it that much later there.</para>
 /// <para><b>Clashes</b> are the conflict detector's rules: in a section, a train following another the same way
 /// enters and leaves the headway after it (or as close as the WTT books them); on a single line an opposing train
 /// must have cleared; at a platform the next train arrives the margin after the last leaves (or as booked). Each pair
@@ -351,6 +361,14 @@ internal sealed class ReplanModel
             if (t.Timed.Count == 0)
             {
                 continue;
+            }
+
+            // On its way from its latest actual: it can be held at the last placed signal before the next point (S33).
+            if (t.Timed.Count >= 2 && SignalHolds.CurrentRun(f) == t.Timed[0] &&
+                SignalHolds.Ahead(plan, f, _plan.MinRuns, _network) is { Count: > 0 } ahead &&
+                ahead[^1].ToIndex == t.Timed[1] && SignalHolds.Reaches(f, ahead[^1], _evaluator.Baseline.Now) is { } reaches)
+            {
+                t.SignalHold = (ahead[^1], reaches.Seconds);
             }
 
             _trains.Add(t);
@@ -1064,6 +1082,7 @@ internal sealed class ReplanModel
         var times = new Dictionary<EventKey, LinearExpr>();
         var vars = new Dictionary<EventKey, IntVar>();
         var holds = new Dictionary<EventKey, IntVar>();
+        var signalHolds = new Dictionary<int, IntVar>();
         var objective = LinearExpr.NewBuilder();
         var built = new bool[_trains.Count];
         var maxHold = Math.Max(_options.StepSeconds, _options.MaxHoldSeconds);
@@ -1151,6 +1170,21 @@ internal sealed class ReplanModel
                     {
                         arrive = Time.Of(baseA);
                         planArrive = shift + plannedA;
+                        if (f.Basis == ForecastBasis.Forecast && t.SignalHold is { } signal && previous == signal.Signal.Index && k == signal.Signal.ToIndex)
+                        {
+                            // Held at a signal on the way (S33): it gets here as much later as it is held, a little
+                            // more than the forecaster gives a train that has time in hand.
+                            var h = model.NewIntVar(0, maxHold, string.Empty);
+                            var held = model.NewBoolVar(string.Empty);
+                            model.Add(h <= maxHold * held);
+                            model.Add(h >= held);
+                            signalHolds[t.Number] = h;
+                            var later = model.NewIntVar(baseA, baseA + span, string.Empty);
+                            model.Add(later == h + baseA);
+                            arrive = new Time(later, null);
+                            objective.AddTerm(held, Cost(_options.HoldPenalty * t.Weight));
+                            objective.AddTerm(h, Cost(HeldSecondCost * t.Weight));
+                        }
                     }
                     else
                     {
@@ -1419,7 +1453,16 @@ internal sealed class ReplanModel
             }
         }
 
-        _last = new ModelSolution(result, held, platforms, status == CpSolverStatus.Optimal) { Clashes = clashes };
+        var atSignals = new Dictionary<int, long>();
+        foreach (var (train, h) in signalHolds)
+        {
+            if (solver.Value(h) is var value and > 0)
+            {
+                atSignals[train] = value;
+            }
+        }
+
+        _last = new ModelSolution(result, held, platforms, status == CpSolverStatus.Optimal) { Clashes = clashes, SignalHolds = atSignals };
         return _last;
     }
 
@@ -1472,6 +1515,25 @@ internal sealed class ReplanModel
         var step = Math.Max(1, _options.StepSeconds);
         foreach (var t in _trains)
         {
+            // Held at a signal on the way (S33): from when it gets there, to the next half minute.
+            if (t.SignalHold is var (signal, reaches) && solution.SignalHolds.TryGetValue(t.Number, out var seconds))
+            {
+                var until = new SimTime((int)((reaches + seconds + step - 1) / step * step));
+                IPlanCommand hold = new HoldAtSignal(t.Id, signal.Hold(until));
+                if (until.Seconds > reaches && scratch.Apply(hold) is ({ } next, { Applied: true }))
+                {
+                    scratch = next;
+                    commands.Add(hold);
+                    byStep.Add([hold]);
+                    steps.Add(new ReplanStep(SuggestionKind.Hold, t.Id, t.Plan.Headcode, t.Points[signal.ToIndex].Location, signal.Index)
+                    {
+                        Until = until,
+                        HoldSeconds = until.Seconds - reaches,
+                        Signal = signal.Signal,
+                    });
+                }
+            }
+
             foreach (var k in t.Timed)
             {
                 if (solution.Platforms.TryGetValue((t.Number, k), out var platform))

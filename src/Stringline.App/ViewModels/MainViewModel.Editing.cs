@@ -475,6 +475,16 @@ internal sealed partial class MainViewModel : IGraphEditor
             }
         }
 
+        if (runs && SignalsToHoldAt(plan, index!.Value) is { Count: > 0 } signals)
+        {
+            items.Add(new PlanMenuItem("Hold at si_gnal…", new AsyncRelayCommand(() => HoldAtSignalAsync(id, signals))));
+        }
+
+        foreach (var hold in plan.Cancelled ? [] : plan.SignalHolds)
+        {
+            items.Add(new PlanMenuItem($"Release hold at {MenuText.Escape(hold.Signal)}", new AsyncRelayCommand(() => ExecuteAsync(new ReleaseSignalHold(id, hold.Index, hold.Signal)))));
+        }
+
         if (runs && point is not null)
         {
             var at = index!.Value;
@@ -579,6 +589,66 @@ internal sealed partial class MainViewModel : IGraphEditor
         }
 
         await ExecuteAsync(point.IsPass ? new AddStop(id, index, depart - planned) : new SetDwell(id, index, depart));
+    }
+
+    /// <summary>
+    /// The placed signals (used or hand-set, S37) a train could be held at from a click at point <paramref name="index"/>
+    /// (S33): on the run it is on now if the click is at either end of it, ahead of where it was last known; else on the
+    /// run on from the point, if it has not left it.
+    /// </summary>
+    private IReadOnlyList<SignalOnRun> SignalsToHoldAt(TrainPlan plan, int index)
+    {
+        var network = Snapshot.Settings.Network;
+        if (network.Places.IsEmpty || index < 0 || index >= plan.RunningPoints.Count)
+        {
+            return [];
+        }
+
+        var forecast = Snapshot.Forecast.Find(plan.Id);
+        if (forecast is not null && SignalHolds.CurrentRun(forecast) is { } c)
+        {
+            var ahead = SignalHolds.Ahead(plan, forecast, Snapshot.Plan.MinRuns, network);
+            if (index == c || (ahead.Count > 0 && index == ahead[0].ToIndex))
+            {
+                return ahead;
+            }
+        }
+
+        return forecast?.At(index)?.Basis == ForecastBasis.Actual ? [] : SignalHolds.OnRun(plan, index, Snapshot.Plan.MinRuns, network);
+    }
+
+    /// <summary>Asks which signal to hold a train at, and until when (S33), offering the last one before the next timing point.</summary>
+    private async Task HoldAtSignalAsync(TrainId id, IReadOnlyList<SignalOnRun> signals)
+    {
+        if (Snapshot.Plan.Find(id) is not { } plan || signals.Count == 0)
+        {
+            return;
+        }
+
+        var last = signals[^1];
+        var next = plan.Points[last.ToIndex].Location;
+        var forecast = Snapshot.Forecast.Find(id);
+        var reaches = forecast is null ? null : SignalHolds.Reaches(forecast, last, Snapshot.Forecast.Now);
+        var from = reaches ?? NowTime ?? plan.Points[last.Index].LastTime ?? SimTime.Zero;
+        var suggested = new SimTime(((from.Seconds + (2 * SimTime.SecondsPerMinute) + 29) / 30) * 30);
+        var ids = signals.Select(s => s.Signal).ToList();
+        var prompt = new PromptViewModel(
+            "Hold at signal",
+            $"Hold {plan.Headcode} at a signal before {Name(next)} until:",
+            new PromptField("Signal", last.Signal, ids, $"Signals placed between {Name(plan.Points[last.Index].Location)} and {Name(next)}, in order. SimSig has no gateway command for this: hold it on the panel."),
+            new PromptField("Until", suggested.ToString(), hint: reaches is { } r ? $"It is forecast to get there at {r}." : null))
+        {
+            Validate = p => !ids.Contains(p[0].Trim(), StringComparer.OrdinalIgnoreCase) ? $"Pick one of the signals: {string.Join(", ", ids)}."
+                : !PlanInput.TryParseTime(p[1], from, out _) ? "Enter a time such as 10:25 or 10:25:30."
+                : null,
+        };
+        if (!_dialogs.Prompt(prompt) || !PlanInput.TryParseTime(prompt[1], from, out var until) ||
+            signals.FirstOrDefault(s => string.Equals(s.Signal, prompt[0].Trim(), StringComparison.OrdinalIgnoreCase)) is not { } signal)
+        {
+            return;
+        }
+
+        await ExecuteAsync(new HoldAtSignal(id, signal.Hold(until)));
     }
 
     private async Task AddStopAsync(TrainId id, int index)

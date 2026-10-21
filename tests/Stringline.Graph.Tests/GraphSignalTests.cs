@@ -53,9 +53,11 @@ public sealed class GraphSignalTests
                 : new ActualEvent(new Tiploc(a.Location), a.Action, SimTime.Parse(a.Time), "", true, 0)).ToImmutableList(),
             false);
 
-    private static PlanSnapshot Snapshot(string now, LineSideState? lineSide, params LiveTrain[] live)
+    private static PlanSnapshot Snapshot(string now, LineSideState? lineSide, params LiveTrain[] live) => Snapshot(now, lineSide, [], live);
+
+    private static PlanSnapshot Snapshot(string now, LineSideState? lineSide, IPlanCommand[] commands, params LiveTrain[] live)
     {
-        var plan = WorkingPlan.FromTimetable(TwoTrains());
+        var plan = WorkingPlan.FromTimetable(TwoTrains()).ApplyAll(commands).Plan;
         var network = ForecastNetwork.For(Placed, plan.Timetable);
         var forecast = Forecaster.Run(new ForecastRequest(plan) { LiveTrains = live, Now = SimTime.Parse(now), Network = network, LineSide = lineSide ?? LineSideState.Empty });
         var clock = SimClockReading.None with { HasTime = true, LastReported = SimTime.Parse(now) };
@@ -139,6 +141,24 @@ public sealed class GraphSignalTests
 
         var info = GraphHover.Describe(new GraphHit(forecast, 0, 0, 0, forecast.Vertices[0].Time), scene, snapshot);
         info.Lines.Should().Contain(new HoverLine(GraphHover.Note, "Standing at S3 since 07:09 (at red); forecast to move at 07:11 at the earliest"));
+    }
+
+    [Fact]
+    public void A_hold_at_a_signal_draws_a_flat_step_at_its_place()
+    {
+        // S33: 1A01 passed S2 at 07:07 and is held at S3 until 07:12: it gets there at 07:09, waits, and reaches C a
+        // minute after leaving.
+        var hold = new HoldAtSignal(new TrainId("1A01"), new SignalHold(1, "S3", B, C, 0.75, 0.75, SimTime.Parse("07:12")));
+        var snapshot = Snapshot("07:07:10", null, [hold], Through);
+        var scene = Build(snapshot);
+
+        var signal = Third * 1.75;
+        var forecast = scene.InLayer(GraphLayer.Forecast).Single(p => p.Train == new TrainId("1A01"));
+        forecast.Vertices.Take(4).Should().Equal(V(T("07:07"), Third * 1.25), V(T("07:09"), signal), V(T("07:12"), signal), V(T("07:13"), 2 * Third));
+        forecast.Signals!.Take(3).Should().Equal("S2", "S3", "S3");
+
+        var info = GraphHover.Describe(new GraphHit(forecast, 1, 0, 1, forecast.Vertices[1].Time), scene, snapshot);
+        info.Lines.Should().Contain(new HoverLine(GraphHover.Note, "Held at S3 from 07:09 until 07:12 (planned hold)"));
     }
 
     [Fact]

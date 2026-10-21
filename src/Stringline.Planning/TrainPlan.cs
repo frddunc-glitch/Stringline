@@ -67,6 +67,9 @@ public sealed record TrainPlan(
     /// <summary>The index of the last point the train runs to.</summary>
     public int LastIndex => TerminatesAt ?? Points.Count - 1;
 
+    /// <summary>Where the train is held at signals between its points (S33), in the order made; none in the WTT.</summary>
+    public IReadOnlyList<SignalHold> SignalHolds { get; init; } = [];
+
     /// <summary>
     /// The points the train runs to, in order. When terminated short, the last one is a terminating stop: it arrives at
     /// the booked arrival or pass time and does not depart. Includes the points of a cancelled train (see <see cref="Cancelled"/>).
@@ -105,11 +108,12 @@ public sealed record TrainPlan(
         return new(train.Id, train.Headcode, train.CategoryId, PlanOrigin.Wtt, train.Id, points, false, null, false);
     }
 
-    /// <summary>True if both plans have the same points (by value), cancellation and termination.</summary>
+    /// <summary>True if both plans have the same points (by value), cancellation, termination and signal holds.</summary>
     public bool SameAs(TrainPlan other)
     {
         ArgumentNullException.ThrowIfNull(other);
-        return Cancelled == other.Cancelled && TerminatesAt == other.TerminatesAt && Points.SequenceEqual(other.Points);
+        return Cancelled == other.Cancelled && TerminatesAt == other.TerminatesAt && Points.SequenceEqual(other.Points) &&
+            SignalHolds.SequenceEqual(other.SignalHolds);
     }
 
     public override string ToString() => $"{Headcode} {Id}{(Cancelled ? " (cancelled)" : string.Empty)}";

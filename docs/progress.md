@@ -2151,7 +2151,7 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - **Corpus** (285 timetables): 8 272 of about 10 000 rules apply; 800 of those left out involve trains with no booked times (nothing to forecast).
 - **Docs:** `03-…md` §6, `04-…md`, `06-…md` §2, the plan's "Built in S32", `CLAUDE.md`, `docs/developer.md`. Guide: conflicts-and-suggestions ("Timetable rules in the forecast"), settings, re-planning (train detail), reading-the-graph (hover). `build/guide-shots.ps1` re-run (Options shows the new box; the graph shows 2R09-1 and 2S19 later).
 - **Tests:** Planning +26 (`ForecastRuleTests` 23: each kind, a late or gone Y, the option, location and first-stop holds, standing at the hold point, chains, a loop of rules and one through a formed train, unresolved and cancelled Y, places not visited, joins, self dwells, untimed trains, exclusions, no conflict; `RuleFixtureTests` 3: Waterloo's rules, 2R09-1 on the 4× recording, the 4 h recording unchanged); Optimiser +1 (a rule-held train follows its held train in the model and the forecast); Graph +1 (hover); App +2 (`TrainDetailRuleTests`); the settings test covers the option. `BlockHeadwayFixtureTests` updated as above.
-- Totals: 1 825 (Core 280, Architecture 18, Gateway 211, Timetable 168, Network 199, Planning 323, Persistence 13, Graph 301, Optimiser 23, Tools 81, App 208). Green on Windows (Debug); the solution builds with `-warnaserror`. Linux not run.
+- Totals: 1 825 (Core 280, Architecture 18, Gateway 211, Timetable 168, Network 199, Planning 323, Persistence 13, Graph 301, Optimiser 23, Tools 81, App 208). Green on Windows (Debug); the solution and the portable solution build with `-warnaserror`. Linux not run.
 - **Benchmarks** (`--quick`, Release, against HEAD in the same sitting): forecast independent 19.3 ms (HEAD 16.7), both passes 41.1 ms (36.4), conflicts 12.9 ms (12.4), the 4 h recording half way with places 58.6 ms (54.5). Pan 11.3 ms, update 9.9–13.6 ms.
 
 ### Decisions
@@ -2172,6 +2172,44 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Questions for Fred
 - 40. **Location only for Y.** Where a departure rule's X does not leave the named location (Basingstoke's 5L78 joins there), X is held at its first stop. Is that what SimSig does?
 - 41. **Y that never gets there.** A rule whose other train is terminated short before its event is skipped, as for a cancelled train. Would SimSig hold X instead until the rule is overridden?
+
+## 2026-10-22 — S33: Holding trains at signals (Q12)
+
+### Done
+- **Fred's choices** (asked during the session): suggestions and the optimiser hold a train at a signal only on the **run it is on now** (past its last timing point before the clash); at the **last** placed signal it has not passed before the next timing point; the right-click menu gets **Hold at signal…** and **Release hold at S457**; the regulation list shows a hold **on the held train's row** at the next timing location.
+- **Plan** (`06-…md` §1): `SignalHold(index, signal, from, to, fraction, share, until)` in `TrainPlan.SignalHolds` (compared by `SameAs`, so a held train is modified; Reset to WTT clears it); commands `HoldAtSignal` (replaces a hold at the same signal on the same run; refuses a signal not between two points, or a run with no timed point after) and `ReleaseSignalHold`, both in `PlanCommandJson` (`holdAtSignal`, `releaseSignalHold`). The hold keeps the signal's share of the run, so the plan forecasts the same if the learned places change later.
+- **Forecast** (`06-…md` §2): the run gets to the signal at its share (from where the train was last known, if on its way, and not before now), waits until the hold's time, and runs the rest as any run from there; several holds on a run in turn; a passed hold, or one reached late, does nothing. `TrainForecast.SignalHolds` (`SignalHoldForecast`: reaches, until). The run-share code the forecaster's anchors use moved to `RunShares`, so holds and anchors agree.
+- **Where a train can be held** (`SignalHolds`): `OnRun` lists the usable places (used or hand-set, never learning) between any two locations on a run, including timing locations its plan does not book; `Ahead` keeps those past the train's anchor on its own line, following the next signals from the one it passed (S38); `Reaches` is when it would pass the signal unheld (standing there, when it would move).
+- **Suggester** (`06-…md` §4): when a hold or swap finds no timing point the train can wait at, it holds it at the last signal ahead before the next point, from when it gets there, with the same rounds and cost. "Hold 1F01 at S12 before B until 08:10 (+2 min)" (`Suggestion.Signal`; ID ends `:S12`).
+- **Optimiser** (`06-…md` §5): a train on its way with a signal ahead gets one more hold variable (`ModelTrain.SignalHold`), adding the time held to its arrival at the next point; the command is `HoldAtSignal`, the step `ReplanStep.Signal`.
+- **App:** the right-click items above (`SignalsToHoldAt`: the run the train is on if the click is at either end of it, else the run on from the point); the train detail's state lists "hold at S457 until 09:12"; the regulation row reads "hold at S457 until 09:12, then passes", with a tooltip that it is a reminder only (no gateway command) to hold the train on the panel; the graph draws the wait as a flat step at the signal's place (hover "Held at S457 from 09:09 until 09:12 (planned hold)").
+- **Waterloo** (places learned from the 4 h recording, `SignalHoldFixtureTests`): on the 4× recording, every 10 sim minutes, 5 of 35 conflicts between trains had the train giving way on its way; 3 got a hold at a signal (5M05 at S108 before Vauxhall, 2F84 standing at S28 and 2H92 at S22 outside Waterloo), each resolving its conflict and ranked first; the other 2 could wait at a timing point. The failure recording's one such train had passed its last signal. `replan` with the learned profile: at 06:00 the optimiser holds 5M05 at S108 (4 → 0; the rules get there with a platform change instead), at 07:30 the rules hold 2F84 at S28 (4 → 0), at 08:00 the optimiser makes 3 of its 5 holds at signals (14 → 8; the rules 14 → 12).
+- **Found on Waterloo:** places are learned between the timing locations trains report, so 2 of the 5 runs (CJML → VAUX past EARLSFD and QTRDBAT; VAUX → WLOO past INTJN) had no signals until unbooked locations counted. Parallel lines' signals sit at the same share (S28, S34, S22, S26 at 0.29–0.32 from INTJN), so without following the line a hold landed on another line's signal. And the last signal before a terminus has no next signal: that ends the line rather than meaning "not learned".
+- **Docs:** `06-…md` §1, §2, §4, §5; the plan's "Built in S33"; `CLAUDE.md` (`replan --profile`); `docs/developer.md`; the guide's re-planning (menu items, "Holding at a signal", train detail), regulation, conflicts-and-suggestions and signal-places pages. `build/guide-shots.ps1` not re-run (the free-sim profile has no learned places, so no picture changes).
+- **Tests:** Planning +16 (`SignalHoldTests` 12: JSON round trip, plan and release, refusals, forecast, two holds, on its way, passed or late, the signals on a run, past an unbooked location on the train's own line, standing there, a learning place not offered, the regulation row; `PlanningEnginePlanTests` undo and redo; `SuggesterScenarioTests` the on-the-way hold and a learning place; `SignalHoldFixtureTests` 2); Optimiser +2 (optimiser and rules hold at a signal); Graph +1 (the flat step and hover); App +2 (detail and menu release on Waterloo; the regulation row).
+- Totals: 1 846 (Core 280, Architecture 18, Gateway 211, Timetable 168, Network 199, Planning 339, Persistence 13, Graph 302, Optimiser 25, Tools 81, App 210). Green on Windows (Debug); the solution and the portable solution build with `-warnaserror`. Linux not run.
+- **Benchmarks** (`--quick`, Release): forecast independent 20.3 ms, both passes 39.0 ms, conflicts 10.5 ms, the 4 h recording half way with places 53.5 ms (S32: 19.3, 41.1, 12.9, 58.6); pan 7.9–10.7 ms, update 8.6–10.7 ms, zoom 36.8–39.2 ms. A plan with no holds skips the new code.
+
+### Decisions
+- **The hold is plan, not forecast:** it lives on the train's plan with the share it was made at, so undo, sessions, review and reset treat it like any other edit, and a later change to the learned places does not move it.
+- **A hold is timed from when the train would pass the signal, never before now:** a train that has not reported passing a placed signal has not passed it.
+- **Unbooked timing locations count** for where a signal is on a run, by S36's shares; where a signal is learned between several pairs, the narrowest is used.
+- **The signals ahead are the line's**, by the next signals learned since S38. Only a profile with no next signals at all (learned before S38) falls back to every signal on the run.
+- **The optimiser models a signal hold as arrival + time held**, a little more than the forecaster gives a train with time in hand; its checking rounds have the last word.
+
+### Next
+- Phase 4d: S40 (S41 can run alongside), per `07-…md` and `08-timetable-editor.md`.
+- 👤 Fred: try a suggested hold at a signal live on Waterloo (does holding the signal at danger match the forecast?), and a Kings Cross `--td` recording when convenient.
+
+### Known issues
+- A train standing at a signal is held from when the forecast has it move (now at the earliest); if the train ahead keeps it there longer anyway, the hold shows but changes nothing.
+- Holds are offered only on the run a train is on now (Fred); a train passing several timing points with no platform before a clash gets none on later runs.
+- At a junction the next signal learned most often may be the other route's (as S38 found for standing trains), so the line followed can be the wrong route's.
+- The menu's **Hold at signal…** on a run not yet started lists every line's signals there (it cannot tell the line yet); it offers the last, which may be a parallel line's.
+
+### Questions for Fred
+- 42. **Default hold time.** Hold at signal… offers 2 min after the train is forecast to get there, rounded to the half minute (as Hold here… does). Is that a useful default?
+- 43. **Standing trains.** Should a train already standing at a red signal be offered a hold there at all? Today it is (2F84 at S28 on the 4× recording), as a reminder to keep it there.
 
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:

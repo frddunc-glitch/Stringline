@@ -339,6 +339,12 @@ internal sealed partial class TrainDetailViewModel : ObservableObject
             }
         }
 
+        // Holds at signals in the plan (S33), whether or not the forecast still stops it there.
+        foreach (var hold in plan.SignalHolds)
+        {
+            parts.Add($"hold at {hold.Signal} until {hold.Until.ToString("H", CultureInfo.InvariantCulture)}");
+        }
+
         // Rules SimSig applies that the forecast does not (S32): which trains run instead of which.
         if (plan.Origin == PlanOrigin.Wtt)
         {

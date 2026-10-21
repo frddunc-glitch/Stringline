@@ -41,6 +41,8 @@ Right-click a train's line for its menu, at the timing point nearest the click. 
 | Item | Does |
 |---|---|
 | **Hold here…** | Sets a departure time here. At a pass, it adds a stop. |
+| **Hold at signal…** | Holds the train at a [placed signal](signal-places.md) before the next timing point, until a time: for a train already on its way, or on the run on from the point. It offers the last signal before the next point. See [holding at a signal](#holding-at-a-signal). |
+| **Release hold at S457** | Takes away a hold at that signal. |
 | **Add stop…** | Adds a stop at a point the train passes. |
 | **Skip stop** | Runs through a stop without calling. |
 | **Change platform…**, **Change line…** | Changes the platform or line at this point. |
@@ -54,9 +56,18 @@ Right-click a train's line for its menu, at the timing point nearest the click. 
 
 Right-click the background for [disruptions and notes](disruptions-and-notes.md). The **Plan** menu has the commands for the selected train too.
 
+## Holding at a signal
+
+SimSig can hold a train at any signal, so a train already on its way to a junction can still wait outside it. Stringline can plan that at the signals it has [learned the places of](signal-places.md) (used or set by hand, not those still learning):
+
+- **Hold at signal…** on a train's right-click menu asks which signal and until when;
+- a [suggestion](conflicts-and-suggestions.md#suggestions) or a [re-plan](conflicts-and-suggestions.md#re-planning-the-next-hour) holds a train at a signal when it has passed the last place before the clash where it could wait ("Hold 1F01 at S12 before Barnes until 08:10 (+2 min)").
+
+The forecast stops the train at the signal until the hold's time, drawn as a short flat step there, and the hover says "Held at S12 from 08:08 until 08:10 (planned hold)". The train detail lists the hold, and the [regulation list](regulation.md) shows it on the train's row at the next timing point. SimSig's gateway has no command to hold a train at a signal, so it is a reminder: hold the train on the panel (keep the signal at danger). Undo, **Release hold at…** or **Reset to WTT** takes it away.
+
 ## The train detail panel
 
-The panel at the top right shows the selected train: its headcode, state (running and how late, not started, finished, not running, cancelled, terminated short, re-planned), its route, and buttons for **Reset to WTT**, **Cancel train** (or **Reinstate**), **Run anyway** (for a train that will [not run](timetables-and-profiles.md#trains-that-will-not-run)), **Clone…** and, for a live train, **Link…**. The state also says when a [timetable rule](conflicts-and-suggestions.md#timetable-rules-in-the-forecast) holds the train ("held by rule: after 2Y28 leaves (+25 min), until 09:12"), and lists the rules that choose between it and another train ("rule: does not run if 2Y01 runs").
+The panel at the top right shows the selected train: its headcode, state (running and how late, not started, finished, not running, cancelled, terminated short, re-planned), its route, and buttons for **Reset to WTT**, **Cancel train** (or **Reinstate**), **Run anyway** (for a train that will [not run](timetables-and-profiles.md#trains-that-will-not-run)), **Clone…** and, for a live train, **Link…**. The state also says when a [timetable rule](conflicts-and-suggestions.md#timetable-rules-in-the-forecast) holds the train ("held by rule: after 2Y28 leaves (+25 min), until 09:12"), lists its [holds at signals](#holding-at-a-signal) ("hold at S457 until 09:12"), and lists the rules that choose between it and another train ("rule: does not run if 2Y01 runs").
 
 Below is its schedule, one row per timing point:
 
