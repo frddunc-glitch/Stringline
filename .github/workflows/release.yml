@@ -106,12 +106,14 @@ jobs:
       # replay running, and updates it with the new setup while it runs; then tries a downgrade and uninstalls.
       - name: Test the update
         if: steps.check.outputs.skip != 'true'
+        # Each setup gives up after 5 minutes; this is a backstop.
+        timeout-minutes: 30
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          $new = "artifacts/Stringline-$env:VERSION-setup.exe"
+          $new ="artifacts/Stringline-$env:VERSION-setup.exe"
           $previous = gh release list --exclude-drafts --limit 30 --json tagName --jq '.[].tagName' | Where-Object { $_ -ne $env:TAG } | Select-Object -First 1
           $old = $null
           if ($previous) {
@@ -121,6 +123,16 @@ jobs:
           $global:LASTEXITCODE = 0
           if ($old) { Write-Host "Updating from $previous"; ./build/test-upgrade.ps1 -Old $old.FullName -New $new }
           else { Write-Host 'No earlier release has a setup; updating from an older build of this one.'; ./build/test-upgrade.ps1 -New $new }
+
+      # The setup logs, and what a stuck setup was doing (see test-upgrade.ps1), pass or fail.
+      - uses: actions/upload-artifact@v7
+        if: always() && steps.check.outputs.skip != 'true'
+        with:
+          name: upgrade-test-${{ steps.version.outputs.version }}
+          path: |
+            artifacts/upgrade-test/*.log
+            artifacts/upgrade-test/*.png
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v7
         if: steps.check.outputs.skip != 'true'

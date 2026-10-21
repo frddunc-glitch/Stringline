@@ -56,7 +56,44 @@ function Check([bool] $ok, [string] $what) {
 
 function Setup([string] $exe, [string] $name, [string[]] $more = @()) {
     $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/LOG=`"$(Join-Path $out "$name.log")`"") + $more
-    (Start-Process $exe -ArgumentList $arguments -Wait -PassThru).ExitCode
+    RunBounded $exe $arguments $name
+}
+
+# Runs a setup or uninstaller and returns its exit code, or -1 if it has not finished within the timeout: then what
+# it was doing is shown and saved (its log, the app's log, the windows open and a screenshot) and it is stopped, so a
+# stuck installer fails the test in minutes instead of holding the Release workflow for hours.
+function RunBounded([string] $exe, [string[]] $arguments, [string] $name, [int] $timeoutSeconds = 300) {
+    $started = Get-Date
+    $process = Start-Process $exe -ArgumentList $arguments -PassThru
+    $null = $process.Handle # keeps the handle, without which ExitCode is lost once the process has gone
+    if ($process.WaitForExit($timeoutSeconds * 1000)) { return $process.ExitCode }
+
+    Write-Host "  FAIL  $name did not finish within $timeoutSeconds s" -ForegroundColor Red
+    Show-Stuck $name $started
+    $process.Kill($true) # with its setup.tmp child
+    Get-Process Stringline -ErrorAction SilentlyContinue | Where-Object { $folder -and $_.Path -like "$folder*" } | Stop-Process -Force
+    -1
+}
+
+function Show-Stuck([string] $name, [datetime] $since) {
+    $log = Join-Path $out "$name.log"
+    if (Test-Path $log) { Write-Host "--- last lines of $name.log"; Get-Content $log -Tail 30 | Out-Host }
+    Write-Host '--- the app''s log since then'
+    AppLogSince $since | Where-Object { $_ -notmatch 'Forecast of' } | Select-Object -Last 30 | Out-Host
+    Write-Host '--- windows open'
+    Get-Process | Where-Object { $_.MainWindowTitle } |
+        Format-Table Id, ProcessName, Responding, MainWindowTitle -AutoSize | Out-Host
+    try {
+        Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+        $screen = [Windows.Forms.SystemInformation]::VirtualScreen
+        $bitmap = [Drawing.Bitmap]::new($screen.Width, $screen.Height)
+        $graphics = [Drawing.Graphics]::FromImage($bitmap)
+        $graphics.CopyFromScreen($screen.Left, $screen.Top, 0, 0, $bitmap.Size)
+        $bitmap.Save((Join-Path $out "$name-stuck.png"), [Drawing.Imaging.ImageFormat]::Png)
+        $graphics.Dispose(); $bitmap.Dispose()
+        Write-Host "--- screenshot in $(Join-Path $out "$name-stuck.png")"
+    }
+    catch { Write-Warning "No screenshot: $($_.Exception.Message)" }
 }
 
 function Installed { if (Test-Path $userKey) { Get-ItemProperty $userKey } }
@@ -72,7 +109,7 @@ function SetupVersion([string] $exe) { ((Get-Item $exe).VersionInfo.ProductVersi
 # at once, and that copy removes the user's data (when asked) after the program and its entry.
 function Uninstall([string[]] $more = @(), [scriptblock] $done = { $true }) {
     $uninstaller = (Installed).UninstallString.Trim('"')
-    Start-Process $uninstaller -ArgumentList (@('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') + $more) -Wait
+    $null = RunBounded $uninstaller (@('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') + $more) 'uninstall'
     $deadline = (Get-Date).AddSeconds(60)
     while (((Installed) -or (Test-Path (Join-Path $folder 'Stringline.exe')) -or -not (& $done)) -and (Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 500

@@ -1960,6 +1960,17 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Known issues
 - One Gateway test failed once under the full parallel `dotnet test` run and passed on a rerun (211/211); this session changed no Gateway code. Probably timing under load; worth finding if it recurs.
 
+## 2026-10-21 — Release v0.3.1: the update test hung
+
+### Done
+- The v0.3.1 Release run stuck in "Test the update" at *Update to 0.3.1 while it runs*: the silent 0.3.1 setup with `/CLOSEAPPLICATIONS` never returned, and neither cancel nor force-cancel stopped the job at first.
+- **`build/test-upgrade.ps1`**: setups and uninstallers run through `RunBounded`, which gives up after 5 minutes. A stuck one then prints the end of its Inno log, the app's log since it started and the open windows (and whether they respond), saves a screenshot (`<name>-stuck.png`), kills it and the app, and counts as a failure.
+- **Release workflow**: `timeout-minutes: 30` on "Test the update", and an `upgrade-test-<version>` artifact with the setup logs and any screenshot, uploaded pass or fail.
+
+### Known issues
+- **Cause not found.** Locally, 0.3.0 (from the release zip, with the Waterloo replay) closes through the Restart Manager in about 1 s and saves its session, whether closed at the first forecast (as CI does) or after 20 s, and with an empty profile. The installer is unchanged since v0.3.0, and 0.2.0 → 0.3.0 passed in 6 minutes. The next run's `upgrade.log` and `upgrade-stuck.png` should say where it stops: at "Shutting down applications using our files" means the app is not exiting.
+- A re-run of v0.3.1 checks out the tag, so it uses the old script; the fix reaches a release from v0.3.2 (or a run without a tag).
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
