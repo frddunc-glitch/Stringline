@@ -422,6 +422,7 @@ Fred raised #16–#19 on 2026-10-20 after testing on more sims (#1 and #5 stay w
   - **Live head** is a layer toggle, on by default, next to Forecast.
 - **Corridor extra points (first part):** the profile can hold corridor locations shown as faint, narrow rows (`CorridorLocation.Minor`: no label unless zoomed, no grid line). They are for timing locations the corridor generator skipped, and in S38 for placed signals. The profile editor can add and remove them.
 - **Tests:** a train reporting an unbooked location between two booked points (the forecast moves to it); no minimum from it (proportional); the live head's position against the clock and its overdue hold (Graph.Tests, portable); minor rows in the axis and editor; the gap baseline on Waterloo.
+- *Built in S36:* `stringline gaps` measures the baseline (`progress.md`). Waterloo's trains report a timing location their WTT leaves out about 30 % of the time, which nearly halves the median gap; Kings Cross (where Fred saw #17) and Penrith report none, so there only the live head helps until S38's signals. Fred chose: a minor row is a full corridor location (its sections split and are measured, keeping the split section's tracks); the live head stops 95 % of the way to the next point when overdue; it is in the View menu only (the toolbar has no room at 1280 px), off while reviewing and in `render-png` unless `--live-head`.
 
 ### S37 — Learning signal, track circuit and berth places (#19, part 1)
 Takes over S33's "find out first".

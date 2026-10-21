@@ -40,6 +40,8 @@ public sealed class SkiaGraphRenderer : IDisposable
     private readonly SKFont _titleFont;
     private readonly SKFont _annotationFont;
     private SKPaint? _draftBorder;
+    private SKPaint? _minorLine;
+    private readonly SKPathEffect _minorDots = SKPathEffect.CreateDash([1, 3], 0);
     private readonly SKPathEffect _draftDash = SKPathEffect.CreateDash([6, 4], 0);
     private readonly SKPathEffect _forecastDash = SKPathEffect.CreateDash([.. ForecastPattern], 0);
     private readonly Dictionary<(LineStyle Style, float Width), SKPathEffect> _categoryDashes = [];
@@ -193,6 +195,7 @@ public sealed class SkiaGraphRenderer : IDisposable
 
         DrawConflictHighlights(canvas, scene, viewport, plot, selection?.ConflictId);
         DrawPaths(canvas, scene, viewport, selection, tiles);
+        DrawLiveHeads(canvas, scene, viewport, selection);
         DrawGhosts(canvas, ghosts, viewport);
         DrawNow(canvas, scene, viewport, plot);
         DrawHeadcodes(canvas, viewport, plot);
@@ -285,9 +288,29 @@ public sealed class SkiaGraphRenderer : IDisposable
     {
         foreach (var location in scene.Locations)
         {
-            var paint = location.IsStation ? Stroke(Theme.StationLine, 1) : Stroke(Theme.LocationLine, 1);
+            var paint = location.IsMinor ? MinorLine() : location.IsStation ? Stroke(Theme.StationLine, 1) : Stroke(Theme.LocationLine, 1);
             LineAtAxis(canvas, viewport, plot, Crisp(viewport.AxisToPixel(location.Axis)), paint);
         }
+    }
+
+    private SKPaint MinorLine() => _minorLine ??= new SKPaint
+    {
+        IsAntialias = true,
+        Style = SKPaintStyle.Stroke,
+        StrokeWidth = 1,
+        Color = ToSk(Theme.MinorLocationLine),
+        PathEffect = _minorDots,
+    };
+
+    /// <summary>
+    /// True if a minor row at <paramref name="index"/> (in axis order) has room for its label: at least
+    /// <see cref="GraphTheme.MinorLabelRoom"/> pixels to the rows either side.
+    /// </summary>
+    private bool MinorHasRoom(List<GraphLocation> ordered, int index, GraphViewport viewport)
+    {
+        var at = viewport.AxisToPixel(ordered[index].Axis);
+        return (index == 0 || Math.Abs(at - viewport.AxisToPixel(ordered[index - 1].Axis)) >= Theme.MinorLabelRoom)
+            && (index == ordered.Count - 1 || Math.Abs(viewport.AxisToPixel(ordered[index + 1].Axis) - at) >= Theme.MinorLabelRoom);
     }
 
     /// <summary>
@@ -358,6 +381,60 @@ public sealed class SkiaGraphRenderer : IDisposable
         foreach (var run in _paths.Get(path))
         {
             canvas.DrawPath(run.Path, PathPaint(run.Colour, path.Layer, dim, path.IsCancelled, path.Style));
+        }
+    }
+
+    /// <summary>
+    /// Each running train's live head (S36) at the scene's now: a line in the actual style from its last report to
+    /// where it has got to, ending in a dot with a halo. Worked out every frame, not cached, so it moves with the clock.
+    /// </summary>
+    private void DrawLiveHeads(SKCanvas canvas, GraphScene scene, GraphViewport viewport, GraphSelection? selection)
+    {
+        if (scene.Now is not { } now || scene.LiveHeads.Count == 0)
+        {
+            return;
+        }
+
+        using var builder = new SKPathBuilder();
+        foreach (var head in scene.LiveHeads)
+        {
+            var line = head.At(now.Seconds);
+            if (line.Count < 2)
+            {
+                continue;
+            }
+
+            var minTime = line[0].Time;
+            var maxTime = line[^1].Time;
+            var minAxis = line.Min(v => v.Axis);
+            var maxAxis = line.Max(v => v.Axis);
+            if (!viewport.Overlaps(minTime, maxTime, minAxis, maxAxis))
+            {
+                continue;
+            }
+
+            builder.Reset();
+            for (var i = 0; i < line.Count; i++)
+            {
+                var p = viewport.ToScreen(line[i].Time, line[i].Axis);
+                if (i == 0)
+                {
+                    builder.MoveTo((float)p.X, (float)p.Y);
+                }
+                else
+                {
+                    builder.LineTo((float)p.X, (float)p.Y);
+                }
+            }
+
+            using var path = builder.Snapshot();
+            var chosen = selection is not null && ((selection.Train is { } t && t == head.Train) || (selection.LiveUid is { } uid && uid == head.LiveUid));
+            var dim = selection is not null && !chosen;
+            canvas.DrawPath(path, PathPaint(head.Colour, GraphLayer.Actual, dim, lineStyle: head.Style));
+            var end = viewport.ToScreen(line[^1].Time, line[^1].Axis);
+            var colour = head.Colour with { A = (byte)Math.Round(head.Colour.A * (dim ? Theme.DimOpacity : 1)) };
+            canvas.DrawCircle((float)end.X, (float)end.Y, Theme.LiveHeadRadius + 1.5f, Fill(Theme.Halo));
+            canvas.DrawCircle((float)end.X, (float)end.Y, Theme.LiveHeadRadius, Fill(colour));
         }
     }
 
@@ -793,12 +870,39 @@ public sealed class SkiaGraphRenderer : IDisposable
             canvas.ClipRect(new SKRect(0, TitleBand, viewport.Width, plot.Top - 2));
         }
 
-        foreach (var location in scene.Locations.OrderBy(l => l.Axis))
+        var ordered = scene.Locations.OrderBy(l => l.Axis).ToList();
+        for (var i = 0; i < ordered.Count; i++)
         {
+            var location = ordered[i];
             var at = (float)viewport.AxisToPixel(location.Axis);
             if (at < low - 1 || at > high + 1 || at - _locationFont.Size < lastEnd)
             {
                 continue; // out of view, or too close to the previous label
+            }
+
+            if (location.IsMinor)
+            {
+                // A minor row: its name small and muted, and only zoomed in far enough that it crowds nothing.
+                if (MinorHasRoom(ordered, i, viewport))
+                {
+                    var text = GraphLabels.Fit(location.Name, _tiplocFont, room);
+                    if (vertical)
+                    {
+                        canvas.Save();
+                        canvas.Translate(at, plot.Top - 6);
+                        canvas.RotateDegrees(-90);
+                        canvas.DrawText(text, 0, 3, SKTextAlign.Left, _tiplocFont, Fill(Theme.MutedText));
+                        canvas.Restore();
+                    }
+                    else
+                    {
+                        canvas.DrawText(text, plot.Left - 6, at + 3, SKTextAlign.Right, _tiplocFont, Fill(Theme.MutedText));
+                    }
+
+                    lastEnd = at + 4;
+                }
+
+                continue;
             }
 
             var hasTiploc = !string.Equals(location.Name, location.Tiploc.Code, StringComparison.Ordinal);
@@ -956,6 +1060,8 @@ public sealed class SkiaGraphRenderer : IDisposable
         _titleFont.Dispose();
         _annotationFont.Dispose();
         _draftBorder?.Dispose();
+        _minorLine?.Dispose();
+        _minorDots.Dispose();
         _draftDash.Dispose();
         _forecastDash.Dispose();
         foreach (var effect in _categoryDashes.Values)

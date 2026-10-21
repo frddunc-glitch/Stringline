@@ -135,6 +135,44 @@ public sealed class ProfileEditTests : IDisposable
     }
 
     [Fact]
+    public void A_minor_row_put_in_a_single_line_keeps_both_halves_single()
+    {
+        var profile = Profile().WithTracks("main", 1, Section.SingleLine);
+
+        var edited = profile.InsertLocation("main", 2, X, Line, minor: true);
+
+        Order(edited).Should().Equal(A, B, X, C, D);
+        edited.Corridors[0].Locations[2].Minor.Should().BeTrue();
+        edited.Corridors[0].Locations.Where(l => l.Tiploc != X).Should().OnlyContain(l => !l.Minor);
+        var sections = edited.Corridors[0].Sections;
+        sections[1].IsSingleLine.Should().BeTrue("B–X is half of the single line B–C");
+        sections[2].IsSingleLine.Should().BeTrue("and so is X–C");
+        sections[0].IsSingleLine.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Any_location_can_be_made_a_minor_row_and_back()
+    {
+        var minor = Profile().WithMinor("main", 1, true);
+
+        minor.Corridors[0].Locations[1].Minor.Should().BeTrue();
+        minor.Corridors[0].Sections.Should().Equal(Profile().Corridors[0].Sections, "only how it draws changes");
+        minor.WithMinor("main", 1, false).Corridors[0].Locations[1].Minor.Should().BeFalse();
+        FluentActions.Invoking(() => Profile().WithMinor("main", 9, true)).Should().Throw<ProfileEditException>();
+    }
+
+    [Fact]
+    public void A_minor_row_is_saved_and_an_ordinary_location_writes_nothing_new()
+    {
+        var plain = ProfileJson.Serialize(Profile());
+        plain.Should().NotContain("minor", "profiles without minor rows are written as before");
+
+        var json = ProfileJson.Serialize(Profile().WithMinor("main", 1, true));
+        json.Should().Contain("\"minor\": true");
+        ProfileJson.Deserialize(json).Corridors[0].Locations.Select(l => l.Minor).Should().Equal(false, true, false, false);
+    }
+
+    [Fact]
     public void Removing_a_location_joins_its_sections_and_measures_the_new_one()
     {
         var edited = Profile().RemoveLocation("main", 1, Line);

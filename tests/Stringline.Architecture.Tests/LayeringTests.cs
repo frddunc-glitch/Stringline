@@ -37,7 +37,12 @@ public class LayeringTests
     public void Only_the_app_project_is_windows_specific()
     {
         var src = Path.Combine(FindRepoRoot(), "src");
-        var projects = Directory.GetFiles(src, "*.csproj", SearchOption.AllDirectories);
+        // WPF markup compilation briefly writes Stringline.App_<random>_wpftmp.csproj beside the real
+        // project, so a parallel build of the app must not be mistaken for a new project.
+        var projects = Directory.GetFiles(src, "*.csproj", SearchOption.AllDirectories)
+            .Where(p => !Path.GetFileNameWithoutExtension(p).EndsWith("_wpftmp", StringComparison.OrdinalIgnoreCase))
+            .Where(p => !p.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(d => d is "obj" or "bin"))
+            .ToArray();
         projects.Should().HaveCountGreaterThanOrEqualTo(9);
 
         foreach (var project in projects)

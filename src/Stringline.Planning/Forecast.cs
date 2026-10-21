@@ -95,6 +95,12 @@ public sealed record TrainForecast(
     /// </summary>
     public bool NotSeen { get; init; }
 
+    /// <summary>
+    /// The timing location the train last reported that its plan does not book (S36, #17), when that report came after
+    /// its last booked one: the rest of the run to the next point is forecast from there. Null otherwise.
+    /// </summary>
+    public ProgressAnchor? Anchor { get; init; }
+
     /// <summary>The index in <see cref="Points"/> of the first point with a forecast time, or -1 if none.</summary>
     public int FirstForecast
     {
@@ -127,6 +133,20 @@ public sealed record TrainForecast(
     public override string ToString() => $"{Headcode} {Status}{(FinalDelaySeconds is { } d ? $" {d:+0;-0}s" : string.Empty)}";
 }
 
+/// <summary>
+/// A report at a timing location between two of a train's booked points that its plan does not book (S36, #17): SimSig
+/// reports those too. The forecast of the run on to <paramref name="Before"/> starts from it. It has no booked time, so
+/// no delay is measured there.
+/// </summary>
+/// <param name="Time">When the train passed (or reached) it.</param>
+/// <param name="After">The plan point the train last reported before it.</param>
+/// <param name="Before">The next timed plan point, which the run is forecast to.</param>
+/// <param name="Share">How far along the run from <paramref name="After"/> to <paramref name="Before"/> it lies, in minimum run time (0–1).</param>
+public sealed record ProgressAnchor(Tiploc Location, SimTime Time, int After, int Before, double Share)
+{
+    public override string ToString() => $"passed {Location} {Time} (not booked)";
+}
+
 /// <summary>A train held by a block (<c>06-…md</c> §2): it would have left point <paramref name="Index"/> at <paramref name="Departure"/>, into the block.</summary>
 /// <param name="Index">The plan point it is held at.</param>
 /// <param name="ToIndex">The next timed point, at the other end of the run the block covers.</param>
@@ -151,6 +171,12 @@ public sealed record ForecastOptions
 
     /// <summary>A running train not reported for this long past its forecast is <see cref="TrainForecast.PossiblyStopped"/> (Fred, S11: 5 min).</summary>
     public int PossiblyStoppedSeconds { get; init; } = 300;
+
+    /// <summary>
+    /// Forecast a running train on from a timing location it reported that its plan does not book (S36,
+    /// <see cref="TrainForecast.Anchor"/>); false forecasts from its last booked report only, as before S36.
+    /// </summary>
+    public bool UnbookedAnchors { get; init; } = true;
 }
 
 /// <summary>

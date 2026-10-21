@@ -192,24 +192,53 @@ public static class ProfileEdits
         return Checked(profile with { Corridors = list });
     }
 
-    /// <summary>A location put on the corridor at <paramref name="index"/> (0 makes it the Up end).</summary>
-    public static StringlineProfile InsertLocation(this StringlineProfile profile, string id, int index, Tiploc location, WorkingTimetable? timetable)
+    /// <summary>
+    /// A location put on the corridor at <paramref name="index"/> (0 makes it the Up end), as a minor row if
+    /// <paramref name="minor"/> (S36).
+    /// </summary>
+    public static StringlineProfile InsertLocation(this StringlineProfile profile, string id, int index, Tiploc location, WorkingTimetable? timetable, bool minor = false)
     {
         if (location.IsEmpty)
         {
             throw new ProfileEditException("No location given.");
         }
 
-        return profile.EditLocations(id, timetable, locations =>
+        var (list, at) = Find(profile, id);
+        var corridor = list[at];
+        var where = Math.Clamp(index, 0, corridor.Locations.Count);
+
+        // A location put between two neighbours splits their section: both halves keep its tracks (a single line stays single).
+        var split = where > 0 && where < corridor.Locations.Count ? corridor.FindSection(corridor.Locations[where - 1].Tiploc, corridor.Locations[where].Tiploc) : null;
+        var edited = profile.EditLocations(id, timetable, locations =>
         {
             if (locations.Any(l => l.Tiploc == location))
             {
                 throw new ProfileEditException($"{location} is already on the corridor.");
             }
 
-            locations.Insert(Math.Clamp(index, 0, locations.Count), new CorridorLocation(location, 0));
+            locations.Insert(where, new CorridorLocation(location, 0, Minor: minor));
+        });
+        if (split is null)
+        {
+            return edited;
+        }
+
+        return edited.EditCorridor(id, c => c with
+        {
+            Sections = c.Sections.Select((s, i) => i == where - 1 || i == where ? s with { Tracks = split.Tracks } : s).ToList(),
         });
     }
+
+    /// <summary>
+    /// Marks a location as a minor row (S36), or as an ordinary one: a minor row draws faintly, with no grid line and
+    /// no label unless zoomed in. Its sections are unchanged.
+    /// </summary>
+    public static StringlineProfile WithMinor(this StringlineProfile profile, string id, int index, bool minor) =>
+        profile.EditCorridor(id, c =>
+        {
+            CheckIndex(c.Locations, index);
+            return c with { Locations = c.Locations.Select((l, i) => i == index ? l with { Minor = minor } : l).ToList() };
+        });
 
     public static StringlineProfile RemoveLocation(this StringlineProfile profile, string id, int index, WorkingTimetable? timetable) =>
         profile.EditLocations(id, timetable, locations =>
@@ -458,7 +487,7 @@ public static class ProfileEdits
         && a.Name == b.Name
         && a.Axis == b.Axis
         && a.Locations.Count == b.Locations.Count
-        && a.Locations.Zip(b.Locations).All(p => p.First.Tiploc == p.Second.Tiploc && p.First.DistanceKm == p.Second.DistanceKm && p.First.Platforms == p.Second.Platforms)
+        && a.Locations.Zip(b.Locations).All(p => p.First.Tiploc == p.Second.Tiploc && p.First.DistanceKm == p.Second.DistanceKm && p.First.Platforms == p.Second.Platforms && p.First.Minor == p.Second.Minor)
         && a.Sections.Zip(b.Sections).All(p => SameHandHeadway(p.First, p.Second) && p.First.Tracks.SequenceEqual(p.Second.Tracks));
 
     private static bool SameHandHeadway(Section a, Section b) =>

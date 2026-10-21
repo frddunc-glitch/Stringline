@@ -102,6 +102,7 @@ internal sealed class CorridorLocationRow(ProfileEditorViewModel editor, string 
     private string _platforms = string.Empty;
     private string _position = string.Empty;
     private bool _timingPointOnly;
+    private bool _minor;
 
     public int Index { get; } = index;
 
@@ -134,6 +135,13 @@ internal sealed class CorridorLocationRow(ProfileEditorViewModel editor, string 
 
     public bool IsTimingPointOnly => _timingPointOnly;
 
+    /// <summary>A minor row (S36): drawn faintly, with no grid line and no label unless zoomed in.</summary>
+    public bool IsMinor
+    {
+        get => _minor;
+        set => Edit(value, _minor, nameof(IsMinor), p => p.WithMinor(corridorId, Index, value));
+    }
+
     public void Load(CorridorLocation location, StringlineProfile profile)
     {
         if (_tiploc != location.Tiploc)
@@ -148,6 +156,7 @@ internal sealed class CorridorLocationRow(ProfileEditorViewModel editor, string 
         Show(ref _platforms, location.Platforms.ToString(CultureInfo.CurrentCulture), nameof(Platforms));
         Show(ref _position, location.AxisPosition.ToString("P0", CultureInfo.CurrentCulture), nameof(Position));
         Show(ref _timingPointOnly, location.IsTimingPointOnly, nameof(IsTimingPointOnly));
+        Show(ref _minor, location.Minor, nameof(IsMinor));
     }
 }
 
@@ -290,7 +299,7 @@ internal sealed class CategoryRow(ProfileEditorViewModel editor, string category
 
 /// <summary>A location mark on the axis preview.</summary>
 /// <param name="Position">0 at the corridor's Up end, 1 at the other.</param>
-internal sealed record AxisMark(string Label, double Position, bool IsStation);
+internal sealed record AxisMark(string Label, double Position, bool IsStation, bool IsMinor = false);
 
 /// <summary>How the editor reads and writes numbers and durations.</summary>
 internal static class ProfileEditorText

@@ -143,6 +143,8 @@
                     ToolTip="Trains SimSig will not run this session (not seeded, or another seed group) draw faintly on the WTT layer; untick to hide them" />
           <MenuItem Header="Show _actual" IsCheckable="True" IsChecked="{Binding ShowActual}" />
           <MenuItem Header="Show f_orecast" IsCheckable="True" IsChecked="{Binding ShowForecast}" />
+          <MenuItem Header="Show live _head" IsCheckable="True" IsChecked="{Binding ShowLiveHead}"
+                    ToolTip="Carry each running train's line on from its last report to now, along its forecast, ending in a dot. It stops short of the next timing point until the train reports it." />
           <MenuItem Header="Show _disruptions and notes" IsCheckable="True" IsChecked="{Binding ShowDisruptions}" />
           <MenuItem Header="Show co_nflicts" IsCheckable="True" IsChecked="{Binding ShowConflicts}" />
           <Separator />

@@ -60,12 +60,14 @@ public sealed class ForecastNetwork
     private readonly IReadOnlyList<Corridor> _corridors;
     private readonly Dictionary<LocationPair, ForecastSection> _sections;
     private readonly ConcurrentDictionary<(Tiploc From, Tiploc To), RouteStep[]?> _routes = new();
+    private readonly Lazy<LocationGraph>? _graph;
 
-    private ForecastNetwork(IReadOnlyList<Corridor> corridors, Dictionary<LocationPair, ForecastSection> sections, IReadOnlyDictionary<string, int> priorities)
+    private ForecastNetwork(IReadOnlyList<Corridor> corridors, Dictionary<LocationPair, ForecastSection> sections, IReadOnlyDictionary<string, int> priorities, Lazy<LocationGraph>? graph = null)
     {
         _corridors = corridors;
         _sections = sections;
         Priorities = priorities;
+        _graph = graph;
     }
 
     /// <summary>No sections: the interaction pass changes nothing.</summary>
@@ -108,7 +110,8 @@ public sealed class ForecastNetwork
             }
         }
 
-        var network = new ForecastNetwork(list, sections, priorities ?? new Dictionary<string, int>());
+        var graph = timetable is null ? null : new Lazy<LocationGraph>(() => LocationGraph.Build(timetable));
+        var network = new ForecastNetwork(list, sections, priorities ?? new Dictionary<string, int>(), graph);
         return timetable is null || sections.Count == 0 ? network : network.WidenedFor(timetable);
     }
 
@@ -222,8 +225,47 @@ public sealed class ForecastNetwork
             widened[pair] = section with { DownTracks = down, UpTracks = up };
         }
 
-        return new ForecastNetwork(_corridors, widened, Priorities);
+        return new ForecastNetwork(_corridors, widened, Priorities, _graph);
     }
+
+    /// <summary>
+    /// Where <paramref name="via"/> lies on a run from <paramref name="from"/> to <paramref name="to"/> (S36), as the
+    /// share of the run's minimum time done there: from the first corridor with all three in that order, by its
+    /// sections' minimum runs that way. Null if no corridor has them so.
+    /// </summary>
+    public double? ShareAt(Tiploc from, Tiploc via, Tiploc to)
+    {
+        if (via == from || via == to)
+        {
+            return null;
+        }
+
+        foreach (var corridor in _corridors)
+        {
+            int i = corridor.IndexOf(from), j = corridor.IndexOf(via), k = corridor.IndexOf(to);
+            if (i < 0 || j < 0 || k < 0 || !(i < j && j < k) && !(i > j && j > k))
+            {
+                continue;
+            }
+
+            double done = Minimum(from, via), all = Minimum(from, to);
+            return all > 0 ? Math.Clamp(done / all, 0, 1) : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// True if some train in the timetable runs <paramref name="from"/>, <paramref name="via"/>, <paramref name="to"/>
+    /// in a row (with the timing locations schedules leave out put back, <see cref="LocationGraph"/>), so a train
+    /// reporting <paramref name="via"/> between the other two is on its way from one to the other. False without a
+    /// timetable.
+    /// </summary>
+    public bool Links(Tiploc from, Tiploc via, Tiploc to) =>
+        _graph is { } graph && via != from && via != to && graph.Value.Through(from, via, to) > 0;
+
+    /// <summary>The sum of the minimum runs of the sections a run passes through (0 if none).</summary>
+    private double Minimum(Tiploc from, Tiploc to) => Route(from, to) is { } route ? route.Sum(s => s.Section.MinRunFor(s.Down)) : 0;
 
     /// <summary>Greedy track assignment of booked runs in entry order: the number of tracks used.</summary>
     internal static int TracksNeeded(List<(int Enter, int Exit)> runs) => BookedHeadway.TracksNeeded(runs);

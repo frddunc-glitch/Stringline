@@ -94,7 +94,16 @@ public sealed class ForecastFixtureTests(ITestOutputHelper output)
                 if (previous >= 0 && p.Basis == ForecastBasis.Forecast && forecast.Points[previous].LastTime is { } from && p.FirstTime is { } to &&
                     working.MinRuns.Along(points, previous, k) is { } min)
                 {
-                    (to - from).Should().BeGreaterThanOrEqualTo(min, $"{forecast.Headcode} runs {points[previous].Location}–{p.Location} no faster than the minimum");
+                    if (forecast.Anchor is { } anchor && anchor.After == previous && anchor.Before == k)
+                    {
+                        // Part of the run is actual (S36): the rest, from the unbooked location passed, takes its share of the minimum.
+                        var rest = working.MinRuns.Between(anchor.Location, p.Location) ?? (int)Math.Floor(min * (1 - anchor.Share));
+                        (to - anchor.Time).Should().BeGreaterThanOrEqualTo(rest - 1, $"{forecast.Headcode} runs on from {anchor.Location} to {p.Location} no faster than its share of the minimum");
+                    }
+                    else
+                    {
+                        (to - from).Should().BeGreaterThanOrEqualTo(min, $"{forecast.Headcode} runs {points[previous].Location}–{p.Location} no faster than the minimum");
+                    }
                 }
             }
 

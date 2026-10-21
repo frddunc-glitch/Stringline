@@ -224,6 +224,7 @@ public static class Forecaster
             var cursor = 0;
             var last = -1;
             var lastWasArrival = false;
+            var unbooked = new List<ActualEvent>();
             foreach (var actual in live.ActualsOf(working))
             {
                 if (!actual.AtTimingPoint)
@@ -243,8 +244,17 @@ public static class Forecaster
 
                 if (k < 0)
                 {
-                    continue; // a timing location the plan does not book (SimSig reports those too)
+                    // A timing location the plan does not book (SimSig reports those too): a progress anchor (S36) if it
+                    // comes after a booked report and the plan does not go there at all.
+                    if (last >= 0 && !points.Any(p => p.Location == actual.Location))
+                    {
+                        unbooked.Add(actual);
+                    }
+
+                    continue;
                 }
+
+                unbooked.Clear();
 
                 if (actual.Action == TrainLocationAction.Arrive)
                 {
@@ -288,11 +298,27 @@ public static class Forecaster
             }
 
             var lastPoint = last == points.Count - 1;
+            if (_options.UnbookedAnchors && !lastPoint && unbooked.Count > 0 && NextTimed(points, last) is { } next)
+            {
+                for (var i = unbooked.Count - 1; i >= 0 && r.Anchor is null; i--)
+                {
+                    r.Anchor = AnchorAt(r, last, next, unbooked[i]);
+                }
+            }
+
             if (lastWasArrival)
             {
                 if (lastPoint)
                 {
                     r.Status = TrainForecastStatus.Finished;
+                    return;
+                }
+
+                if (r.Anchor is { } gone)
+                {
+                    // It has left without reporting its departure: it is at the anchor now.
+                    r.Set(last, r.ActualArrive[last], null, false, ForecastBasis.Actual);
+                    Queue(r, last, gone.Time.Seconds, fixedDeparture: true);
                     return;
                 }
 
@@ -309,6 +335,78 @@ public static class Forecaster
             {
                 Queue(r, last, r.ActualDepart[last]!.Value, fixedDeparture: true);
             }
+        }
+
+        /// <summary>The next point after <paramref name="k"/> with a time, if any.</summary>
+        private static int? NextTimed(IReadOnlyList<PlannedPoint> points, int k)
+        {
+            for (var n = k + 1; n < points.Count; n++)
+            {
+                if (points[n].IsTimed)
+                {
+                    return n;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// A report at an unbooked timing location as an anchor for the run from <paramref name="c"/> to
+        /// <paramref name="n"/> (S36), if it lies on the way: between two of the plan's points from c to n on a corridor,
+        /// or in the timetable's location graph. Its share of the run comes from the corridor's section minimums, else
+        /// the minimum runs either side of it; null if neither says where it is.
+        /// </summary>
+        private ProgressAnchor? AnchorAt(Runner r, int c, int n, ActualEvent report)
+        {
+            var points = r.Points;
+            var mins = _plan.MinRuns;
+            var network = _request.Network;
+            var via = report.Location;
+            for (var j = c; j < n; j++)
+            {
+                var (a, b) = (points[j].Location, points[j + 1].Location);
+                var share = network.ShareAt(a, via, b);
+                if (share is null && network.Links(a, via, b))
+                {
+                    share = mins.Between(a, via) is { } x && mins.Between(via, b) is { } y && x + y > 0 ? (double)x / (x + y)
+                        : mins.Between(via, b) is { } rest && mins.Between(a, b) is { } all && all > 0 ? Math.Clamp(1 - ((double)rest / all), 0, 1)
+                        : null;
+                }
+
+                if (share is not { } s)
+                {
+                    continue;
+                }
+
+                // As a share of the whole run from c to n: the steps before j, then its part of this one.
+                double before = j == c ? 0 : mins.Along(points, c, j) ?? 0;
+                double step = mins.Along(points, j, j + 1) ?? 0;
+                double after = j + 1 < n ? mins.Along(points, j + 1, n) ?? 0 : 0;
+                var whole = before + step + after;
+                return new ProgressAnchor(via, report.Time, c, n, Math.Clamp(whole > 0 ? (before + (s * step)) / whole : s, 0, 1));
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// The run from <paramref name="c"/> to <paramref name="n"/> of a train already past an unbooked anchor (S36),
+        /// as the time from its departure <paramref name="d"/>: the rest from the anchor takes the minimum from there (from
+        /// the WTT, else the run's minimum in proportion), or the planned rest if the train is not late, as
+        /// <see cref="RunTime"/> does for a whole run.
+        /// </summary>
+        private int AnchoredRun(Runner r, ProgressAnchor anchor, int c, int n, int d, int plannedRun, int plannedArrive)
+        {
+            var from = anchor.Time.Seconds;
+            var full = _plan.MinRuns.Along(r.Points, c, n, anchor.Time, _plan.Disruptions, plannedRun) ?? plannedRun;
+            var plain = _plan.MinRuns.Along(r.Points, c, n);
+            var restMin = _plan.MinRuns.Between(anchor.Location, r.Points[n].Location) is { } direct
+                ? (plain is > 0 ? direct * (double)full / plain.Value : direct) // a speed restriction lengthens it as it does the whole run
+                : full * (1 - anchor.Share);
+            var plannedRest = plannedRun * (1 - anchor.Share);
+            var rest = (int)Math.Round(Math.Max(restMin, Math.Min(plannedRest, plannedArrive - from)));
+            return Math.Max(0, from + rest - d);
         }
 
         /// <summary>A train not seen yet: if another train forms it, wait for that one; otherwise start now.</summary>
@@ -429,7 +527,9 @@ public static class Forecaster
             int run = plannedRun;
             for (var settle = 0; settle < MaxSettle; settle++)
             {
-                run = RunTime(r, c, n, d, plannedRun, plannedArrive);
+                run = r.FixedDeparture && r.Anchor is { } anchor && anchor.After == c
+                    ? AnchoredRun(r, anchor, c, n, d, plannedRun, plannedArrive)
+                    : RunTime(r, c, n, d, plannedRun, plannedArrive);
                 if (r.FixedDeparture)
                 {
                     break;
@@ -708,6 +808,9 @@ public static class Forecaster
 
         public bool PossiblyStopped { get; set; }
 
+        /// <summary>The unbooked timing location the run on from its last booked report is forecast from (S36).</summary>
+        public ProgressAnchor? Anchor { get; set; }
+
         public NotRunningReason? NotRunning { get; set; }
 
         public bool NotSeen { get; set; }
@@ -779,6 +882,7 @@ public static class Forecaster
             {
                 BlockHolds = BlockHolds.Count == 0 ? [] : [.. BlockHolds],
                 NotSeen = NotSeen && Status == TrainForecastStatus.NotStarted,
+                Anchor = Status == TrainForecastStatus.Running ? Anchor : null,
             };
         }
 

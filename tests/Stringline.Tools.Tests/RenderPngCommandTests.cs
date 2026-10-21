@@ -40,6 +40,19 @@ public sealed class RenderPngCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Live_heads_are_drawn_only_when_asked()
+    {
+        var (exit, output, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo4x), "--at", "07:00", Out());
+        exit.Should().Be(0, error);
+        output.Should().NotContain("live heads", "an export leaves them out by default (S36)");
+
+        (exit, output, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo4x), "--at", "07:00", "--live-head", Out("heads.png"));
+        exit.Should().Be(0, error);
+        output.Should().MatchRegex(@" [1-9]\d* live heads\.\r?\n?$");
+        File.ReadAllBytes(Out("heads.png")).Should().NotEqual(File.ReadAllBytes(Out()));
+    }
+
+    [Fact]
     public async Task Draws_wtt_and_actuals_around_the_time_given()
     {
         var (exit, output, error) = await Run("--wtt", Waterloo, "--log", Fixtures.Path(Fixtures.Waterloo4x), "--corridor", "main", "--at", "07:00", "--hours", "3", Out());

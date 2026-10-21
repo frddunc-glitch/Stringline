@@ -107,12 +107,18 @@ public sealed record Corridor(
 /// <param name="DistanceKm">Configured distance from a fixed origin, if the user entered one.</param>
 /// <param name="Platforms">Platforms seen in the WTT here, or as set by the user; 0 if none are named.</param>
 /// <param name="IsTimingPointOnly">True if no train stops here (every booked call is a pass).</param>
+/// <param name="Minor">
+/// A minor row (S36): a location the corridor generator skipped (a timing location few trains are booked at), put on
+/// by the user so trains reporting it show their progress there. It is a full corridor location (its sections are
+/// measured like any other) but draws faintly, with no grid line and no label unless zoomed in.
+/// </param>
 public sealed record CorridorLocation(
     Tiploc Tiploc,
     double AxisPosition,
     double? DistanceKm = null,
     int Platforms = 0,
-    bool IsTimingPointOnly = false);
+    bool IsTimingPointOnly = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Minor = false);
 
 /// <summary>The line between two adjacent corridor locations, <see cref="From"/> before <see cref="To"/> in corridor order.</summary>
 /// <param name="MinRunSeconds">

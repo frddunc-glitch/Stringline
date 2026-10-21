@@ -35,6 +35,9 @@ public static class GraphHover
     public const string Conflict = "Conflict";
     public const string Disruption = "Disruption";
 
+    /// <summary>The WTT row at a timing location the train reported but its schedule leaves out (S36).</summary>
+    public const string NotBooked = "not booked";
+
     /// <summary>
     /// The tooltip for whatever is under the mouse (#12): a train line, a conflict's ring or highlight, a block or speed
     /// restriction, a note, or a location's label. The same in both orientations, as it reads only the scene.
@@ -98,6 +101,7 @@ public static class GraphHover
         }
 
         var point = location is null || wtt is null ? null : NearestPoint(wtt, location.Tiploc, vertex.Time);
+        var actuals = location is null || live is null || working is null ? [] : NearestVisit(live, working.Value, location.Tiploc, vertex.Time);
         if (point is not null)
         {
             lines.Add(new HoverLine(Booked, FormatBooked(point)));
@@ -106,8 +110,11 @@ public static class GraphHover
         {
             lines.Add(new HoverLine(Booked, "—"));
         }
+        else if (wtt is not null && actuals.Count > 0)
+        {
+            lines.Add(new HoverLine(Booked, NotBooked)); // SimSig reports timing locations a schedule leaves out (S36)
+        }
 
-        var actuals = location is null || live is null || working is null ? [] : NearestVisit(live, working.Value, location.Tiploc, vertex.Time);
         if (actuals.Count > 0)
         {
             lines.Add(new HoverLine(Actual, string.Join("  ", actuals.Select(FormatActual))));
@@ -159,6 +166,11 @@ public static class GraphHover
             var times = point.IsPass ? $"pass {Format(point.Depart!.Value, "H")}"
                 : string.Join("  ", new[] { point.Basis == ForecastBasis.Forecast && point.Arrive is { } a ? $"arr {Format(a, "H")}" : null, point.Depart is { } d ? $"dep {Format(d, "H")}" : null }.OfType<string>());
             lines.Add(new HoverLine(Forecast, point.DelaySeconds is { } delay ? $"{times}  ({FormatDelay(delay).ToLowerInvariant()})" : times));
+        }
+
+        if (forecast.Anchor is { } anchor)
+        {
+            lines.Add(new HoverLine(Note, $"Passed {anchor.Location} {Format(anchor.Time, "H")} (not booked): forecast on from there"));
         }
 
         if (forecast.NotRunning is { } reason)

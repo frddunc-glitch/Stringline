@@ -7,7 +7,7 @@ namespace Stringline.Benchmarks;
 /// <summary>
 /// A busy made-up corridor for the GR-9 budget: <c>trains</c> trains spread over a 6 hour window, half Down and half
 /// Up, each with a WTT path and, if it has started by now, an actual path coloured by delay band segment by segment
-/// (the most runs per path). Seeded, so every run draws the same scene.
+/// (the most runs per path), and a live head for each train running at now. Seeded, so every run draws the same scene.
 /// </summary>
 public static class SyntheticGraph
 {
@@ -33,6 +33,7 @@ public static class SyntheticGraph
             .ToList();
 
         var paths = new List<GraphPath>();
+        var heads = new List<GraphLiveHead>();
         var span = End.Seconds - Start.Seconds;
         for (var t = 0; t < trains; t++)
         {
@@ -76,10 +77,15 @@ public static class SyntheticGraph
                 paths.Add(new GraphPath($"act:{t}/0", GraphLayer.Actual, id, headcode, segments[^1], actual.Take(seen).ToList(),
                     Direction: down ? Network.TrackDirection.Down : Network.TrackDirection.Up, LiveUid: t.ToString(System.Globalization.CultureInfo.InvariantCulture), Working: 0,
                     SegmentColours: segments));
+                if (seen < actual.Count)
+                {
+                    // A live head (S36) from its last report towards the next point, drawn every frame from the clock.
+                    heads.Add(new GraphLiveHead($"head:{id}", id, headcode, segments[^1], LineStyle.Solid, [actual[seen - 1], actual[seen]]));
+                }
             }
         }
 
-        return new GraphScene("main", "Synthetic — 500 trains", locations, paths, Now);
+        return new GraphScene("main", "Synthetic — 500 trains", locations, paths, Now) { LiveHeads = heads };
     }
 
     /// <summary>The window above on a full-HD surface.</summary>

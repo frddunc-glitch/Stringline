@@ -40,6 +40,12 @@ public sealed record GraphSceneRequest(StringlineProfile Profile, Corridor Corri
 
     public bool ShowForecast { get; init; } = true;
 
+    /// <summary>
+    /// Each running train's live head (S36): its actual line carried on to <see cref="Now"/> along its forecast. Needs
+    /// <see cref="Forecast"/> and <see cref="Now"/>; it is drawn whether or not the forecast layer is.
+    /// </summary>
+    public bool ShowLiveHead { get; init; } = true;
+
     /// <summary>Draws the plan's blocks, speed restrictions and notes on this corridor (S13).</summary>
     public bool ShowDisruptions { get; init; } = true;
 
@@ -103,7 +109,7 @@ public static class GraphSceneBuilder
         var corridor = request.Corridor;
 
         var locations = corridor.Locations
-            .Select(l => new GraphLocation(l.Tiploc, profile.DisplayName(l.Tiploc), l.AxisPosition, l.Platforms > 0 || !l.IsTimingPointOnly, l.Platforms))
+            .Select(l => new GraphLocation(l.Tiploc, profile.DisplayName(l.Tiploc), l.AxisPosition, !l.Minor && (l.Platforms > 0 || !l.IsTimingPointOnly), l.Platforms, l.Minor))
             .ToList();
 
         var paths = new List<GraphPath>();
@@ -169,7 +175,94 @@ public static class GraphSceneBuilder
             scene = scene with { Conflicts = GraphConflicts.For(corridor, conflicts) };
         }
 
+        if (request.ShowLiveHead && request.Forecast is { } withHeads && request.Now is not null)
+        {
+            scene = scene with { LiveHeads = LiveHeads(corridor, withHeads, request) };
+        }
+
         return scene;
+    }
+
+    /// <summary>
+    /// The live head of each running train on this corridor (S36): from its last report (an unbooked anchor, or its
+    /// last actual point) along its forecast to the next point it will report. None where any of those is off the
+    /// corridor. Coloured as its actual line: by category, or by its latest delay.
+    /// </summary>
+    private static List<GraphLiveHead> LiveHeads(Corridor corridor, Forecast forecast, GraphSceneRequest request)
+    {
+        var heads = new List<GraphLiveHead>();
+        var byDelay = request.ColourMode == GraphColourMode.Delay;
+        foreach (var train in forecast.Trains)
+        {
+            if (train.Status != TrainForecastStatus.Running || HeadVertices(corridor, train) is not { } vertices)
+            {
+                continue;
+            }
+
+            var wtt = request.Timetable?.Find(train.Train);
+            var categoryId = request.Plan?.Find(train.Train)?.CategoryId ?? wtt?.CategoryId;
+            var style = request.Profile.StyleFor(categoryId);
+            var colour = style.Colour;
+            if (byDelay)
+            {
+                var latest = train.Points.LastOrDefault(p => p.Basis == ForecastBasis.Actual && p.DelaySeconds is not null)?.DelaySeconds;
+                colour = DelayBands.ColourOfSeconds(latest);
+            }
+
+            heads.Add(new GraphLiveHead($"head:{train.Train}", train.Train, train.Headcode, colour, style.Style, vertices, train.LiveUid));
+        }
+
+        return heads;
+    }
+
+    /// <summary>A running train's head line: its last report, the end of a dwell there, then the next point; null if not all on the corridor.</summary>
+    private static List<GraphVertex>? HeadVertices(Corridor corridor, TrainForecast train)
+    {
+        var first = train.FirstForecast;
+        if (first < 0)
+        {
+            return null;
+        }
+
+        var p = train.Points[first];
+        var vertices = new List<GraphVertex>(3);
+        if (p.Basis == ForecastBasis.Arrived)
+        {
+            // Standing at its last report: there until its forecast departure, then on to the next timed point.
+            if (corridor.PositionOf(p.Location) is not { } at || p.Arrive is not { } arrived || p.Depart is not { } departs)
+            {
+                return null;
+            }
+
+            vertices.Add(new GraphVertex(arrived.Seconds, at));
+            vertices.Add(new GraphVertex(departs.Seconds, at));
+            var next = train.Points.Skip(first + 1).FirstOrDefault(q => q.FirstTime is not null);
+            if (next is null || corridor.PositionOf(next.Location) is not { } to)
+            {
+                return null;
+            }
+
+            vertices.Add(new GraphVertex(next.FirstTime!.Value.Seconds, to));
+            return vertices;
+        }
+
+        var last = train.Points.Take(first).LastOrDefault(q => q.Basis == ForecastBasis.Actual && q.LastTime is not null);
+        if (last is null || p.FirstTime is not { } reach || corridor.PositionOf(p.Location) is not { } nextAt)
+        {
+            return null;
+        }
+
+        var start = train.Anchor is { } anchor && anchor.After == last.Index && corridor.PositionOf(anchor.Location) is { } anchorAt
+            ? new GraphVertex(anchor.Time.Seconds, anchorAt)
+            : corridor.PositionOf(last.Location) is { } lastAt ? new GraphVertex(last.LastTime!.Value.Seconds, lastAt) : (GraphVertex?)null;
+        if (start is not { } from || reach.Seconds < from.Time)
+        {
+            return null;
+        }
+
+        vertices.Add(from);
+        vertices.Add(new GraphVertex(reach.Seconds, nextAt));
+        return vertices;
     }
 
     private static (Colour Colour, LineStyle Style) StyleOf(LiveWorking working, GraphSceneRequest request) =>
@@ -231,7 +324,16 @@ public static class GraphSceneBuilder
             {
                 if (forecast.Points[k] is { Basis: ForecastBasis.Actual, LastTime: { } anchor } p)
                 {
-                    builder.Add(p.Location, anchor, p.DelaySeconds, p.Index);
+                    // From an unbooked timing location passed since (S36), if it is on the corridor; it stands in for the run's start.
+                    if (forecast.Anchor is { } passed && passed.After == k && corridor.Contains(passed.Location))
+                    {
+                        builder.Add(passed.Location, passed.Time, p.DelaySeconds, p.Index);
+                    }
+                    else
+                    {
+                        builder.Add(p.Location, anchor, p.DelaySeconds, p.Index);
+                    }
+
                     break;
                 }
             }

@@ -38,6 +38,7 @@ internal static class RenderPngCommand
         var noForecast = new Option<bool>("--no-forecast") { Description = "Leave out the forecast layer (drawn with --log)." };
         var noKnockOn = new Option<bool>("--no-knock-on") { Description = "Forecast each train on its own, without knock-on delay from the others." };
         var noConflicts = new Option<bool>("--no-conflicts") { Description = "Leave out the conflict marks (found with --log, unless --no-forecast)." };
+        var liveHead = new Option<bool>("--live-head") { Description = "Draw each running train's live head: its line carried on from its last report to the time (with --log)." };
         var page = new Option<string?>("--page") { Description = "PDF page: a3 or a4 (landscape), a3p or a4p (portrait), or view (--width × --height points). Default: a3, or a3p for a vertical plot." };
         var plot = new Option<bool>("--plot") { Description = "Write a multi-page PDF plot of --from to --to at --per-page a page, time running down (S21)." };
         var from = new Option<string?>("--from") { Description = "With --plot: where it starts (HH:mm). Default: the hour before --at, or the timetable's start." };
@@ -48,7 +49,7 @@ internal static class RenderPngCommand
 
         var command = new Command("render-png", "Draw a corridor's train graph (WTT, actuals and forecast) to a PNG, or a PDF.")
         {
-            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, vertical, colour, noForecast, noKnockOn, noConflicts, page, plot, from, to, perPage, horizontal, verbose,
+            output, wtt, log, profile, corridor, at, hours, nowAt, width, height, noWtt, vertical, colour, noForecast, noKnockOn, noConflicts, liveHead, page, plot, from, to, perPage, horizontal, verbose,
         };
         command.Aliases.Add("render");
 
@@ -61,6 +62,7 @@ internal static class RenderPngCommand
                 NoForecast = parse.GetValue(noForecast),
                 NoKnockOn = parse.GetValue(noKnockOn),
                 NoConflicts = parse.GetValue(noConflicts),
+                LiveHead = parse.GetValue(liveHead),
                 Page = parse.GetValue(page),
                 Plot = parse.GetValue(plot),
                 From = parse.GetValue(from),
@@ -101,6 +103,9 @@ internal static class RenderPngCommand
 
         /// <summary>Leave out the conflict marks.</summary>
         public bool NoConflicts { get; init; }
+
+        /// <summary>Draw the live heads (S36); off by default in exports.</summary>
+        public bool LiveHead { get; init; }
 
         /// <summary>The PDF page by name (<see cref="PdfPage.Parse"/>), for a <c>.pdf</c> output; null for the default.</summary>
         public string? Page { get; init; }
@@ -252,6 +257,7 @@ internal static class RenderPngCommand
             ColourMode = settings.Colour,
             Forecast = forecast,
             Conflicts = conflicts,
+            ShowLiveHead = settings.LiveHead,
         });
         var orientation = settings.Vertical ? GraphOrientation.Vertical : GraphOrientation.Horizontal;
         var viewport = GraphViewport.Around(now.Value, (int)Math.Round(settings.Hours * SimTime.SecondsPerHour), settings.Width, settings.Height, settings.NowAt,
@@ -283,7 +289,8 @@ internal static class RenderPngCommand
         await output.WriteLineAsync(
             $"Wrote {settings.Output.Name}{(pdfPage is null ? string.Empty : $" ({pdfPage.Name})")}: {corridor.Id} ({corridor.Name}), {viewport.TimeStart.ToSimTime()}–{viewport.TimeEnd.ToSimTime()}, " +
             $"now {now}, {visible} paths in view ({scene.InLayer(GraphLayer.Actual).Count()} actual, {scene.InLayer(GraphLayer.Forecast).Count()} forecast in all)" +
-            (conflicts is null ? "." : $", {scene.Conflicts.Count} of {conflicts.Count} conflicts on this corridor.")).ConfigureAwait(false);
+            (conflicts is null ? "." : $", {scene.Conflicts.Count} of {conflicts.Count} conflicts on this corridor.") +
+            (settings.LiveHead ? $" {scene.LiveHeads.Count} live heads." : string.Empty)).ConfigureAwait(false);
         return 0;
     }
 

@@ -148,6 +148,7 @@ public sealed class SessionTests : IDisposable
         await second.Ui.Run(() =>
         {
             vm.IsReviewing.Should().BeTrue();
+            vm.ShowLiveHead.Should().BeFalse("the live head starts off while reviewing (S36)");
             vm.Title.Should().Be("Stringline — Waterloo – SX May 2010 (Updated - Loader) v1.0.1 (v1.0.2) (review)");
             vm.SimTitleText.Should().EndWith("(v1.0.2) (review)");
             vm.InfoMessage.Should().StartWith("Reviewing ");
@@ -179,6 +180,7 @@ public sealed class SessionTests : IDisposable
         // Starting something else leaves review.
         await second.Ui.RunAsync(() => vm.OpenReplayAsync(Fixtures.Path(Fixtures.Waterloo4x), null, double.PositiveInfinity, null));
         (await second.Ui.Run(() => vm.IsReviewing)).Should().BeFalse();
+        (await second.Ui.Run(() => vm.ShowLiveHead)).Should().BeTrue("and on again after");
     }
 
     [Fact]

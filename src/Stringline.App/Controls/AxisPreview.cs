@@ -46,6 +46,12 @@ public sealed class AxisPreview : FrameworkElement
         foreach (var mark in marks)
         {
             var x = margin + (Math.Clamp(mark.Position, 0, 1) * width);
+            if (mark.IsMinor)
+            {
+                drawingContext.DrawLine(Timing, new Point(x, y - 2), new Point(x, y + 2)); // a minor row (S36): a small tick, no name
+                continue;
+            }
+
             var tick = mark.IsStation ? 7 : 4;
             drawingContext.DrawLine(mark.IsStation ? Station : Timing, new Point(x, y - tick), new Point(x, y + tick));
             var text = new FormattedText(mark.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), 10, Brushes.Black, dpi);

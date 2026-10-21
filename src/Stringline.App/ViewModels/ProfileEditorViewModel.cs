@@ -626,7 +626,7 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
                 }
 
                 AxisMarks = corridor.Locations
-                    .Select(l => new AxisMark(Draft.DisplayName(l.Tiploc), l.AxisPosition, l.Platforms > 0 || !l.IsTimingPointOnly))
+                    .Select(l => new AxisMark(Draft.DisplayName(l.Tiploc), l.AxisPosition, !l.Minor && (l.Platforms > 0 || !l.IsTimingPointOnly), l.Minor))
                     .ToList();
             }
 

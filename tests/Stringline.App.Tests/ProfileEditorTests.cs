@@ -218,6 +218,28 @@ public sealed class ProfileEditorTests
     }
 
     [Fact]
+    public async Task A_location_ticked_minor_draws_as_a_minor_row()
+    {
+        await using var app = new TestApp();
+        var vm = await LoadWaterloo(app);
+        var tiploc = await app.Ui.Run(() => vm.SelectedCorridor!.Corridor.Locations[1].Tiploc);
+
+        await Edit(app, e =>
+        {
+            e.Locations[1].IsMinor.Should().BeFalse();
+            e.Locations[1].IsMinor = true;
+            e.Error.Should().BeNull();
+            e.Locations[1].IsMinor.Should().BeTrue();
+            e.AxisMarks[1].IsMinor.Should().BeTrue();
+            e.AxisMarks[1].IsStation.Should().BeFalse();
+            e.OkCommand.Execute(null);
+        });
+
+        new ProfileStore(app.Paths.Profiles).Load("waterloo")!.FindCorridor("main")!.Locations[1].Minor.Should().BeTrue();
+        await app.Ui.WaitUntil(() => vm.Scene!.Locations.Single(l => l.Tiploc == tiploc).IsMinor, "the minor row on the graph");
+    }
+
+    [Fact]
     public async Task Corridors_and_locations_are_added_moved_and_removed()
     {
         await using var app = new TestApp();

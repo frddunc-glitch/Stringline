@@ -96,9 +96,78 @@ public sealed record GraphPath(
     }
 }
 
+/// <summary>
+/// A running train's live head (S36): its actual line carried on from its last report to now, along its forecast, as
+/// a short line in the actual style ending in a dot. The renderer works out where it has got to from the clock each
+/// frame (<see cref="At"/>), so it moves without the scene being built again.
+/// </summary>
+/// <param name="Key">Unique within the scene, e.g. <c>head:1A23</c>.</param>
+/// <param name="Vertices">
+/// From the last report along the forecast to the next point the train will report: the last report, the end of a
+/// dwell there if it is standing, then the next point. At least two, in time order; only the last one moves along
+/// the axis.
+/// </param>
+public sealed record GraphLiveHead(string Key, TrainId Train, Headcode Headcode, Colour Colour, LineStyle Style, IReadOnlyList<GraphVertex> Vertices, string? LiveUid = null)
+{
+    /// <summary>
+    /// The head stops this far along its last stretch (Fred, S36): it never reaches the next point without a report, so
+    /// an overdue train is not drawn ahead of where it is known to be.
+    /// </summary>
+    public const double HoldShare = 0.95;
+
+    /// <summary>
+    /// The line to draw at sim time <paramref name="time"/>: the last report, the corners passed, and the head itself
+    /// at <paramref name="time"/>. Once overdue, the head waits <see cref="HoldShare"/> of the way along, drawn flat to
+    /// <paramref name="time"/>. Empty at or before the last report.
+    /// </summary>
+    public IReadOnlyList<GraphVertex> At(double time)
+    {
+        if (Vertices.Count < 2 || time <= Vertices[0].Time)
+        {
+            return [];
+        }
+
+        var line = new List<GraphVertex>(Vertices.Count + 1) { Vertices[0] };
+        for (var i = 1; i < Vertices.Count; i++)
+        {
+            var (from, to) = (Vertices[i - 1], Vertices[i]);
+            var last = i == Vertices.Count - 1;
+            if (!last && time >= to.Time)
+            {
+                line.Add(to);
+                continue;
+            }
+
+            var span = to.Time - from.Time;
+            var share = span <= 0 ? 1 : (time - from.Time) / span;
+            if (last && share > HoldShare)
+            {
+                var held = new GraphVertex(from.Time + (HoldShare * Math.Max(0, span)), from.Axis + (HoldShare * (to.Axis - from.Axis)));
+                line.Add(held);
+                line.Add(held with { Time = time });
+            }
+            else
+            {
+                line.Add(new GraphVertex(time, from.Axis + (Math.Min(1, share) * (to.Axis - from.Axis))));
+            }
+
+            break;
+        }
+
+        return line;
+    }
+
+    /// <summary>The head's place at <paramref name="time"/>, if it is drawn then.</summary>
+    public GraphVertex? HeadAt(double time) => At(time) is { Count: > 0 } line ? line[^1] : null;
+}
+
 /// <summary>A location line across the graph.</summary>
 /// <param name="IsStation">Trains stop here (it has platforms or booked stops); drawn heavier with a bold label.</param>
-public sealed record GraphLocation(Tiploc Tiploc, string Name, double Axis, bool IsStation, int Platforms);
+/// <param name="IsMinor">
+/// A minor row (S36, <see cref="CorridorLocation.Minor"/>): a faint dotted line instead of a location line, and a small
+/// label only where there is room for it (zoomed in).
+/// </param>
+public sealed record GraphLocation(Tiploc Tiploc, string Name, double Axis, bool IsStation, int Platforms, bool IsMinor = false);
 
 /// <summary>
 /// Everything one corridor's graph shows, in world coordinates, independent of the viewport: build it once per data
@@ -121,6 +190,9 @@ public sealed record GraphScene(
 
     /// <summary>Conflicts on this corridor (S14): highlights under the trains, rings over them.</summary>
     public IReadOnlyList<GraphConflict> Conflicts { get; init; } = [];
+
+    /// <summary>Running trains' live heads (S36), drawn from <see cref="Now"/> each frame.</summary>
+    public IReadOnlyList<GraphLiveHead> LiveHeads { get; init; } = [];
 
     public IEnumerable<GraphPath> InLayer(GraphLayer layer) => Paths.Where(p => p.Layer == layer);
 }

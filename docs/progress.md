@@ -1971,6 +1971,50 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - **Cause not found.** Locally, 0.3.0 (from the release zip, with the Waterloo replay) closes through the Restart Manager in about 1 s and saves its session, whether closed at the first forecast (as CI does) or after 20 s, and with an empty profile. The installer is unchanged since v0.3.0, and 0.2.0 → 0.3.0 passed in 6 minutes. The next run's `upgrade.log` and `upgrade-stuck.png` should say where it stops: at "Shutting down applications using our files" means the app is not exiting.
 - A re-run of v0.3.1 checks out the tag, so it uses the old script; the fix reaches a release from v0.3.2 (or a run without a tag).
 
+## 2026-10-21 — S36: Progress between booked points, from today's data (#17, part 1)
+
+### Done
+- **Fred's choices** (asked during the session): #17 showed on **Kings Cross**; a minor row is a **full corridor location** (it splits its section, which is measured like any other); an overdue live head **stops short of the next point** (95 % of the way) and waits, rather than jumping back; the live head is off while reviewing and in `render-png` unless asked; its toggle is in the **View menu only**, as one more toolbar box pushed Waterloo's second corridor tab under » at 1280 px.
+- **Baseline** (`stringline gaps`, new; `ReportGaps` in Planning). Reports by matched workings at timing locations, and the gaps between a train's reports at two different corridor locations (a dwell is not a gap), in seconds, with the generated profile's corridors:
+
+  | Recording | Workings | Reports not in the train's WTT | Booked only: median / 95th / longest | All timing locations | With signals |
+  |---|---|---|---|---|---|
+  | Waterloo 1× (04:30–05:52) | 35 | 66 of 217 (30.4 %) | 122 / 347 / 371 | 83 / 137 / 150 | 23 / 54 / 83 |
+  | Waterloo 4× (05:52–08:05) | 205 | 453 of 1 636 (27.7 %) | 150 / 351 / 668 | 89 / 150 / 370 | 24 / 60 / 289 |
+  | Waterloo failure (04:30–05:57) | 39 | 67 of 224 (29.9 %) | 150 / 371 / 1 670 | 87 / 147 / 1 670 | 24 / 57 / 1 670 |
+  | Penrith (local, 14:00–14:14) | 9 | 0 of 50 | 167 / 551 / 551 | the same | 41 / 74 / 204 |
+  | Kings Cross (Fred's live session of 2026-10-20, 03:00–04:26, Summer 2020 MF) | 17 | 0 of 75 | 153 / 795 / 813 | the same | 32 / 89 / 648 |
+
+  So at Waterloo the unbooked timing locations nearly halve the median gap, but **Kings Cross and Penrith report none**: there #17's 13-minute gaps (95th percentile) stay until S38 uses the signal passes, which bring the median to about half a minute. The live head is what helps there now. (The Kings Cross row is from the session file's frames, as `report --session` reads them; only 17 workings matched in its first hour and a half.)
+- **Forecast** (`Forecaster.StartRunning`, `06-…md` §2): a report at a timing location the plan does not go to, after the last booked report, is a `ProgressAnchor` (`TrainForecast.Anchor`) if it is on the way: between two of the run's points on a corridor (`ForecastNetwork.ShareAt`), or where a WTT train runs through it between them (`ForecastNetwork.Links`, `LocationGraph.Through`; the network now keeps a lazy location graph). The rest of the run is the WTT's minimum from it (scaled by a speed restriction), else the run's minimum times the share left, and never more than the planned rest or the time to the planned arrival. A train that arrived and then reports an anchor has left: its point keeps the arrival only. `ForecastOptions.UnbookedAnchors` (on) turns it off.
+- **Graph:** the forecast line starts from an anchor on the corridor; the hover says WTT "not booked" at an unbooked report and "Passed B 07:05 (not booked): forecast on from there"; delay colours already carried the latest known delay across unbooked locations (now tested). **Live head:** `GraphScene.LiveHeads` (`GraphLiveHead`: from the last report, the end of a dwell if standing, then the next point), drawn each frame from the scene's now by `SkiaGraphRenderer.DrawLiveHeads` (not tiled; dimmed with a selection; category or latest-delay colour). `GraphSceneRequest.ShowLiveHead` (on). **Minor rows:** `CorridorLocation.Minor` (JSON only when true), `GraphLocation.IsMinor`: a faint dotted line, no location line, a small muted label only with 28 px either side.
+- **Profile:** `InsertLocation(…, minor)` and `WithMinor`; a location put between two neighbours gives both halves the split section's tracks (before, they became double line). Editor: a **Minor** column, and the axis preview draws a minor row as a small tick with no name.
+- **App:** View ▸ Show live head (`MainViewModel.ShowLiveHead`, off while reviewing, on again after). **Tools:** `gaps`; `render-png --live-head` (and the summary line counts the heads).
+- **Docs:** `05-…md` §2 (line styles, progress between booked points) and §9, `06-…md` §2 (unbooked anchors), the plan's "Built in S36", `CLAUDE.md` and `docs/developer.md` (gaps, `--live-head`), the guide's reading-the-graph ("Between timing points") and profile pages; `build/guide-shots.ps1` re-run (the main window shows a live head, the profile editor the Minor column).
+- **Tests:** Planning +8 (`ForecastAnchorTests`: the forecast moves to an anchor, proportional with no minimum, off the corridor through the location graph, a report elsewhere ignored, the latest anchor and a booked report clearing it, a stop left unreported; `ReportGapsTests`: a synthetic count and the Waterloo baseline); Graph +12 (`GraphProgressTests`: the head against the clock, its overdue hold and a dwell, the scene's heads, on/off, delay colour, the forecast and head from an anchor, delay colours across it, the hover, minor rows, a snapshot); Network +3 (a minor row in a single line, `WithMinor`, JSON); App +1 (the Minor column to the graph and the saved profile) and a review check; Tools +3 (`gaps`, `--live-head`). Changed: `ForecastFixtureTests` checks a run from an anchor against its share of the minimum; `ConflictFixtureTests` (Waterloo 4×: 17 and 13 headway conflicts, the new one 5F89/1P17 at EARLSFD, where 1P17 is a minute late just ahead, now forecast from QTRDBAT and VAUX); the forecast snapshot shows the live head.
+- Totals: 1 692 (Core 270, Architecture 18, Gateway 211, Timetable 167, Network 173, Planning 259, Persistence 12, Graph 288, Optimiser 22, Tools 74, App 198). Green on Windows (Debug); the solution and the portable solution build with `-warnaserror`. Linux not run.
+- **Benchmarks** (`--quick`, Release, with a live head for each running train added to the synthetic scene): pan 8–9 ms, update 8–10 ms (heads cost about 1 ms); zoom frames 31–41 ms, the direct draw as before (earlier sessions measured 37–40 ms); forecast 14 ms independent, 31 ms with knock-on.
+
+### Decisions
+- **An anchor must be somewhere the plan does not go at all**, and come after a booked report. A repeat report at a booked location is not an anchor.
+- **The anchor's share comes from the corridor's section minimums** (the derived axis's own measure), not the train's: at Waterloo 5S03 passed CJWIN and then WANDS 66 s later, 45 % of the way to BARNES by the sections, so the rest is 55 % of its 4 min minimum. The forecast rule test now checks such a run from the anchor.
+- **The live head starts from the anchor only when it is on the corridor;** otherwise from the last actual point. A train whose last report or next point is off the corridor has no head.
+- **Heads are drawn directly each frame** (like the drag ghost), not in the tiles, since they move with the clock.
+- **`ReportGaps` counts a working's signal passes only between its first and last corridor report**, so "with signals" is what S38 can reach on the corridor.
+
+### Next
+- S37 (learning signal, track circuit and berth places), then S38 → S39, then S32 → S33.
+- 👤 Fred, before S37 (from the issue review): record 1–2 h with `--td` on Kings Cross and on a busy sim, at 1×–4×. The Kings Cross session here has only 17 matched workings, and its 95th percentile gap is 13 min: S38's gain should show there first.
+
+### Known issues
+- The replay-server tests (Gateway's `Start_time_pre_rolls_state…`, Tools' `Plays_a_recording…`) failed once under the full parallel run and passed alone and on the next full run; this session changed neither. The same flake as S35.
+- Inserting a location used to make the split halves double line; it now keeps the split section's tracks. A profile made before S36 that relied on that is unchanged until edited.
+- A train stopped at a signal between timing points keeps its head moving until it is due at the next point (S38 tells "held at a signal" from "late").
+
+### Questions for Fred
+- 32. **Hold point.** Is 95 % of the way the right place for an overdue head to wait, or would you rather it wait at the last report's place plus a fixed distance?
+- 33. **Kings Cross.** Only 17 workings matched in the first 86 minutes of your Kings Cross session (`kingsx-20261020-1613`): is that right for a 03:00 start, or were trains not matching?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

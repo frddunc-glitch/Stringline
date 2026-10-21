@@ -78,8 +78,13 @@ public sealed class ConflictFixtureTests(ITestOutputHelper output)
     /// S27 (#7): with the WTT's headways (Waterloo's main line is booked 1:30–2:54 apart), false headway conflicts
     /// fall, none appears that the old 3 min everywhere did not give, and the clashes caused by the failure stay.
     /// </summary>
+    /// <remarks>
+    /// S36 added one on the 4× recording, under both headways: 5F89/1P17 at EARLSFD. Both are forecast from the
+    /// timing locations they last passed that their schedules leave out (VAUX, QTRDBAT), which shows 1P17 a minute
+    /// late just ahead of 5F89.
+    /// </remarks>
     [Theory]
-    [InlineData(Fixtures.Waterloo4x, 16, 12, new[] { "6L49/6G15", "2C85/2S91" })]
+    [InlineData(Fixtures.Waterloo4x, 17, 13, new[] { "6L49/6G15", "2C85/2S91", "5F89/1P17" })]
     [InlineData(Fixtures.WaterlooFailure, 3, 2, new[] { "5S06/5O05", "2O05/2U07" })]
     public void Wtt_headways_drop_false_conflicts_and_keep_the_real_ones(string recording, int before, int after, string[] kept)
     {

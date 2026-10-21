@@ -31,6 +31,15 @@ public sealed record GraphTheme
 
     public Colour StationLine { get; init; } = new(0xBD, 0xBD, 0xBD);
 
+    /// <summary>A minor row's faint dotted line (S36): fainter than a location line, so it does not read as part of the grid.</summary>
+    public Colour MinorLocationLine { get; init; } = new(0xC8, 0xC8, 0xC8, 0x90);
+
+    /// <summary>A minor row is labelled only with at least this many pixels to the rows either side (zoomed in).</summary>
+    public float MinorLabelRoom { get; init; } = 28;
+
+    /// <summary>The live head (S36): the short line from a running train's last report to now ends in a dot this wide.</summary>
+    public float LiveHeadRadius { get; init; } = 3.5f;
+
     public Colour Text { get; init; } = new(0x21, 0x21, 0x21);
 
     public Colour MutedText { get; init; } = new(0x75, 0x75, 0x75);

@@ -29,6 +29,9 @@ internal sealed partial class MainViewModel
     [ObservableProperty]
     public partial bool IsReviewing { get; private set; }
 
+    /// <summary>The live head starts off while reviewing and on again after (S36).</summary>
+    partial void OnIsReviewingChanged(bool value) => ShowLiveHead = !value;
+
     /// <summary>A resumed live session waiting for Connect to carry on.</summary>
     [ObservableProperty]
     public partial bool IsResumedIdle { get; private set; }

@@ -26,6 +26,8 @@ The location names are on the left, bold for stations with platforms. A long nam
 | Medium solid line | The **working plan**, where you have re-planned a train away from the WTT. |
 | Heavy solid line | The **actual** running, as the sim reported it. |
 | Dash-dot line (– · – ·) | The **forecast**: where a running train is expected to go from here, and a train not yet started if it is expected a minute or more off its plan. |
+| Short heavy line ending in a dot, at now | The **live head**: a running train's line carried on from where it was last reported to now, along its forecast. See [Between timing points](#between-timing-points). |
+| Faint dotted row | A **minor row**: a timing location you added to the corridor as minor in the profile. Its name shows when you zoom in. |
 | Thin grey line with crosses at the ends | A **cancelled** train. |
 | Very faint line | A train SimSig will **not run** this session (see [Trains that will not run](timetables-and-profiles.md#trains-that-will-not-run)). **View ▸ Show not-running trains** hides them. |
 | Grey heavy line | A live train not matched to the timetable. |
@@ -38,7 +40,15 @@ The location names are on the left, bold for stations with platforms. A long nam
 
 Each train is drawn in its category's colour, and some categories may be dashed or dotted. A category is never dash-dot, so a dash-dot line is always a forecast. The headcode is written along the line.
 
-The toolbar's **WTT**, **Actual**, **Forecast**, **Disruptions** and **Conflicts** boxes (also in the View menu) show and hide those layers.
+The toolbar's **WTT**, **Actual**, **Forecast**, **Disruptions** and **Conflicts** boxes (also in the View menu) show and hide those layers. **View ▸ Show live head** shows and hides the live heads.
+
+### Between timing points
+
+On a sim with few timing points, a train can go several minutes between reports. Stringline shows its progress in between in three ways:
+
+- **Timing locations the timetable leaves out.** SimSig reports some timing locations that a train's own schedule does not list. The actual line bends there, and the forecast carries on from the latest one, so a train that has made up time is shown on time sooner. Hovering there says the WTT is "not booked", and the forecast says "Passed EARLSFD 09:12 (not booked)". There is no delay at such a place, so the line keeps the colour of the last delay known.
+- **The live head.** Each running train's line goes on from its last report to now, ending in a dot that moves with the clock. It follows the forecast, but stops just short of the next timing point until the train reports it there, so it never shows a train further on than it is known to be. Stringline cannot yet tell that a train has stopped at a signal, so its head keeps moving until the train is due at the next point, then waits just short of it. The live head is off while reviewing a session, and in pictures made with `render-png` unless you add `--live-head`; **View ▸ Show live head** turns it on or off.
+- **Minor rows.** If a timing location you want to follow is not on the corridor, add it in the profile editor and tick **Minor** (see [Profiles](timetables-and-profiles.md)). It draws as a faint dotted row, without a grid line, and its name shows only when you zoom in.
 
 ### Colour by delay
 

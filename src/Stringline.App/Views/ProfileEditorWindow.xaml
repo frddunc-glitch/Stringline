@@ -172,6 +172,13 @@
                     <DataGridTextColumn Header="Platforms" Binding="{Binding Platforms}" Width="75" />
                     <DataGridTextColumn Header="Axis" Binding="{Binding Position, Mode=OneWay}" IsReadOnly="True" Width="55" />
                     <DataGridCheckBoxColumn Header="Timing point only" Binding="{Binding IsTimingPointOnly, Mode=OneWay}" IsReadOnly="True" Width="Auto" />
+                    <DataGridCheckBoxColumn Header="Minor" Binding="{Binding IsMinor, UpdateSourceTrigger=PropertyChanged}" Width="Auto">
+                      <DataGridCheckBoxColumn.HeaderStyle>
+                        <Style TargetType="DataGridColumnHeader">
+                          <Setter Property="ToolTip" Value="A minor row: drawn faintly, with no grid line and no label unless zoomed in. For a timing location few trains are booked at, so trains reporting it show their progress there." />
+                        </Style>
+                      </DataGridCheckBoxColumn.HeaderStyle>
+                    </DataGridCheckBoxColumn>
                   </DataGrid.Columns>
                 </DataGrid>
               </DockPanel>

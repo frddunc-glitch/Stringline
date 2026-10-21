@@ -170,6 +170,13 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty]
     public partial bool ShowForecast { get; set; } = true;
 
+    /// <summary>
+    /// Show each running train's live head (S36): its actual line carried on from its last report to now. On for a live
+    /// session, off while reviewing (it can be ticked). Not remembered.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ShowLiveHead { get; set; } = true;
+
     /// <summary>The forecast includes knock-on delay from other trains (headways, single lines). Remembered.</summary>
     [ObservableProperty]
     public partial bool ForecastKnockOn { get; set; } = true;
@@ -294,6 +301,8 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     partial void OnShowNotRunningChanged(bool value) => RequestScene();
 
     partial void OnShowForecastChanged(bool value) => RequestScene();
+
+    partial void OnShowLiveHeadChanged(bool value) => RequestScene();
 
     partial void OnForecastKnockOnChanged(bool value)
     {
@@ -994,6 +1003,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             ShowNotRunning = ShowNotRunning,
             ShowActual = ShowActual,
             ShowForecast = ShowForecast,
+            ShowLiveHead = ShowLiveHead,
             ShowDisruptions = ShowDisruptions,
             ShowConflicts = ShowConflicts,
             ColourMode = ColourMode,

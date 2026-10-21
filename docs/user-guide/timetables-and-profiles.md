@@ -60,7 +60,8 @@ The profile is saved in `%APPDATA%\Stringline\profiles` under the sim's name, an
 **Corridors**
 
 - The corridors in tab order. Rename one in place, move it with ▲ and ▼, make a **New…** one from two ends, **Remove** one, or **Add** a generated corridor that is not yet in the profile.
-- For the selected corridor: a preview of its axis (its Up end on the left), **Space by distance**, its locations (name, distance, platforms; **Add location…** after the one selected, **Remove**, ▲ and ▼), and its sections:
+- For the selected corridor: a preview of its axis (its Up end on the left), **Space by distance**, its locations (name, distance, platforms, **Minor**; **Add location…** after the one selected, **Remove**, ▲ and ▼), and its sections:
+  - **Minor** makes a location a faint row on the graph, with no grid line and its name only when zoomed in. Use it for a timing location the corridor left out, so trains reporting it show their progress there. A location added between two others splits their section, and both halves keep its tracks (a single line stays single);
   - **Tracks**, as a layout or as text;
   - **Headway**, as minutes and seconds (`2:30`);
   - **From**: where the headway comes from (Hand, WTT or Default). Its tooltip explains it;
