@@ -236,6 +236,15 @@ public sealed record ForecastOptions
 
     /// <summary>A run is reckoned at most this much slower than its minimum from the train's running so far in it (S38).</summary>
     public double MaxPace { get; init; } = 1.5;
+
+    /// <summary>
+    /// A train is standing at a red signal ahead once overdue there by this many times its minimum run to it (Fred,
+    /// S38 question 36: 1.2, sooner than the 1.5 first tried)…
+    /// </summary>
+    public double StandingFactor { get; init; } = 1.2;
+
+    /// <summary>…plus this many seconds.</summary>
+    public int StandingGraceSeconds { get; init; } = 10;
 }
 
 /// <summary>

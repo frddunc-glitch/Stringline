@@ -152,7 +152,7 @@ public sealed class ForecastSignalTests
     [Fact]
     public void A_train_overdue_at_a_red_signal_ahead_is_standing_there()
     {
-        // S3 is 3 min on from S2 at the minimum; red, and the train not there 1.5 × 3 min + 15 s after S2: standing at
+        // S3 is 3 min on from S2 at the minimum; red, and the train not there 1.2 × 3 min + 10 s after S2 (06:09:46): standing at
         // S3 since 06:09, and the last fifth of the run (2 min) is forecast from now.
         var live = Train1A01(Dep("A", "06:00"), Passed("S2:2", "06:06"));
         var red = LineSide(Signal("S3", 0, "06:05:30"));
@@ -165,7 +165,7 @@ public sealed class ForecastSignalTests
         train.PossiblyStopped.Should().BeFalse();
         Times(train)[1].Should().Be("C pass 06:13:00 F");
 
-        Forecast("06:10:30", [live], lineSide: red).Find(Fast)!.Standing.Should().BeNull("not yet overdue at S3");
+        Forecast("06:09:40", [live], lineSide: red).Find(Fast)!.Standing.Should().BeNull("not yet overdue at S3");
         Forecast("06:11:00", [live], lineSide: LineSide(Signal("S3", 0, "06:05:30"), Signal("S3", 4, "06:10:50"))).Find(Fast)!.Standing.Should().BeNull("S3 has cleared");
     }
 

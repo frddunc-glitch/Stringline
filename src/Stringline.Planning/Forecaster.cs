@@ -74,9 +74,6 @@ public static class Forecaster
     /// <summary>Most re-checks of one run before it is accepted as it stands (a guard; real runs settle in two or three).</summary>
     private const int MaxSettle = 64;
 
-    /// <summary>A train is overdue at a red signal this long past 1.5 times its minimum run there (S38).</summary>
-    private const int StandingGraceSeconds = 15;
-
     /// <summary>A train's pace in a run is measured once it has covered this share of it (S38)…</summary>
     private const double MinPaceShare = 0.15;
 
@@ -534,8 +531,8 @@ public static class Forecaster
 
         /// <summary>
         /// Marks the train standing at the signal ahead of where it was last known (<paramref name="at"/>, or its last
-        /// timing location), if that signal is red and the train is overdue there: later than 1.5 times its minimum
-        /// run to the signal, plus 15 s. Red is as the sim reported it; without the TD topic, a single yellow passed at
+        /// timing location), if that signal is red and the train is overdue there: later than
+        /// <see cref="ForecastOptions.StandingFactor"/> times its minimum run to the signal, plus <see cref="ForecastOptions.StandingGraceSeconds"/>. Red is as the sim reported it; without the TD topic, a single yellow passed at
         /// the signal before it says so. The anchor moves to the signal, at the time it is reckoned to have got there.
         /// </summary>
         private void Standing(Runner r, int c, int n, ActualEvent from, double fromShare, ProgressAnchor? at)
@@ -594,7 +591,7 @@ public static class Forecaster
             var plannedRun = Math.Max(0, r.Points[n].FirstTime!.Value.Seconds - r.Points[c].LastTime!.Value.Seconds);
             var full = _plan.MinRuns.Along(r.Points, c, n, time, _plan.Disruptions, plannedRun) ?? plannedRun;
             var expected = (int)Math.Round(full * (ahead.Share - share));
-            if (now < time.Seconds + (1.5 * expected) + StandingGraceSeconds)
+            if (now < time.Seconds + (_options.StandingFactor * expected) + _options.StandingGraceSeconds)
             {
                 return;
             }
