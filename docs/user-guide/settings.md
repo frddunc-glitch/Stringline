@@ -44,6 +44,11 @@ Where Stringline looks for timetables (SimSig's Timetables folder unless you cha
 
 Whether a SimSig password is saved, and **Forget saved password**, which removes it at once (OK or Cancel afterwards makes no difference). The host, port and login are in the [Connect dialog](connecting.md). **Privacy** opens [what Stringline stores and sends](privacy.md).
 
+## Profile
+
+- **Learn signal places from live and replayed sessions**: on unless you turn it off. Stringline learns where signals, track circuits and berths are from the trains it sees, and keeps them in the sim's profile. See [Signal places](signal-places.md).
+- **A place is used after** a number of trains have passed it (3 unless you change it, from 1 to 50). Until then, or while the trains pass it at places too far apart, it is still learning.
+
 ## Display
 
 **Sim clock size**: Normal, Large or Huge. Large or Huge can be read from across the room.

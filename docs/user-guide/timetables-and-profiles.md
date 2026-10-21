@@ -67,6 +67,10 @@ The profile is saved in `%APPDATA%\Stringline\profiles` under the sim's name, an
   - **From**: where the headway comes from (Hand, WTT or Default). Its tooltip explains it;
   - the WTT's least running time through the section.
 
+**Signals**
+
+The signals, track circuits and train describer berths learned between timing locations, section by section, with how many trains each was learned from and whether it is used yet. You can correct, add, delete and reset them. See [Signal places](signal-places.md#the-signals-tab).
+
 **Categories**
 
 Each category's name, colour (`#RRGGBB`), line style (solid, dashed or dotted; forecasts are always dash-dot, so they are never mistaken for a category), priority and number of trains. The graph draws each train in its category's colour.
@@ -78,6 +82,7 @@ In the **Tools** menu:
 - **Open profile file** opens the profile's JSON file in the program Windows uses for JSON, for hand editing.
 - **Reload profile** reads it again after a hand edit and redraws. A damaged file is reported, and the profile in use is kept.
 - **Regenerate corridors…** works the corridors out afresh from the timetable. If you have changed any by hand, it asks first: **Replace all**, **Keep mine** (beside the new ones), or **Cancel**.
+- **Export profile…** and **Import profile…** share a profile with other players of the same sim, with its learned signal places. See [Sharing a profile](signal-places.md#sharing-a-profile).
 
 ## Headways
 

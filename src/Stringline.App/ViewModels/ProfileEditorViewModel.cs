@@ -23,7 +23,7 @@ internal sealed record CorridorChoice(Corridor Corridor, string Text)
 
 /// <summary>
 /// The profile editor (S14a, COR-2, COR-5): the sim's name and location names (with CSV import), the corridors with
-/// their locations and sections, and the category styles. Every change is a <see cref="ProfileEdits"/> edit on a draft,
+/// their locations and sections, the category styles, and the learned signal places (S37, the Signals tab). Every change is a <see cref="ProfileEdits"/> edit on a draft,
 /// so a change that would make the profile invalid is refused with its reason and the draft never goes wrong. Apply
 /// (or OK) hands the draft to the main window, which saves it and redraws. Touches no WPF types.
 /// </summary>
@@ -45,9 +45,11 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
         IDialogService dialogs,
         Func<StringlineProfile, ProfileApplyResult> apply,
         bool needsSimId = false,
-        string? suggestedSimId = null)
+        string? suggestedSimId = null,
+        int minSamples = SignallingPlaces.DefaultMinSamples)
     {
         ArgumentNullException.ThrowIfNull(profile);
+        MinSamples = minSamples;
         _timetable = timetable;
         _dialogs = dialogs;
         _apply = apply;
@@ -483,6 +485,7 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
             SyncCategories();
             SyncCandidates();
             SyncCorridor();
+            SyncPlaces();
         }
         finally
         {

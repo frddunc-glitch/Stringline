@@ -460,10 +460,11 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         if (!carryOn)
         {
             StartStore(new SessionInfo { Kind = SavedSessionKind.Live, Host = options.Host, Port = options.Port });
+            StartLearning(Store is { } store ? SignalLearning.SessionId(store.Info.Created) : null);
         }
 
         IsResumedIdle = false;
-        StartSession(SimSession.StartLive(options, _engine, _recorder, _loggerFactory, Store, fresh: !carryOn));
+        StartSession(SimSession.StartLive(options, _engine, _recorder, _loggerFactory, Store, fresh: !carryOn, observe: LearnerFeed));
         LogConnecting(options);
     }
 
@@ -513,6 +514,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         _recordingName = Path.GetFileName(recordingPath);
         _replayOptions = new ReplayOptions { Speed = speed, StartAt = startAt };
         StartStore(new SessionInfo { Kind = SavedSessionKind.Replay, RecordingPath = Path.GetFullPath(recordingPath) });
+        StartLearning(RecordingLearningId(recording));
         StartReplay();
     }
 
@@ -751,7 +753,12 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             return;
         }
 
-        var session = SimSession.StartReplay(_recording, _recordingName ?? "recording", _replayOptions, _engine, _loggerFactory, fresh);
+        if (!fresh)
+        {
+            RestartLearning();
+        }
+
+        var session = SimSession.StartReplay(_recording, _recordingName ?? "recording", _replayOptions, _engine, _loggerFactory, fresh, LearnerFeed);
         StartSession(session);
         Transport = new TransportViewModel(session, _replayOptions.Speed, RestartReplayAt);
     }
@@ -789,7 +796,14 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         UpdatePlaceholder();
     }
 
+    /// <summary>Stop the running source, if any, then learn from the session so far (S37).</summary>
     private async Task StopSessionAsync()
+    {
+        await StopSourceAsync();
+        await LearnNowAsync();
+    }
+
+    private async Task StopSourceAsync()
     {
         if (_session is not { } session)
         {
@@ -827,6 +841,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             }
 
             IsLive = false;
+            _ = LearnQuietlyAsync();
         }
 
         if (status.State == SessionState.Failed)

@@ -256,6 +256,41 @@
           </DataGrid>
         </DockPanel>
       </TabItem>
+
+      <!-- Signals (S37, #19) -->
+      <TabItem Header="Signals" views:Help.Topic="{x:Static services:HelpTopics.SignalPlaces}">
+        <DockPanel Margin="8">
+          <StackPanel DockPanel.Dock="Top">
+            <TextBlock Style="{StaticResource Hint}" Text="{Binding PlacesSummary}" />
+            <TextBlock Style="{StaticResource Hint}"
+                       Text="Where signals, track circuits and berths are between two timing locations, as a share of the run time (0 at the first, 1 at the second), learned from the trains that pass them. Trains that start or stop there have places of their own. Type a place to set it by hand: learning then never moves it." />
+            <DockPanel Margin="0,2,0,6">
+              <Label DockPanel.Dock="Left" Content="S_ection" Target="{Binding ElementName=PlaceSections}" Margin="0,0,8,0" />
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="6,0,0,0">
+                <Button Content="A_dd…" Command="{Binding AddPlaceCommand}" />
+                <Button Content="Dele_te" Command="{Binding DeletePlaceCommand}" />
+                <Button Content="Reset _section…" Command="{Binding ResetSectionPlacesCommand}" ToolTip="Forget the places learned in this section, both ways. Places set by hand stay." />
+                <Button Content="Reset all…" Margin="0" Command="{Binding ResetAllPlacesCommand}" ToolTip="Forget every place learned for this sim. Places set by hand stay." />
+              </StackPanel>
+              <ComboBox x:Name="PlaceSections" ItemsSource="{Binding PlaceSections}" SelectedItem="{Binding SelectedPlaceSection}" />
+            </DockPanel>
+          </StackPanel>
+          <DataGrid x:Name="PlacesGrid" ItemsSource="{Binding Places}" SelectedItem="{Binding SelectedPlace}">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Kind" Binding="{Binding KindText, Mode=OneWay}" IsReadOnly="True" Width="85" />
+              <DataGridTextColumn Header="ID" Binding="{Binding Id, Mode=OneWay}" IsReadOnly="True" Width="65" />
+              <DataGridTextColumn Header="Running" Binding="{Binding Direction, Mode=OneWay}" IsReadOnly="True" Width="*" />
+              <DataGridTextColumn Header="Trains" Binding="{Binding Run, Mode=OneWay}" IsReadOnly="True" Width="125" />
+              <DataGridTextColumn Header="Place" Binding="{Binding Fraction}" Width="55" />
+              <DataGridTextColumn Header="End" Binding="{Binding End, Mode=OneWay}" IsReadOnly="True" Width="50" />
+              <DataGridTextColumn Header="Samples" Binding="{Binding Samples, Mode=OneWay}" IsReadOnly="True" Width="60" />
+              <DataGridTextColumn Header="Spread" Binding="{Binding Spread, Mode=OneWay}" IsReadOnly="True" Width="55" />
+              <DataGridTextColumn Header="State" Binding="{Binding State, Mode=OneWay}" IsReadOnly="True" Width="70" />
+              <DataGridTextColumn Header="Notes" Binding="{Binding Detail, Mode=OneWay}" IsReadOnly="True" Width="1.2*" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </DockPanel>
+      </TabItem>
     </TabControl>
   </DockPanel>
 </Window>

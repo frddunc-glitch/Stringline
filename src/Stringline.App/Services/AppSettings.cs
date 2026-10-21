@@ -91,6 +91,15 @@ internal sealed record AppSettings
     /// <summary>The last plot's choices (S21), offered again.</summary>
     public PlotSettings Plot { get; init; } = new();
 
+    /// <summary>
+    /// Learn where signals, track circuits and TD berths are from every live or replayed session (S37, #19), into the
+    /// sim's profile. On unless turned off.
+    /// </summary>
+    public bool LearnSignalPlaces { get; init; } = true;
+
+    /// <summary>Samples a learned place needs before it is used (S37).</summary>
+    public int LearnMinSamples { get; init; } = Network.Profiles.SignallingPlaces.DefaultMinSamples;
+
     /// <summary>Saved sessions last saved more than this many days ago are deleted at start-up; never when null.</summary>
     public int? DeleteSessionsAfterDays { get; init; }
 

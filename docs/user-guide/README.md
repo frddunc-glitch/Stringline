@@ -14,29 +14,30 @@ In the app, **Help ▸ User guide** opens this guide, and **F1** opens the page 
 2. [Turning on the Interface Gateway](gateway.md)
 3. [Connecting](connecting.md): single player, payware sims and multiplayer
 4. [Timetables and profiles](timetables-and-profiles.md)
+5. [Signal places and sharing a profile](signal-places.md)
 
 **Using the graph**
 
-5. [Reading the graph](reading-the-graph.md): the lines, moving around, and boards (split view and board windows)
-6. [Re-planning](re-planning.md): grips, nudges, the right-click menu and undo
-7. [Disruptions and notes](disruptions-and-notes.md)
-8. [Conflicts and suggestions](conflicts-and-suggestions.md)
-9. [The regulation list](regulation.md)
-10. [Assist](assist.md): route requests and interposing, off unless you turn it on
+6. [Reading the graph](reading-the-graph.md): the lines, moving around, and boards (split view and board windows)
+7. [Re-planning](re-planning.md): grips, nudges, the right-click menu and undo
+8. [Disruptions and notes](disruptions-and-notes.md)
+9. [Conflicts and suggestions](conflicts-and-suggestions.md)
+10. [The regulation list](regulation.md)
+11. [Assist](assist.md): route requests and interposing, off unless you turn it on
 
 **Keeping your work**
 
-11. [Sessions, recordings and review](sessions-and-review.md)
-12. [Exports and reports](exports-and-reports.md): pictures, PDFs, multi-page plots and CSV
+12. [Sessions, recordings and review](sessions-and-review.md)
+13. [Exports and reports](exports-and-reports.md): pictures, PDFs, multi-page plots and CSV
 
 **Reference**
 
-13. [Settings](settings.md)
-14. [Troubleshooting and logs](troubleshooting.md)
-15. [Glossary](glossary.md)
-16. [Keyboard and mouse](keyboard-and-mouse.md)
-17. [Further reading](further-reading.md)
-18. [Privacy](privacy.md): what Stringline stores, what it sends, and how to remove it
+14. [Settings](settings.md)
+15. [Troubleshooting and logs](troubleshooting.md)
+16. [Glossary](glossary.md)
+17. [Keyboard and mouse](keyboard-and-mouse.md)
+18. [Further reading](further-reading.md)
+19. [Privacy](privacy.md): what Stringline stores, what it sends, and how to remove it
 
 ## Five-minute start
 

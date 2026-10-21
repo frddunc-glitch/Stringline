@@ -111,6 +111,36 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public async Task Learning_signal_places_is_set_on_the_profile_tab()
+    {
+        await using var app = new TestApp(root: _root.FullName);
+        var vm = app.ViewModel;
+        app.Dialogs.Settings = s =>
+        {
+            s.LearnSignalPlaces.Should().BeTrue("on by default");
+            s.LearnMinSamples.Should().Be("3");
+            s.LearnMinSamples = "0";
+            s.TryAccept().Should().BeFalse();
+            s.Error.Should().Contain("samples a learned place needs");
+            s.LearnSignalPlaces = false;
+            s.LearnMinSamples = "5";
+            return true;
+        };
+
+        await app.Ui.Run(() => vm.ShowSettingsCommand.Execute(null));
+
+        app.Settings.Load().Should().Match<AppSettings>(s => !s.LearnSignalPlaces && s.LearnMinSamples == 5);
+        app.Dialogs.Settings = s =>
+        {
+            s.RestoreDefaultsCommand.Execute(null);
+            s.LearnSignalPlaces.Should().BeTrue();
+            s.LearnMinSamples.Should().Be("3");
+            return false;
+        };
+        await app.Ui.Run(() => vm.ShowSettingsCommand.Execute(null));
+    }
+
+    [Fact]
     public async Task A_restarted_app_starts_with_the_saved_numbers_and_folders()
     {
         var sessions = Path.Combine(_root.FullName, "elsewhere");

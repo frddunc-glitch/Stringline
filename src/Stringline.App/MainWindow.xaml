@@ -207,6 +207,12 @@
           <MenuItem Header="Open profile _file" Command="{Binding OpenProfileFileCommand}" />
           <MenuItem Header="_Reload profile" Command="{Binding ReloadProfileCommand}" />
           <MenuItem Header="Re_generate corridors…" Command="{Binding RegenerateCorridorsCommand}" />
+          <Separator />
+          <!-- Sharing a profile (S37, #19): with its learned signal places -->
+          <MenuItem Header="E_xport profile…" Command="{Binding ExportProfileCommand}"
+                    ToolTip="Save this sim's profile, with its learned signal places, to share it" />
+          <MenuItem Header="_Import profile…" Command="{Binding ImportProfileCommand}"
+                    ToolTip="Use a profile someone shared for this sim: merge its learned signal places into yours, or replace yours with it" />
         </MenuItem>
         <MenuItem Header="_Help">
           <!-- The bundled guide's contents (S28); F1 opens the page for the panel or window with the focus (Views.Help) -->

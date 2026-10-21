@@ -2015,6 +2015,41 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - 32. **Hold point.** Is 95 % of the way the right place for an overdue head to wait, or would you rather it wait at the last report's place plus a fixed distance?
 - 33. **Kings Cross.** Only 17 workings matched in the first 86 minutes of your Kings Cross session (`kingsx-20261020-1613`): is that right for a 03:00 start, or were trains not matching?
 
+## 2026-10-21 — S37: Learning signal, track circuit and berth places (#19, part 1)
+
+### Done
+- **Fred's recording:** Waterloo for 4 h (04:30–08:30 sim, 8–10×, all three topics with TD), renamed `tests/fixtures/waterloo-4h.sslog` and committed (24 MB, free sim; `Fixtures.Waterloo4h`). No Kings Cross `--td` recording yet.
+- **Fred's choices** (asked during the session): commit the recording; count starting and stopping runs and let the spread decide; run the gate on Waterloo only for now; and, once the recordings showed it, learn a place **per kind of run** (`RunKind`: through, starting, stopping, starting and stopping). S110 Queenstown Road → Vauxhall is at 0.689 for trains running through Vauxhall and 0.595 for trains stopping there, each with a spread of about 0, so a pooled median followed the mix of trains and moved by up to 0.17 between recordings.
+- **Model** (`Stringline.Network.Profiles.SignallingPlaces`, `StringlineProfile.Signalling`/`Places`/`WithPlaces`; `04-…md` §5): signals, track circuits and berths keyed by ID, from, to and run kind, with fraction (and a track circuit's end), direction, line, the bounding or matching signal, the latest 64 samples, the count, last learned and session, and hand-set. Used at ≥ *n* samples (3, Options) and an interquartile range ≤ 0.10. `Learn` pools a session's samples, taking only runs ending after the session's `UpTo` (resume, review and replaying again count nothing twice); `Pool` merges an import (samples added, hand-set kept); `SetByHand`, `Remove`, `Reset(a, b)`, `ResetAll` (keeps the sessions, so the running session's earlier runs do not come back). The validator refuses an empty ID, equal locations or a place outside 0–1. Profile version stays 2.
+- **Learner** (`Stringline.Planning.SignalLearner`, `SignalLearning`; `06-…md` §2): `Observe` (thread-safe, cheap) and `Learn(timetable)`. Runs between consecutive timing locations; a run counts if it left by passing or departing, reached by passing or arriving, saw no red aspect on approach, and took at most 1.5 × the fastest of its kind over the section in the session. Track circuits go to a train in two sweeps (the place each one's trains were last at, then the one train near there); berths by headcode, with `SignalOf` matching `0457` ↔ `S457`. A replay rewind starts again. IDs: `recording <created>` for a replay or a review of one, `session <created>` for a live session or a review of it.
+- **The gate passed** (`stringline learn`, Waterloo): 198 of the 202 signals passed by 3 or more trains are used (98 %); between the 4 h and 4× recordings, the 151 signals used in both move median 0.000, 95th percentile 0.005, at most 0.018, none by more than its spread. Against the 1× recording (34 in both), at most 0.019. Track circuits: 83.1 % of 10 416 occupations put to one train in the 4 h recording (9 with two trains near, 295 with none, 1 454 of track circuits with no settled place before them), 67 % at 1×; 397 track circuits and 194 berths used. Recorded in `03-…md` §6.
+- **App:** every live session, replay, resume and review feeds a learner from the session's pump thread (`SimSession`'s `observe`; a resumed live session's saved frames too). Learning is pooled into the profile and saved when the session stops (disconnect, another session, closing the app), when a replay finishes or the connection closes, and after the profile editor saves; one log line (`LearnOutcome.Describe`). It is skipped for a timetable without a sim ID or when the sim is not the profile's. **Options ▸ Profile**: "Learn signal places" (on) and the samples needed (3, 1–50). **Profile editor ▸ Signals**: per section (corridor sections, then "Off the corridors"), the places in order with kind, ID, direction, trains, place, end, samples, spread, state and notes; type a place to hand-set it; Add…, Delete, Reset section…, Reset all…. **Tools ▸ Export profile…** (learns first) and **Import profile…** (same sim only; Merge pools the places and keeps the rest, Replace takes the shared profile but remembers the sessions already learned from).
+- **Tools:** `stringline learn` (`--log` more than once, `--profile`, `--out`, `--report`, `--min-samples`), with the comparison between recordings that the gate uses.
+- **Docs:** `02-…md` §5, `03-…md` §6 (signal, track circuit and berth findings), `04-…md` §5, `06-…md` §2 and §4, the plan's "Built in S37", `CLAUDE.md` and `docs/developer.md`; the guide's new page **Signal places and sharing a profile** (`signal-places.md`, 5 in the contents; F1 on the Signals tab), and the profile and settings pages (`settings.md#profile`, F1 on the Options tab).
+- **Tests:** Network +16 (`SignallingPlacesTests`: pooling, learning state, never twice, run kinds and directions, lines, hand-set, editing, reset, pooling an import, the sample cap, statistics, JSON round trip and refusals); Planning +14 (`SignalLearnerTests`: a known place, too few, a checked train, a slow run, stopping runs, dwells, a rewind, track circuit attribution, two trains near, no train near, berths, IDs, `Apply`, and the Waterloo gate); Tools +3 (`learn`); App +6 (`SignalPlacesTests`: a replay learned once and shown on the Signals tab, review learns nothing new, add/delete/reset, learning off, export and import; and the Options tab).
+- Totals: 1 731 (Core 270, Architecture 18, Gateway 211, Timetable 167, Network 189, Planning 273, Persistence 12, Graph 288, Optimiser 22, Tools 77, App 204). Green on Windows (Debug); the solution and the portable solution build with `-warnaserror`. Linux not run.
+
+### Decisions
+- **Every train counts, matched or not:** a place belongs to the track. The section's minimum is the fastest run of its kind seen in the session, not the WTT's: Waterloo's trains rarely run as fast as its minimums, which left out half the runs.
+- **The whole run is left out** when any signal in it was approached at red, as its later times are distorted too.
+- **A sample's time is when its run reached `to`**, so a run still in progress is learned the next time, and never twice.
+- **Places keep their samples** (the latest 64), so pooling a shared profile is exact rather than an average of medians. Pooling cannot tell whether two profiles learned from the same session (sessions are combined, samples added).
+- **Editing a place in the grid keeps the rows where they are** until the section is picked again, so the grid does not reorder under the user.
+- No new screenshots: the guide describes the Signals tab in words (`build/guide-shots.ps1` not re-run).
+
+### Next
+- S38 (signals and track circuits in the graph and forecast), then S39, then S32 → S33.
+- 👤 Fred: a Kings Cross recording with `--td` at 1×–4×, so the gate can be checked where #17 showed (only Waterloo so far).
+
+### Known issues
+- Learning a long session takes about a second (on a background thread) when it stops; when the app closes, it waits for it.
+- Track circuits few trains use (yards, sidings, little-used platforms) get no settled place before them and stay unplaced (14 % of occupations at Waterloo).
+- A berth's place is where its block starts (the step comes as the train passes the signal before), not at its signal.
+
+### Questions for Fred
+- 34. **Run kinds in S38.** A stopping train's places differ from a through train's near the stop. S38 will use the place for the kind of run the train's plan has there, falling back to any used place for the signal. Is that what you want, or one place per signal for drawing?
+- 35. **Sharing.** Merge pools samples, so importing the same shared profile twice counts its samples twice. Should a merge skip sessions both profiles already have (and their samples), at the cost of keeping samples per session?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

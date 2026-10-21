@@ -9,7 +9,8 @@ using Stringline.Planning;
 namespace Stringline.App.ViewModels;
 
 /// <summary>
-/// The settings window (S18): forecast and conflicts, suggestions, folders, logging and housekeeping, and display. The values
+/// The settings window (S18): forecast and conflicts, suggestions, folders, logging and housekeeping, learning signal
+/// places (S37), and display. The values
 /// are edited as text and checked together when OK is pressed (<see cref="TryAccept"/>); the window stays open showing
 /// what is wrong until they pass, and then <see cref="Result"/> holds the new settings. Connection details stay in the
 /// Connect dialog (the Connection tab only forgets a saved password, S30), and the view options in the View menu.
@@ -131,6 +132,13 @@ internal sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial string DeleteSessionsAfterDays { get; set; } = string.Empty;
 
+    // Profile (S37).
+    [ObservableProperty]
+    public partial bool LearnSignalPlaces { get; set; }
+
+    [ObservableProperty]
+    public partial string LearnMinSamples { get; set; } = string.Empty;
+
     // Display.
     /// <summary>The sim clock sizes offered (#13).</summary>
     public IReadOnlyList<ClockSize> ClockSizes { get; } = Enum.GetValues<ClockSize>();
@@ -175,6 +183,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
             DetailedLogging = defaults.DetailedLogging,
             LogRetentionDays = defaults.LogRetentionDays,
             DeleteSessionsAfterDays = null,
+            LearnSignalPlaces = defaults.LearnSignalPlaces,
+            LearnMinSamples = defaults.LearnMinSamples,
             ClockSize = defaults.ClockSize,
         });
         Error = null;
@@ -264,6 +274,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
         LogRetentionDays = s.LogRetentionDays.ToString(CultureInfo.CurrentCulture);
         DeleteOldSessions = s.DeleteSessionsAfterDays is not null;
         DeleteSessionsAfterDays = (s.DeleteSessionsAfterDays ?? 90).ToString(CultureInfo.CurrentCulture);
+        LearnSignalPlaces = s.LearnSignalPlaces;
+        LearnMinSamples = s.LearnMinSamples.ToString(CultureInfo.CurrentCulture);
         ClockSize = s.ClockSize;
     }
 
@@ -299,6 +311,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
             DetailedLogging = DetailedLogging,
             LogRetentionDays = Count(LogRetentionDays, "days of logs to keep", 1, 365),
             DeleteSessionsAfterDays = DeleteOldSessions ? Count(DeleteSessionsAfterDays, "days to keep saved sessions", 1, 3650) : null,
+            LearnSignalPlaces = LearnSignalPlaces,
+            LearnMinSamples = Count(LearnMinSamples, "samples a learned place needs", 1, 50),
             ClockSize = ClockSize,
         };
     }

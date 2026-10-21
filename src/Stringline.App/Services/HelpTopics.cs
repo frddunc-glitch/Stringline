@@ -35,10 +35,16 @@ internal static class HelpTopics
 
     public const string Disruptions = "disruptions-and-notes.md";
 
+    /// <summary>The profile editor's Signals tab (S37).</summary>
+    public const string SignalPlaces = "signal-places.md#the-signals-tab";
+
+    /// <summary>Options ▸ Profile (S37).</summary>
+    public const string LearningOptions = "settings.md#profile";
+
     /// <summary>The privacy policy (S30, #14), a copy of <c>PRIVACY.md</c>; Help ▸ Privacy, About and the Connect dialog link to it.</summary>
     public const string Privacy = "privacy.md";
 
     /// <summary>Every topic, for the test that each page and heading is there.</summary>
     public static IReadOnlyList<string> All { get; } =
-        [Contents, Graph, TrainList, Boards, TrainDetail, Conflicts, Regulation, Delays, History, Replay, Connect, Options, ProfileEditor, Disruptions, Privacy];
+        [Contents, Graph, TrainList, Boards, TrainDetail, Conflicts, Regulation, Delays, History, Replay, Connect, Options, ProfileEditor, Disruptions, SignalPlaces, LearningOptions, Privacy];
 }

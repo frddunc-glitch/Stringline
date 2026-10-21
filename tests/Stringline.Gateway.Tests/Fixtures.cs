@@ -12,6 +12,12 @@ internal static class Fixtures
     /// <summary>Waterloo at 4× then 16×, movements and clock only. 05:52–08:05 sim.</summary>
     public const string Waterloo4x = "waterloo-4x.sslog";
 
+    /// <summary>
+    /// Waterloo for four hours (04:30–08:30 sim) at 8–10×, all three topics with TD (S37). 24 MB: load it once per
+    /// test class.
+    /// </summary>
+    public const string Waterloo4h = "waterloo-4h.sslog";
+
     /// <summary>Waterloo with a track circuit failure on T1620 (05:22:11–05:54:35 sim), with TD. Mostly flat-out speed.</summary>
     public const string WaterlooFailure = "waterloo-failure.sslog";
 

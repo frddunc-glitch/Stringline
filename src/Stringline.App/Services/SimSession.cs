@@ -95,9 +95,10 @@ internal sealed partial class SimSession : IAsyncDisposable
     /// <summary>
     /// Connect to SimSig and feed the engine. A recorder, if given, sees every frame and connection change; the session
     /// store, if given, the frames it keeps. <paramref name="fresh"/> false carries on from the engine's state (a resumed
-    /// session) instead of starting a new one.
+    /// session) instead of starting a new one. <paramref name="observe"/>, if given, sees every event on the pump's
+    /// thread before the engine queues it (the signal learner, S37).
     /// </summary>
-    public static SimSession StartLive(GatewayClientOptions options, PlanningEngine engine, SessionRecorder? recorder, ILoggerFactory loggerFactory, SessionWriter? store = null, bool fresh = true)
+    public static SimSession StartLive(GatewayClientOptions options, PlanningEngine engine, SessionRecorder? recorder, ILoggerFactory loggerFactory, SessionWriter? store = null, bool fresh = true, Action<GatewayEvent>? observe = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(engine);
@@ -114,24 +115,26 @@ internal sealed partial class SimSession : IAsyncDisposable
             };
         }
 
-        session.Start(engine, source, fresh);
+        session.Start(engine, Observed(source, observe), fresh);
         return session;
     }
 
     /// <summary>
     /// Replay a recording into the engine. <paramref name="fresh"/> false keeps the plan and drops only the live state,
-    /// as a seek back does (restarting a finished replay).
+    /// as a seek back does (restarting a finished replay). <paramref name="observe"/> as for <see cref="StartLive"/>.
     /// </summary>
-    public static SimSession StartReplay(SslogRecording recording, string fileName, ReplayOptions options, PlanningEngine engine, ILoggerFactory loggerFactory, bool fresh = true)
+    public static SimSession StartReplay(SslogRecording recording, string fileName, ReplayOptions options, PlanningEngine engine, ILoggerFactory loggerFactory, bool fresh = true, Action<GatewayEvent>? observe = null)
     {
         ArgumentNullException.ThrowIfNull(recording);
         ArgumentNullException.ThrowIfNull(engine);
         var replay = new ReplaySource(recording, options, new MessageParser(loggerFactory.CreateLogger<MessageParser>()));
         var initial = new SessionStatus(options.StartPaused ? SessionState.Paused : SessionState.Playing);
         var session = new SimSession(SessionKind.Replay, fileName, initial, loggerFactory.CreateLogger<SimSession>(), null, replay, null, null);
-        session.Start(engine, replay, fresh);
+        session.Start(engine, Observed(replay, observe), fresh);
         return session;
     }
+
+    private static ISimEventSource Observed(ISimEventSource source, Action<GatewayEvent>? observe) => observe is null ? source : new ObservedSource(source, observe);
 
     /// <summary>Send a command to SimSig (live only). Failures are logged, not thrown.</summary>
     /// <returns>True if it was sent; false for a replay, or if it could not be (not connected, say).</returns>
@@ -280,6 +283,19 @@ internal sealed partial class SimSession : IAsyncDisposable
 #pragma warning restore CA1031
         {
             LogHandlerFailed(ex);
+        }
+    }
+
+    /// <summary>A source whose events are seen by <c>observe</c> as they pass, on the reading thread.</summary>
+    private sealed class ObservedSource(ISimEventSource inner, Action<GatewayEvent> observe) : ISimEventSource
+    {
+        public async IAsyncEnumerable<GatewayEvent> ReadAllAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await foreach (var e in inner.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                observe(e);
+                yield return e;
+            }
         }
     }
 

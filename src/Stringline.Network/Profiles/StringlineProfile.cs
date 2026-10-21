@@ -79,6 +79,23 @@ public sealed record StringlineProfile
     /// </summary>
     public IReadOnlyList<AssistRoute> AssistRoutes { get; init; } = [];
 
+    /// <summary>
+    /// The signals, track circuits and TD berths learned from play (S37, #19); null for none. Profiles from before S37
+    /// have none; an older Stringline ignores them. Read them through <see cref="Places"/>.
+    /// </summary>
+    public SignallingPlaces? Signalling { get; init; }
+
+    /// <summary><see cref="Signalling"/>, or <see cref="SignallingPlaces.Empty"/>.</summary>
+    [JsonIgnore]
+    public SignallingPlaces Places => Signalling ?? SignallingPlaces.Empty;
+
+    /// <summary>The profile with these learned places (none is written as no <see cref="Signalling"/> at all).</summary>
+    public StringlineProfile WithPlaces(SignallingPlaces places)
+    {
+        ArgumentNullException.ThrowIfNull(places);
+        return this with { Signalling = places.IsEmpty ? null : places };
+    }
+
     /// <summary>The route last asked for this exact move, if any.</summary>
     public AssistRoute? FindAssistRoute(AssistMove move) => AssistRoutes.LastOrDefault(r => r.Move == move && r.IsComplete);
 

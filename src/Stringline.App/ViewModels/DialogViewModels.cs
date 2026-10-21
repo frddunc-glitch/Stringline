@@ -18,6 +18,8 @@ internal static class FileFilters
     public const string Session = "Stringline sessions (*.stringline)|*.stringline|All files (*.*)|*.*";
 
     public const string Csv = "CSV files (*.csv)|*.csv|Text files (*.txt)|*.txt|All files (*.*)|*.*";
+
+    public const string Profile = "Stringline profiles (*.json)|*.json|All files (*.*)|*.*";
 }
 
 /// <summary>The Connect dialog (CON-1, CON-5): where SimSig is, the optional login, and an optional timetable.</summary>

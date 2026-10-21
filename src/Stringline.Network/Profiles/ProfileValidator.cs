@@ -35,7 +35,7 @@ public static class ProfileValidator
             }
         }
 
-        return null;
+        return profile.Signalling?.FindProblem();
     }
 
     /// <summary>The first rule this corridor breaks, or null.</summary>

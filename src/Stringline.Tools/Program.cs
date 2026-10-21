@@ -16,6 +16,7 @@ internal static class Program
         root.Subcommands.Add(ReportCommand.Create());
         root.Subcommands.Add(ReplanCommand.Create());
         root.Subcommands.Add(GapsCommand.Create());
+        root.Subcommands.Add(LearnCommand.Create());
         root.Subcommands.Add(IconCommand.Create());
 
         return root.Parse(args).InvokeAsync();

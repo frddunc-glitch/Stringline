@@ -85,6 +85,7 @@ A few rules run through the code:
 | `replan` | Re-plans the hour ahead of a point in a recording and lists the conflicts before and after |
 | `report` | Writes the delay table as CSV, from a recording or a saved session |
 | `gaps` | Measures how long trains go between reports on the corridors, and how often they report a timing location their WTT leaves out (the S36 baseline) |
+| `learn` | Learns signal, track circuit and berth places from recordings into a profile, and compares the places between recordings (S37) |
 | `icon` | Redraws the app icon after a change to `AppIcon` |
 
 [`CLAUDE.md`](../CLAUDE.md) keeps every command with its options; each command's `--help` lists them too. Example:

@@ -236,6 +236,24 @@
         </StackPanel>
       </TabItem>
 
+      <!-- Profile (S37, #19) -->
+      <TabItem Header="Profile" views:Help.Topic="{x:Static services:HelpTopics.LearningOptions}">
+        <StackPanel Margin="10">
+          <TextBlock Style="{StaticResource Intro}"
+                     Text="Stringline learns where signals, track circuits and train describer berths are between timing locations from the trains it sees, and keeps them in the sim's profile. Review them in Tools ▸ Edit profile ▸ Signals." />
+          <CheckBox x:Name="LearnPlaces" Content="_Learn signal places from live and replayed sessions" IsChecked="{Binding LearnSignalPlaces}" />
+          <TextBlock Style="{StaticResource Hint}"
+                     Text="Learned when a session ends, or when the profile is saved. Track circuits and berths need the train describer (TD) topic, ticked in the Connect dialog." />
+          <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+            <Label Content="A place is _used after" Target="{Binding ElementName=MinSamples}" />
+            <TextBox x:Name="MinSamples" Width="50" Margin="8,0,6,0" Text="{Binding LearnMinSamples, UpdateSourceTrigger=PropertyChanged}" />
+            <Label Content="trains have passed it (1 to 50)" />
+          </StackPanel>
+          <TextBlock Style="{StaticResource Hint}"
+                     Text="Until then, or while trains pass it at places too far apart, it is still learning and is not used." />
+        </StackPanel>
+      </TabItem>
+
       <!-- Display (#13) -->
       <TabItem Header="Display">
         <StackPanel Margin="10">

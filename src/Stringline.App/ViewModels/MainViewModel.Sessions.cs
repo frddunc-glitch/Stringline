@@ -130,17 +130,21 @@ internal sealed partial class MainViewModel
             _recording = recording;
             _recordingName = Path.GetFileName(saved.Info.RecordingPath);
             _replayOptions = new ReplayOptions { Speed = ReplaySpeed(), StartAt = saved.Info.Position, StartPaused = true };
+            StartLearning(RecordingLearningId(recording));
             StartReplay();
             await _engine.RestorePlan(saved.Steps);
         }
         else
         {
             _engine.Clear();
+            StartLearning(SignalLearning.SessionId(saved.Info.Created));
             var engine = _engine;
+            var feed = LearnerFeed;
             await Task.Run(() =>
             {
                 foreach (var e in saved.Events(new MessageParser()))
                 {
+                    feed?.Invoke(e);
                     engine.Post(e);
                 }
             });
@@ -205,6 +209,7 @@ internal sealed partial class MainViewModel
         _reviewSteps = saved.Steps;
         _reviewApplied = -1;
         IsReviewing = true;
+        StartLearning(saved.Info.Kind == SavedSessionKind.Replay ? RecordingLearningId(recording) : SignalLearning.SessionId(saved.Info.Created));
         _recording = recording;
         _recordingName = $"Review: {Path.GetFileName(path)}";
         _replayOptions = new ReplayOptions { Speed = ReplaySpeed(), StartPaused = true };
