@@ -194,6 +194,11 @@ public static class GraphHover
             lines.Add(new HoverLine(Note, $"Passed {anchor.Location} {Format(anchor.Time, "H")} (not booked): forecast on from there"));
         }
 
+        foreach (var hold in forecast.RuleHolds)
+        {
+            lines.Add(new HoverLine(Note, $"Held by rule: {hold.Rule.Description}, until {Format(hold.Until, "H")}"));
+        }
+
         if (forecast.NotRunning is { } reason)
         {
             lines.Add(new HoverLine(Note, $"Not running: {reason} (SimSig will not run it this session)"));

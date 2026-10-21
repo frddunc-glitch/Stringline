@@ -2137,6 +2137,42 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - 38. **Floor and overlap.** Are a 1 min least block headway and 15 s for an untimed overlap right?
 - 39. **Old profiles.** Should a profile learned before S39 be offered a "learn again" from its sessions' recordings (forgetting their sessions), so it gets block times without new play?
 
+## 2026-10-22 — S32: WTT rules in the forecast (Q5, Q7)
+
+### Done
+- **Q5 checked** (`03-…md` §6, `04-…md`): rule `Time` is in **seconds**. No rule held a train in any Waterloo recording: the 32 ruled trains that came in during the 4 h one did so at about their booked times. The tightest (2V05, 1 800 after 5V05 leaves) caps the unit at 1.2 s, so minutes are ruled out. Fred accepted this without a binding case.
+- **Fred's choices** (asked during the session): a rule whose other train will not run (cancelled, not running, failed) is **skipped**; joins, divides and forms count from Y's **arrival** at that point; a departure rule with no location holds X at its **first stop**, with Y's event there if Y goes there.
+- **`TimetableRules`** (`Stringline.Planning`, cached per plan): resolves each appearance (0–2, 11–13) and departure (4–9) rule to X's hold point and Y's event (point and first/last time), and keeps exclusion rules (3, 10, 14) for the detail. It also notes rules left out: a train with no booked times, no stop to hold at, a place not visited, or a loop. Two cases found in Fred's corpus are handled too. A **train's rule on itself** is a least dwell (Kings Cross 1985: "4S39 departs after 4S39 arrives", HITCHIN, 2 min). And a departure rule whose X **does not leave the location** (Basingstoke's 5L78 joins 2L65 there) holds X at its first stop.
+- **Forecaster** (`06-…md` §2): a train waits for its rules' events (start gate, departure gates, watchers on the other train), then goes no earlier than event + time. A loop missed by the static check (through a formed train) is let go when nothing else can move. `TrainForecast.RuleHolds` (`RuleHold`: "held by rule: after 2B44 leaves (+1 min)"). `ForecastOptions.TimetableRules` (on). The formed-train wait now shares the start gate (`TryBegin`).
+- **Optimiser:** `ModelTrain.RuleFloors`: when both trains are modelled, X's departure is no earlier than Y's modelled event + time, so holding Y moves X as the forecaster would. Suggestions and the rules re-planner re-forecast, so they keep to the rules already.
+- **App:** Options ▸ Forecast and conflicts ▸ **Apply timetable rules** (`PlanningSettings.ApplyTimetableRules`, on). The train detail's state adds "held by rule: … , until 08:06" and "rule: does not run if 2Y01 runs" (on both trains). The graph hover adds "Held by rule: after 1A01 arrives (+1 min), until 07:13". The engine logs once per timetable how many rules apply and those left out.
+- **Tools:** `wtt-dump`'s summary says how many rules the forecast applies and lists the rest.
+- **Waterloo:** 335 of 338 rules apply (the 3 "X not if Y" are notes). At the end of the 4× recording 2R09 has not started, so 2R09-1 (booked in 08:21:30) is forecast in 40 min after 2R09 leaves (08:55), and 2S19, formed from it, follows. That adds one conflict each way to S39's fixture: 2S19 catches 2O17 between WESTLON and CJWIN (WTT headways 12 → 13, blocks 8 → 9). Through the 4 h recording, forecasts before each ruled train came in are unchanged.
+- **Corpus** (285 timetables): 8 272 of about 10 000 rules apply; 800 of those left out involve trains with no booked times (nothing to forecast).
+- **Docs:** `03-…md` §6, `04-…md`, `06-…md` §2, the plan's "Built in S32", `CLAUDE.md`, `docs/developer.md`. Guide: conflicts-and-suggestions ("Timetable rules in the forecast"), settings, re-planning (train detail), reading-the-graph (hover). `build/guide-shots.ps1` re-run (Options shows the new box; the graph shows 2R09-1 and 2S19 later).
+- **Tests:** Planning +26 (`ForecastRuleTests` 23: each kind, a late or gone Y, the option, location and first-stop holds, standing at the hold point, chains, a loop of rules and one through a formed train, unresolved and cancelled Y, places not visited, joins, self dwells, untimed trains, exclusions, no conflict; `RuleFixtureTests` 3: Waterloo's rules, 2R09-1 on the 4× recording, the 4 h recording unchanged); Optimiser +1 (a rule-held train follows its held train in the model and the forecast); Graph +1 (hover); App +2 (`TrainDetailRuleTests`); the settings test covers the option. `BlockHeadwayFixtureTests` updated as above.
+- Totals: 1 825 (Core 280, Architecture 18, Gateway 211, Timetable 168, Network 199, Planning 323, Persistence 13, Graph 301, Optimiser 23, Tools 81, App 208). Green on Windows (Debug); the solution builds with `-warnaserror`. Linux not run.
+- **Benchmarks** (`--quick`, Release, against HEAD in the same sitting): forecast independent 19.3 ms (HEAD 16.7), both passes 41.1 ms (36.4), conflicts 12.9 ms (12.4), the 4 h recording half way with places 58.6 ms (54.5). Pan 11.3 ms, update 9.9–13.6 ms.
+
+### Decisions
+- **Rules are timetable facts, so both passes apply them** (the independent forecast too), and conflicts see a rule-held train where SimSig will run it.
+- **"Leaves" is Y's last timing point** (its last time there): SimSig reports no exit, and the last point is where the forecast ends.
+- **Rules are resolved once per plan** (`ConditionalWeakTable`), so plan edits (termination short, cancellation) are seen and both passes share the work.
+- **A loop of rules is cut at the rule that closes it** (in file order); a loop through formed trains is cut at run time.
+
+### Next
+- S33 (holds at signals).
+- 👤 Fred: a recording where a rule holds a train (for example a Waterloo return working whose train runs late enough), to see a binding case.
+
+### Known issues
+- The forecast costs about 2.5 ms more independent and 4.6 ms with both passes on Waterloo, for rule bookkeeping on every train.
+- "Leaves" is timed at Y's last timing point, not its exit from the area, so a return working may be forecast in up to its exit run early.
+- The optimiser keeps a rule only when both trains are in its model; otherwise the base forecast's time stands (it already includes the rule).
+
+### Questions for Fred
+- 40. **Location only for Y.** Where a departure rule's X does not leave the named location (Basingstoke's 5L78 joins there), X is held at its first stop. Is that what SimSig does?
+- 41. **Y that never gets there.** A rule whose other train is terminated short before its event is skipped, as for a cancelled train. Would SimSig hold X instead until the rule is overridden?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

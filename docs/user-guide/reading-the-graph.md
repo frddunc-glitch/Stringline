@@ -95,7 +95,7 @@ You can watch more than one corridor at once. Each graph is a **board**, with it
 
 Hover over anything for its details:
 
-- **A train:** its headcode and description, the location, its booked, planned, actual and forecast times there, and whether it is early, on time or late. Knock-on delay from other trains and "possibly stopped" (no report for a while) are shown when they apply.
+- **A train:** its headcode and description, the location, its booked, planned, actual and forecast times there, and whether it is early, on time or late. Knock-on delay from other trains, a hold by a [timetable rule](conflicts-and-suggestions.md#timetable-rules-in-the-forecast) and "possibly stopped" (no report for a while) are shown when they apply.
 - **A conflict ring or band:** what clashes, which trains, where and when, the delay needed to clear it, the headway used, and the best suggestion. See [Conflicts](conflicts-and-suggestions.md).
 - **A block or speed restriction:** its section, tracks, times and effect, and its note.
 - **A location name:** its whole name, TIPLOC and platforms.

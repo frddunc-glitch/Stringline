@@ -9,6 +9,7 @@
 | Setting | Default | What it does |
 |---|---|---|
 | Forecast knock-on delay from other trains | On | Holds trains in the forecast behind late ones (the same switch as the Plan menu). See [Knock-on](conflicts-and-suggestions.md#knock-on-in-the-forecast). |
+| Apply timetable rules | On | Holds trains in the forecast by the WTT's rules, as SimSig does. See [Timetable rules](conflicts-and-suggestions.md#timetable-rules-in-the-forecast). |
 | Default dwell | 0:30 | How long a train stands at a stop the WTT gives no dwell for. |
 | Default turnaround | 0:30 | The least time from a train arriving to it leaving again as its next working. |
 | Train may have stopped after | 5:00 | How long past its forecast a train can go without a report before it is marked "possibly stopped". |

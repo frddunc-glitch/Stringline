@@ -1,4 +1,5 @@
 using Stringline.Core;
+using Stringline.Core.Timetables;
 using Stringline.Planning;
 using static Stringline.Planning.Tests.ForecastTesting;
 using static Stringline.Timetable.Tests.Live.TestTimetable;
@@ -56,5 +57,40 @@ public sealed class ReplanModelTests
         solution.Times[new EventKey(stopper.Number, 2, false)].Should().Be(SimTime.Parse("08:13").Seconds);
         solution.Times[new EventKey(late.Number, 1, true)].Should().Be(SimTime.Parse("08:26").Seconds);
         solution.Times[new EventKey(late.Number, 2, false)].Should().Be(SimTime.Parse("08:30").Seconds);
+    }
+
+    [Fact]
+    public void A_rule_held_train_follows_its_other_train_as_the_model_holds_it()
+    {
+        // S32: 2X01 may not leave C until a minute after 2S01 arrives there (08:12, so 08:13). Held at B until 08:09,
+        // 2S01 runs B–C in its 6 min (the only train there) to arrive at 08:15, and 2X01 leaves at 08:16, as the
+        // forecaster has it.
+        var trains = new[]
+        {
+            Train("2S01", points: [Call("A", null, "07:55"), Call("B", "07:59", "08:06"), Call("C", "08:12", null)]),
+            Train("2X01", points: [Call("C", null, "08:10"), Call("D", "08:20", null)]),
+        };
+        var t = Of(trains);
+        var rule = new TimetableRule(RuleKind.XAppearsAfterYArrives, 2, "2X01", "2S01", new TrainId("2X01"), new TrainId("2S01"), 60, null);
+        var timetable = new WorkingTimetable(t.Header, t.Categories, t.Trains, [rule]);
+        var network = ForecastNetwork.Build([Line("main", 180, single: false, "A", "B", "C")], timetable);
+        var request = new ForecastRequest(WorkingPlan.FromTimetable(timetable)) { Now = SimTime.Parse("07:50"), Network = network };
+        var evaluator = new ReplanEvaluator(new ReplanRequest(request) { Options = new ReplanOptions { Workers = 1 } });
+        var model = new ReplanModel(evaluator);
+        var stopper = model.Trains.Single(m => m.Plan.Headcode.Value == "2S01");
+        var ruled = model.Trains.Single(m => m.Plan.Headcode.Value == "2X01");
+        ruled.RuleFloors.Should().ContainSingle();
+        evaluator.Baseline.Independent.Find(ruled.Id)!.Points[0].Depart.Should().Be(SimTime.Parse("08:13"));
+
+        var solution = model.Solve(TimeSpan.FromSeconds(5), default, new Dictionary<EventKey, long>
+        {
+            [new EventKey(stopper.Number, 1, true)] = SimTime.Parse("08:09").Seconds,
+        })!;
+        var (commands, _, _) = model.Commands(solution);
+        var forecast = evaluator.Evaluate(commands)!.Forecast.Independent;
+
+        solution.Times[new EventKey(ruled.Number, 0, true)].Should().Be(SimTime.Parse("08:16").Seconds);
+        forecast.Find(ruled.Id)!.Points[0].Depart.Should().Be(SimTime.Parse("08:16"));
+        forecast.Find(ruled.Id)!.RuleHolds.Should().ContainSingle().Which.ToString().Should().Be("held by rule: after 2S01 arrives (+1 min)");
     }
 }

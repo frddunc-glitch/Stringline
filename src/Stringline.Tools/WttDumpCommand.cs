@@ -3,6 +3,7 @@ using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Stringline.Core;
 using Stringline.Core.Timetables;
+using Stringline.Planning;
 using Stringline.Timetable;
 
 namespace Stringline.Tools;
@@ -125,7 +126,12 @@ internal static class WttDumpCommand
         if (tt.Rules.Count > 0)
         {
             var kinds = tt.Rules.GroupBy(r => r.Kind).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} {g.Count()}");
-            w.WriteLine($"Rules: {string.Join(", ", kinds)}.");
+            var forecast = TimetableRules.For(WorkingPlan.FromTimetable(tt));
+            w.WriteLine($"Rules: {string.Join(", ", kinds)}; the forecast applies {forecast.Rules.Count} (S32).");
+            foreach (var note in forecast.Notes)
+            {
+                w.WriteLine($"  {note}");
+            }
         }
 
         if (result.UnknownElements.Count > 0)

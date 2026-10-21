@@ -48,7 +48,7 @@ A `.wtt` is a **zip** of `TimetableHeader.xml` (header only) and `SavedTimetable
 | 9 | PlatformShare | the other train |
 | 10 | CrewChange | often a crew number, not a train |
 
-**`TimetableRule`**: `Rule` code (0 X appears after Y enters, 1 … after Y leaves, 2 … after Y arrives, 3 X not if Y, 4–9 X departs after Y arrives/enters/leaves/joins/divides/forms, 10 mutually exclusive, 11–13 X appears after Y joins/divides/forms, 14 alternatives), `Train`/`Train2` (headcodes) or `TrainUID`/`Train2UID`, `Time` (seconds after Y's event), optional `Location`.
+**`TimetableRule`**: `Rule` code (0 X appears after Y enters, 1 … after Y leaves, 2 … after Y arrives, 3 X not if Y, 4–9 X departs after Y arrives/enters/leaves/joins/divides/forms, 10 mutually exclusive, 11–13 X appears after Y joins/divides/forms, 14 alternatives), `Train`/`Train2` (headcodes) or `TrainUID`/`Train2UID`, `Time` (seconds after Y's event; checked in S32, `03-…md` §6), optional `Location`. The forecast applies them since S32 (`TimetableRules`, `06-…md` §2).
 
 **Import rules (`WttReader`)**
 - Never fails the whole import for one train: a train without a usable headcode or without any usable timing point is skipped; a point without a location is skipped; a bad number is dropped. Each becomes an `ImportWarning` (Info / Warning / Error). Damaged XML keeps every train read before the damage (Error). Only a file that is not a timetable at all throws `WttFormatException`.

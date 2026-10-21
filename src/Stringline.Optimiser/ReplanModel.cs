@@ -101,6 +101,12 @@ internal sealed class ModelTrain(int number, TrainPlan plan, Train? wtt, TrainFo
     /// <summary>The sim's entry delay the forecast gave its start, which a hold at its origin must not count twice.</summary>
     public int EntryDelay { get; set; }
 
+    /// <summary>
+    /// Its timetable rules (S32) whose other train is in the model: it leaves point <c>Index</c> no earlier than that
+    /// train's event plus <c>Gap</c>, however the other train is held.
+    /// </summary>
+    public List<(int Index, EventKey After, int Gap)> RuleFloors { get; } = [];
+
     public TrainId Id => Plan.Id;
 
     /// <summary>The first timed point of its plan: where it starts, or enters the area.</summary>
@@ -354,6 +360,35 @@ internal sealed class ReplanModel
         foreach (var t in _trains)
         {
             Origin(t);
+        }
+
+        if (_evaluator.Request.Forecast.Options.TimetableRules)
+        {
+            var rules = TimetableRules.For(_plan);
+            foreach (var t in _trains)
+            {
+                Rules(t, rules);
+            }
+        }
+    }
+
+    /// <summary>A rule holding the train (S32) whose other train is modelled ties its departure to that train's event.</summary>
+    private void Rules(ModelTrain t, TimetableRules rules)
+    {
+        foreach (var rule in rules.For(t.Id))
+        {
+            var k = rule.Point ?? (t.Base.Status == TrainForecastStatus.NotStarted && t.First == t.PlanFirst ? t.First : -1);
+            if (k < 0 || !t.Timed.Contains(k) || !t.HasDepart(k) || t.Base.Points[k].Basis == ForecastBasis.Actual ||
+                !_byId.TryGetValue(rule.After, out var y) || !y.Timed.Contains(rule.AfterPoint))
+            {
+                continue;
+            }
+
+            var j = rule.AfterPoint;
+            var after = rule.Edge == RuleEdge.First
+                ? new EventKey(y.Number, j, !y.HasArrive(j))
+                : new EventKey(y.Number, j, y.HasDepart(j));
+            t.RuleFloors.Add((k, after, rule.DelaySeconds));
         }
     }
 
@@ -1089,6 +1124,11 @@ internal sealed class ReplanModel
                 Build(_trains[formed.Parent]);
             }
 
+            foreach (var (_, after, _) in t.RuleFloors)
+            {
+                Build(_trains[after.Train]);
+            }
+
             // Each point's forecast times, and its plan times as holds change them: a hold moves later points of the
             // plan only as far as minimum runs need, keeping their dwells (WorkingPlanBuilder), and the forecaster
             // then never runs the train before its plan.
@@ -1150,6 +1190,15 @@ internal sealed class ReplanModel
                         var dwell = plannedD - (p.Arrive?.Seconds ?? plannedD);
                         planDepart = Max(plannedD, shift + plannedD, planArrive!.Value + dwell);
                         natural = Max(baseD, arrive!.Value + Dwell(t, k), planDepart, Time.Of(baseD));
+                    }
+
+                    // A timetable rule (S32): no earlier than the other train's event allows, as it is held.
+                    foreach (var (index, after, gap) in t.RuleFloors)
+                    {
+                        if (index == k && f.Basis != ForecastBasis.Actual && times.TryGetValue(after, out var other) && other is IntVar)
+                        {
+                            natural = Max(baseD, natural, new Time(other + gap, null));
+                        }
                     }
 
                     if (t.Holdable(k))

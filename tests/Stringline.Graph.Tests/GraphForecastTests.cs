@@ -1,6 +1,7 @@
 using Stringline.Core;
 using Stringline.Core.Events;
 using Stringline.Core.Live;
+using Stringline.Core.Timetables;
 using Stringline.Planning;
 using Stringline.Timetable.Live;
 using static Stringline.Graph.Tests.TestData;
@@ -23,9 +24,10 @@ public sealed class GraphForecastTests
         Live("902", "2B02", MatchStatus.Matched, "2B02", ("D", TrainLocationAction.Depart, "07:06"), ("C", TrainLocationAction.Arrive, "07:11")),
     ];
 
-    private static PlanSnapshot Snapshot(string now, params LiveTrain[] live)
+    private static PlanSnapshot Snapshot(string now, params LiveTrain[] live) => Snapshot(WorkingPlan.FromTimetable(TwoTrains()), now, live);
+
+    private static PlanSnapshot Snapshot(WorkingPlan plan, string now, params LiveTrain[] live)
     {
-        var plan = WorkingPlan.FromTimetable(TwoTrains());
         var clock = SimClockReading.None with { HasTime = true, LastReported = SimTime.Parse(now) };
         var forecast = Forecaster.Run(new ForecastRequest(plan)
         {
@@ -116,6 +118,23 @@ public sealed class GraphForecastTests
         var info = GraphHover.Describe(new GraphHit(path, 0, 0, 1, path.Vertices[1].Time), scene, snapshot);
 
         info.Lines.Should().Contain(new HoverLine(GraphHover.Note, "Possibly stopped: overdue at its next timing point"));
+    }
+
+    [Fact]
+    public void The_tooltip_says_when_a_timetable_rule_holds_a_train()
+    {
+        // S32: 2B02 may not leave D until a minute after 1A01 arrives there (07:12): 07:13, not 07:05.
+        var tt = TwoTrains();
+        var rule = new TimetableRule(RuleKind.XAppearsAfterYArrives, 2, "2B02", "1A01", new TrainId("2B02"), new TrainId("1A01"), 60, null);
+        var snapshot = Snapshot(WorkingPlan.FromTimetable(new WorkingTimetable(tt.Header, tt.Categories, tt.Trains, [rule])), "06:50");
+        var scene = Build(snapshot);
+        var path = scene.InLayer(GraphLayer.Forecast).Should().ContainSingle().Subject;
+        path.Train.Should().Be(new TrainId("2B02"));
+        path.Vertices[0].Time.Should().Be(T("07:13"));
+
+        var info = GraphHover.Describe(new GraphHit(path, 0, 0, 1, path.Vertices[0].Time), scene, snapshot);
+
+        info.Lines.Should().Contain(new HoverLine(GraphHover.Note, "Held by rule: after 1A01 arrives (+1 min), until 07:13"));
     }
 
     [Fact]

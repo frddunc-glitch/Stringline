@@ -271,7 +271,7 @@ internal sealed partial class TrainDetailViewModel : ObservableObject
         Heading = plan.Headcode.ToString();
         Colour = (plan.Cancelled ? GraphSceneBuilder.CancelledColour : profile?.StyleFor(plan.CategoryId).Colour ?? CategoryStyle.Fallback.Colour).ToString();
         Description = DescribeTrain(schedule, profile);
-        StatusText = DescribeState(schedule, profile, RunsAnyway);
+        StatusText = DescribeState(schedule, snapshot.Plan, profile, RunsAnyway);
     }
 
     private static string DescribeTrain(TrainSchedule schedule, StringlineProfile? profile)
@@ -285,7 +285,7 @@ internal sealed partial class TrainDetailViewModel : ObservableObject
         return string.Join(" · ", new[] { route, what }.Where(s => s.Length > 0));
     }
 
-    private static string DescribeState(TrainSchedule schedule, StringlineProfile? profile, bool runsAnyway)
+    private static string DescribeState(TrainSchedule schedule, WorkingPlan working, StringlineProfile? profile, bool runsAnyway)
     {
         var plan = schedule.Plan;
         var parts = new List<string>();
@@ -331,6 +331,20 @@ internal sealed partial class TrainDetailViewModel : ObservableObject
             else if (f.PossiblyStopped)
             {
                 parts.Add("possibly stopped");
+            }
+
+            foreach (var hold in f.RuleHolds)
+            {
+                parts.Add($"{hold}, until {hold.Until.ToString("H", CultureInfo.InvariantCulture)}");
+            }
+        }
+
+        // Rules SimSig applies that the forecast does not (S32): which trains run instead of which.
+        if (plan.Origin == PlanOrigin.Wtt)
+        {
+            foreach (var rule in TimetableRules.For(working).ExclusionsOf(plan.Id))
+            {
+                parts.Add($"rule: {TimetableRules.DescribeExclusion(rule, plan.Id, working.NameOf)}");
             }
         }
 

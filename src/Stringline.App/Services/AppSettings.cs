@@ -169,6 +169,9 @@ internal sealed record PlanningSettings
 
     public int PossiblyStoppedSeconds { get; init; } = Forecast.PossiblyStoppedSeconds;
 
+    /// <summary>Hold trains by the WTT's rules in the forecast (S32; on by default), so a user can compare without.</summary>
+    public bool ApplyTimetableRules { get; init; } = Forecast.TimetableRules;
+
     public int PlatformMarginSeconds { get; init; } = Conflict.PlatformMarginSeconds;
 
     public int MinConflictSeconds { get; init; } = Conflict.MinSeveritySeconds;
@@ -204,6 +207,7 @@ internal sealed record PlanningSettings
         DefaultDwellSeconds = DefaultDwellSeconds,
         DefaultTurnaroundSeconds = DefaultTurnaroundSeconds,
         PossiblyStoppedSeconds = PossiblyStoppedSeconds,
+        TimetableRules = ApplyTimetableRules,
     };
 
     public ConflictOptions ToConflictOptions() => new() { PlatformMarginSeconds = PlatformMarginSeconds, MinSeveritySeconds = MinConflictSeconds };

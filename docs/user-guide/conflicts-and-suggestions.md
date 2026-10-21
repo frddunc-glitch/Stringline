@@ -67,3 +67,13 @@ How far ahead it looks, how long it thinks, whether it may change platforms, and
 ## Knock-on in the forecast
 
 **Plan ▸ Forecast knock-on from other trains** (on by default) holds trains in the forecast for headways and single lines, so a late train delays the trains behind it, and the forecast lines show the knock-on. Turn it off to see each train's forecast on its own. It does not change which conflicts are listed.
+
+## Timetable rules in the forecast
+
+A timetable can hold one train until another has done something, plus a time: "2Y31 appears 25 min after 2Y28 leaves" (a unit coming back after its trip out of the area), "1F05 departs after 2B44 arrives" (a crossing on a single line), or a train's least stop at a station. SimSig keeps to these rules, so the forecast does too: a train is not forecast to enter, start or leave before its rule allows, from the other train's forecast or actual times. If that train is late, so is the one it holds.
+
+The [train detail](re-planning.md#the-train-detail-panel) and the hover say when a rule held a train: "held by rule: after 2Y28 leaves (+25 min), until 09:12". Being held by a rule is not a conflict; a clash it then causes with another train is. Suggestions and re-plans keep to the rules too.
+
+Rules that pick which trains run ("not if", "one or the other", alternatives) are not forecast; the train detail lists them on both trains. A rule whose other train will not run (cancelled, or not running this session) is ignored.
+
+To compare the forecast without the rules, untick **Apply timetable rules** in [Tools ▸ Options ▸ Forecast and conflicts](settings.md#forecast-and-conflicts).

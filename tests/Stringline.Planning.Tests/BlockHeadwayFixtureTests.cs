@@ -85,10 +85,12 @@ public sealed class BlockHeadwayFixtureTests(ITestOutputHelper output)
     /// S39: with the block headways, headway conflicts at the end of each recording against the WTT's (S27, with the
     /// same learned places in the forecast). False ones fall and none appears. On the failure recording 2O05/2U07 stays;
     /// 5S06/5O05 (108 s apart at QTRDBAT–WESTLON, where the WTT gives 2:30 and the blocks need 1:25) goes, as Fred
-    /// accepted: the learned signalling clears them.
+    /// accepted: the learned signalling clears them. Since S32 the 4× recording has one more each way: 2R09 has not
+    /// started by its end, so its rule holds 2R09-1 (and 2S19, formed from it) until 40 min after it leaves, and 2S19
+    /// then catches 2O17 between WESTLON and CJWIN.
     /// </summary>
     [Theory]
-    [InlineData(Fixtures.Waterloo4x, 12, 8, new[] { "6L49/6G15", "2C85/2S91", "1B92/2L90" })]
+    [InlineData(Fixtures.Waterloo4x, 13, 9, new[] { "6L49/6G15", "2C85/2S91", "1B92/2L90", "2S19/2O17" })]
     [InlineData(Fixtures.WaterlooFailure, 2, 1, new[] { "2O05/2U07" })]
     [InlineData(Fixtures.Waterloo1x, 0, 0, new string[] { })]
     public void Block_headways_drop_false_conflicts_and_add_none(string recording, int before, int after, string[] kept)

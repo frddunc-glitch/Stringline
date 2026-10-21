@@ -68,6 +68,9 @@ public sealed record ForecastRequest(WorkingPlan Plan)
 /// </list>
 /// <para>A train formed from another (next working, divide, detach) starts no earlier than the other arrives at the
 /// point it forms there, plus the turnaround.</para>
+/// <para>A WTT rule (S32, <see cref="TimetableRules"/>) holds a train until another reaches its event plus the rule's
+/// time: at its entry or start ("X appears after Y …"), or at its hold point ("X departs after Y …"). The train waits
+/// for the other's forecast or actual event; a loop the static check missed is broken, never waited on.</para>
 /// </remarks>
 public static class Forecaster
 {
@@ -91,13 +94,14 @@ public static class Forecaster
             request.SessionStart,
             new HashSet<TrainId>([.. StartingTrains.Matched(request.LiveTrains), .. request.Plan.RunAnyway]),
             request.Now);
-        var independent = new Pass(request, starting, interaction: false).Run();
+        var rules = request.Options.TimetableRules ? TimetableRules.For(request.Plan) : TimetableRules.Empty;
+        var independent = new Pass(request, starting, rules, interaction: false).Run();
         if (!request.Options.Interaction || request.Network.Sections.Count == 0)
         {
             return new Forecast(request.Now, false, independent) { Starting = starting };
         }
 
-        var interacted = new Pass(request, starting, interaction: true).Run();
+        var interacted = new Pass(request, starting, rules, interaction: true).Run();
         var result = new TrainForecast[interacted.Count];
         for (var i = 0; i < result.Length; i++)
         {
@@ -134,6 +138,7 @@ public static class Forecaster
     {
         private readonly ForecastRequest _request;
         private readonly StartingTrains _starting;
+        private readonly TimetableRules _rules;
         private readonly bool _interaction;
         private readonly WorkingPlan _plan;
         private readonly ForecastOptions _options;
@@ -142,14 +147,16 @@ public static class Forecaster
         private readonly PriorityQueue<Runner, (int Time, int Priority, int Order)> _queue = new();
         private readonly Dictionary<int, SectionOccupancy<Runner>> _occupancy = [];
         private readonly Dictionary<Headcode, Runner> _firstNotStarted = [];
+        private readonly Dictionary<TrainId, Runner> _byId = [];
         private Dictionary<Tiploc, int>? _near;
         private Dictionary<Headcode, int>? _headcodes;
         private Dictionary<string, List<(string Berth, SimTime Since)>>? _berths;
 
-        public Pass(ForecastRequest request, StartingTrains starting, bool interaction)
+        public Pass(ForecastRequest request, StartingTrains starting, TimetableRules rules, bool interaction)
         {
             _request = request;
             _starting = starting;
+            _rules = rules;
             _interaction = interaction;
             _plan = request.Plan;
             _options = request.Options;
@@ -159,7 +166,7 @@ public static class Forecaster
         public List<TrainForecast> Run()
         {
             var live = MatchedWorkings(_request.LiveTrains);
-            var byId = new Dictionary<TrainId, Runner>();
+            var byId = _byId;
             foreach (var train in _plan.Trains)
             {
                 if (train.Cancelled)
@@ -200,6 +207,15 @@ public static class Forecaster
                 }
             }
 
+            // Trains held by a timetable rule wait for the other train's event (S32).
+            if (_rules.Rules.Count > 0)
+            {
+                foreach (var runner in _runners)
+                {
+                    Safely(runner, () => Gate(runner));
+                }
+            }
+
             // Trains formed from another wait for it, unless they are running already.
             foreach (var runner in _runners)
             {
@@ -209,10 +225,14 @@ public static class Forecaster
                 }
             }
 
-            while (_queue.TryDequeue(out var runner, out _))
+            do
             {
-                Safely(runner, () => Step(runner));
+                while (_queue.TryDequeue(out var runner, out _))
+                {
+                    Safely(runner, () => Step(runner));
+                }
             }
+            while (BreakStuck());
 
             return _runners.Select(r => r.ToForecast()).ToList();
         }
@@ -229,6 +249,7 @@ public static class Forecaster
             {
                 runner.Failed = true;
                 runner.ReleaseAll(this);
+                DropWatchers(runner, useResults: false);
             }
         }
 
@@ -706,24 +727,33 @@ public static class Forecaster
         /// <summary>A train not seen yet: if another train forms it, wait for that one; otherwise start now.</summary>
         private void Prepare(Runner r, Dictionary<TrainId, Runner> byId)
         {
+            r.Prepared = true;
             if (r.Wtt?.FormedFrom is { } parentId && r.Train.Origin == PlanOrigin.Wtt && byId.TryGetValue(parentId, out var parent) &&
                 FormingPoint(parent, r.Train.Id) is { } k && k <= parent.Train.LastIndex)
             {
                 var turnaround = Turnaround(parent, k, r.Train.Id);
                 if (parent.Result[k]?.FirstTime is { } arrived)
                 {
-                    Begin(r, arrived.Seconds + turnaround);
-                    return;
+                    r.Ready = arrived.Seconds + turnaround;
                 }
-
-                if (parent.Status is TrainForecastStatus.Running or TrainForecastStatus.NotStarted && !parent.Failed && !parent.Done)
+                else if (parent.Status is TrainForecastStatus.Running or TrainForecastStatus.NotStarted && !parent.Failed && !parent.Done)
                 {
+                    r.AwaitingParent = true;
                     parent.Waiting.Add((k, r, turnaround));
-                    return;
                 }
             }
 
-            Begin(r, null);
+            TryBegin(r);
+        }
+
+        /// <summary>Starts a train not yet started once nothing holds it: the train forming it, and its appearance rules.</summary>
+        private void TryBegin(Runner r)
+        {
+            if (r.Prepared && !r.AwaitingParent && r.StartGate is not { Pending: > 0 } &&
+                r.Status == TrainForecastStatus.NotStarted && r.Next < 0 && !r.Failed)
+            {
+                Begin(r, r.Ready);
+            }
         }
 
         /// <summary>Start a train at its first timed point, no earlier than <paramref name="ready"/> (its forming train's arrival plus turnaround) or now.</summary>
@@ -753,11 +783,19 @@ public static class Forecaster
             var p = points[first];
             var planned = p.FirstTime!.Value.Seconds;
             var at = Math.Max(planned + hint, floor);
+            if (r.Status == TrainForecastStatus.NotStarted && r.StartGate is { Floor: { } ruled, Rule: { } rule } && ruled > at)
+            {
+                r.RuleHolds.Add(new RuleHold(rule, first, new SimTime(at), new SimTime(ruled)));
+                at = ruled;
+            }
+
             r.Next = first;
             r.Release(first, at, this);
+            Fire(r, first, RuleEdge.First, at);
             if (first == points.Count - 1 && !p.IsPass)
             {
                 r.Set(first, at, null, false, ForecastBasis.Forecast);
+                Fire(r, first, RuleEdge.Last, at);
                 Finish(r);
                 return;
             }
@@ -811,6 +849,30 @@ public static class Forecaster
                 return;
             }
 
+            // A departure rule (S32): wait for the other train's event, then go no earlier than it allows.
+            int? ruled = null;
+            if (!r.FixedDeparture && r.DepartGates?.GetValueOrDefault(c) is { } gate)
+            {
+                if (gate.Pending > 0)
+                {
+                    gate.Parked = true;
+                    return;
+                }
+
+                if (gate.Floor is { } f && f > r.Departure)
+                {
+                    if (!gate.Deferred)
+                    {
+                        gate.Deferred = true;
+                        _queue.Enqueue(r, (f, -r.Priority, r.Order)); // take it in its turn at the time it may go
+                        return;
+                    }
+
+                    ruled = f;
+                    r.RuleHolds.Add(new RuleHold(gate.Rule!, c, new SimTime(r.Departure), new SimTime(f)));
+                }
+            }
+
             var plannedDepart = points[c].LastTime!.Value.Seconds;
             var plannedArrive = points[n].FirstTime!.Value.Seconds;
             var plannedRun = Math.Max(0, plannedArrive - plannedDepart);
@@ -818,7 +880,7 @@ public static class Forecaster
             var booked = route is null ? null : Booked(r, c, n);
             var kind = SectionWindow.KindOf(points, c, n);
 
-            var d = r.Departure;
+            var d = Math.Max(r.Departure, ruled ?? int.MinValue);
             int run = plannedRun;
             for (var settle = 0; settle < MaxSettle; settle++)
             {
@@ -870,6 +932,7 @@ public static class Forecaster
                 HoldAt(r, c, d);
             }
 
+            Fire(r, c, RuleEdge.Last, d);
             ArriveAt(r, n, arrive);
         }
 
@@ -918,6 +981,7 @@ public static class Forecaster
             var p = points[n];
             var last = n == points.Count - 1;
             r.Release(n, arrive, this);
+            Fire(r, n, RuleEdge.First, arrive);
             if (p.IsPass && !last)
             {
                 r.Set(n, null, arrive, true, ForecastBasis.Forecast);
@@ -928,6 +992,7 @@ public static class Forecaster
             if (last || p.Depart is null)
             {
                 r.Set(n, arrive, null, false, ForecastBasis.Forecast);
+                Fire(r, n, RuleEdge.Last, arrive);
                 Finish(r);
                 return;
             }
@@ -941,15 +1006,204 @@ public static class Forecaster
         {
             r.Done = true;
             r.ReleaseAll(this);
+            DropWatchers(r, useResults: true);
         }
 
         /// <summary>A train formed from another can start, at <paramref name="ready"/> at the earliest (null: as planned).</summary>
         public void Released(Runner child, int? ready)
         {
-            if (child.Status == TrainForecastStatus.NotStarted && child.Next < 0 && !child.Failed)
+            child.AwaitingParent = false;
+            child.Ready = ready;
+            Safely(child, () => TryBegin(child));
+        }
+
+        // ---- Timetable rules (S32) ----
+
+        /// <summary>Puts each rule holding <paramref name="x"/> on its gate, and the gate on the other train's event.</summary>
+        private void Gate(Runner x)
+        {
+            foreach (var rule in _rules.For(x.Train.Id))
             {
-                Safely(child, () => Begin(child, ready));
+                RuleGate? gate;
+                if (rule.IsAppearance)
+                {
+                    if (x.Status != TrainForecastStatus.NotStarted)
+                    {
+                        continue; // it has appeared
+                    }
+
+                    gate = x.StartGate ??= new RuleGate();
+                }
+                else
+                {
+                    var k = rule.Point!.Value;
+                    if (x.Status is not (TrainForecastStatus.NotStarted or TrainForecastStatus.Running) || k >= x.Points.Count || x.ActualDepart[k] is not null ||
+                        (x.Status == TrainForecastStatus.Running && (k < x.Current || (k == x.Current && x.FixedDeparture))))
+                    {
+                        continue; // it has left there
+                    }
+
+                    x.DepartGates ??= [];
+                    if (!x.DepartGates.TryGetValue(k, out gate))
+                    {
+                        x.DepartGates[k] = gate = new RuleGate();
+                    }
+                }
+
+                gate.Pending++;
+                if (!_byId.TryGetValue(rule.After, out var y) || y.Failed || y.Status == TrainForecastStatus.NotRunning)
+                {
+                    Resolve(x, gate, rule, null); // the other train will not run: the rule is skipped (Fred, S32)
+                }
+                else if (Known(y, rule.AfterPoint, rule.Edge, out var time))
+                {
+                    Resolve(x, gate, rule, time);
+                }
+                else
+                {
+                    (y.Watchers ??= []).Add(new RuleWatch(rule.AfterPoint, rule.Edge, x, gate, rule));
+                }
             }
+        }
+
+        /// <summary>True if the train's event at point <paramref name="k"/> is already settled (with its time, or null if it went by unreported).</summary>
+        private static bool Known(Runner y, int k, RuleEdge edge, out int? time)
+        {
+            time = null;
+            if (k >= y.Points.Count)
+            {
+                return true;
+            }
+
+            var result = y.Result[k];
+            int? Time() => (edge == RuleEdge.First ? result?.FirstTime : result?.LastTime)?.Seconds;
+            if (edge == RuleEdge.First && result?.FirstTime is not null)
+            {
+                time = Time();
+                return true;
+            }
+
+            if ((edge == RuleEdge.Last && result is { Basis: ForecastBasis.Actual, LastTime: not null }) || y.Status == TrainForecastStatus.Finished || y.Done ||
+                (y.Status == TrainForecastStatus.Running && y.Next >= 0 && k < y.Current))
+            {
+                time = Time();
+                return true;
+            }
+
+            if (y.Status == TrainForecastStatus.Running && y.Next >= 0 && k == y.Current && edge == RuleEdge.Last && y.FixedDeparture)
+            {
+                time = y.Departure;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>The train has reached its event at point <paramref name="k"/>: the trains waiting for it may go, the rule's time later.</summary>
+        private void Fire(Runner y, int k, RuleEdge edge, int time)
+        {
+            if (y.Watchers is not { Count: > 0 } watchers)
+            {
+                return;
+            }
+
+            for (var i = watchers.Count - 1; i >= 0; i--)
+            {
+                var w = watchers[i];
+                if (w.Point == k && w.Edge == edge)
+                {
+                    watchers.RemoveAt(i);
+                    Safely(w.Train, () => Resolve(w.Train, w.Gate, w.Rule, time));
+                }
+            }
+        }
+
+        /// <summary>
+        /// The train is done (or failed) without reaching some events: at a point it has times for, they happened then;
+        /// otherwise they never will, and the rule is skipped.
+        /// </summary>
+        private void DropWatchers(Runner y, bool useResults)
+        {
+            if (y.Watchers is not { Count: > 0 } watchers)
+            {
+                return;
+            }
+
+            var left = watchers.ToList();
+            watchers.Clear();
+            foreach (var w in left)
+            {
+                var result = useResults && w.Point < y.Result.Length ? y.Result[w.Point] : null;
+                var time = (w.Edge == RuleEdge.First ? result?.FirstTime : result?.LastTime)?.Seconds;
+                Safely(w.Train, () => Resolve(w.Train, w.Gate, w.Rule, time));
+            }
+        }
+
+        private void Resolve(Runner x, RuleGate gate, ForecastRule rule, int? time)
+        {
+            if (gate.Pending <= 0)
+            {
+                return; // let go out of a loop already
+            }
+
+            if (time is { } t && t + rule.DelaySeconds > (gate.Floor ?? int.MinValue))
+            {
+                gate.Floor = t + rule.DelaySeconds;
+                gate.Rule = rule;
+            }
+
+            if (--gate.Pending == 0)
+            {
+                Open(x, gate);
+            }
+        }
+
+        private void Open(Runner x, RuleGate gate)
+        {
+            if (ReferenceEquals(gate, x.StartGate))
+            {
+                TryBegin(x);
+            }
+            else if (gate.Parked)
+            {
+                gate.Parked = false;
+                gate.Deferred = true;
+                _queue.Enqueue(x, (Math.Max(x.Departure, gate.Floor ?? x.Departure), -x.Priority, x.Order));
+            }
+        }
+
+        /// <summary>
+        /// Lets the first train still held when nothing else can move go as far as the rules it has heard from allow:
+        /// rules and trains forming others waiting on each other in a loop are never waited on. True if one was let go.
+        /// </summary>
+        private bool BreakStuck()
+        {
+            foreach (var r in _runners)
+            {
+                if (r.Failed)
+                {
+                    continue;
+                }
+
+                if (r.StartGate is { Pending: > 0 } start && r.Prepared && r.Next < 0 && r.Status == TrainForecastStatus.NotStarted)
+                {
+                    start.Pending = 0;
+                    Safely(r, () => TryBegin(r));
+                    return true;
+                }
+
+                foreach (var gate in r.DepartGates?.Values ?? Enumerable.Empty<RuleGate>())
+                {
+                    if (gate is { Parked: true, Pending: > 0 })
+                    {
+                        gate.Pending = 0;
+                        Open(r, gate);
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private int DepartAfterArriving(Runner r, int k, int arrived)
@@ -1054,6 +1308,26 @@ public static class Forecaster
         }
     }
 
+    /// <summary>The rules holding a train at one place (S32): how many events it still waits for, and the latest time they allow.</summary>
+    private sealed class RuleGate
+    {
+        public int Pending { get; set; }
+
+        public int? Floor { get; set; }
+
+        /// <summary>The rule that gave <see cref="Floor"/>.</summary>
+        public ForecastRule? Rule { get; set; }
+
+        /// <summary>The train got to its departure here while still waiting: queue it again once the gate opens.</summary>
+        public bool Parked { get; set; }
+
+        /// <summary>Its departure has been queued again at the time the gate allows.</summary>
+        public bool Deferred { get; set; }
+    }
+
+    /// <summary>A rule of <see cref="Train"/> waiting for an event of the train it is put on.</summary>
+    private sealed record RuleWatch(int Point, RuleEdge Edge, Runner Train, RuleGate Gate, ForecastRule Rule);
+
     /// <summary>One train's state during a pass.</summary>
     private sealed class Runner
     {
@@ -1120,6 +1394,27 @@ public static class Forecaster
         /// <summary>Where a block held the train (<see cref="TrainForecast.BlockHolds"/>).</summary>
         public List<BlockHold> BlockHolds { get; } = [];
 
+        /// <summary>Where a timetable rule held the train (<see cref="TrainForecast.RuleHolds"/>).</summary>
+        public List<RuleHold> RuleHolds { get; } = [];
+
+        /// <summary>Not started: its start has been worked out (<c>Prepare</c>), so it may begin once nothing holds it.</summary>
+        public bool Prepared { get; set; }
+
+        /// <summary>Waiting for the train that forms it to get there.</summary>
+        public bool AwaitingParent { get; set; }
+
+        /// <summary>The earliest it can start, from the train forming it (arrival plus turnaround); null as planned.</summary>
+        public int? Ready { get; set; }
+
+        /// <summary>Its appearance rules ("X appears after Y …").</summary>
+        public RuleGate? StartGate { get; set; }
+
+        /// <summary>Its departure rules, by the point they hold it at.</summary>
+        public Dictionary<int, RuleGate>? DepartGates { get; set; }
+
+        /// <summary>Rules of other trains waiting for this one's events.</summary>
+        public List<RuleWatch>? Watchers { get; set; }
+
         /// <summary>Trains formed from this one, waiting for it to reach the point they form at.</summary>
         public List<(int Point, Runner Child, int Turnaround)> Waiting { get; } = [];
 
@@ -1179,6 +1474,7 @@ public static class Forecaster
             return new TrainForecast(Train.Id, Train.Headcode, Status, points, LiveUid, PossiblyStopped)
             {
                 BlockHolds = BlockHolds.Count == 0 ? [] : [.. BlockHolds],
+                RuleHolds = RuleHolds.Count == 0 ? [] : [.. RuleHolds],
                 NotSeen = NotSeen && Status == TrainForecastStatus.NotStarted,
                 Anchor = Status == TrainForecastStatus.Running ? Anchor : null,
                 Standing = Status == TrainForecastStatus.Running ? Standing : null,

@@ -58,6 +58,10 @@ internal sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial bool ForecastKnockOn { get; set; }
 
+    /// <summary>Options ▸ Forecast ▸ Apply timetable rules (S32).</summary>
+    [ObservableProperty]
+    public partial bool ApplyTimetableRules { get; set; }
+
     [ObservableProperty]
     public partial string DefaultDwell { get; set; } = string.Empty;
 
@@ -251,6 +255,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
     {
         var p = s.Planning;
         ForecastKnockOn = s.ForecastKnockOn;
+        ApplyTimetableRules = p.ApplyTimetableRules;
         DefaultDwell = ProfileEditorText.FormatDuration(p.DefaultDwellSeconds);
         DefaultTurnaround = ProfileEditorText.FormatDuration(p.DefaultTurnaroundSeconds);
         PossiblyStopped = ProfileEditorText.FormatDuration(p.PossiblyStoppedSeconds);
@@ -287,6 +292,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
             DefaultDwellSeconds = Duration(DefaultDwell, "default dwell", 0, 10),
             DefaultTurnaroundSeconds = Duration(DefaultTurnaround, "default turnaround", 0, 60),
             PossiblyStoppedSeconds = Duration(PossiblyStopped, "time before a train may have stopped", 1, 60),
+            ApplyTimetableRules = ApplyTimetableRules,
             PlatformMarginSeconds = Duration(PlatformMargin, "platform margin", 0, 10),
             MinConflictSeconds = Duration(MinConflict, "least conflict shown", 0, 10),
             DefaultHeadwaySeconds = Duration(DefaultHeadway, "default headway", 0, 15),

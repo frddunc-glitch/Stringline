@@ -87,6 +87,12 @@ public sealed record TrainForecast(
     /// </summary>
     public IReadOnlyList<BlockHold> BlockHolds { get; init; } = [];
 
+    /// <summary>
+    /// Where a WTT rule held the train (S32): at its entry or start for "X appears after …", at its hold point for
+    /// "X departs after …", in the order they happened. Not a conflict in itself.
+    /// </summary>
+    public IReadOnlyList<RuleHold> RuleHolds { get; init; } = [];
+
     /// <summary>Why the train is <see cref="TrainForecastStatus.NotRunning"/>; null otherwise.</summary>
     public NotRunningReason? NotRunning { get; init; }
 
@@ -233,6 +239,12 @@ public sealed record ForecastOptions
     /// train standing at a red signal from a late one (<see cref="TrainForecast.Standing"/>).
     /// </summary>
     public bool SignalPlaces { get; init; } = true;
+
+    /// <summary>
+    /// Apply the WTT's rules (S32, <see cref="TimetableRules"/>): a train held until another enters, leaves, arrives,
+    /// joins, divides or forms is not forecast to go before it may. False forecasts as before S32, to compare.
+    /// </summary>
+    public bool TimetableRules { get; init; } = true;
 
     /// <summary>A run is reckoned at most this much slower than its minimum from the train's running so far in it (S38).</summary>
     public double MaxPace { get; init; } = 1.5;

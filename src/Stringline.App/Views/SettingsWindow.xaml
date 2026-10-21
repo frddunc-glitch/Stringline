@@ -59,6 +59,8 @@
           <TextBlock Style="{StaticResource Intro}"
                      Text="How trains are forecast and which clashes are shown. Durations are m:ss, minutes (2.5) or seconds (90s)." />
           <CheckBox Content="Forecast _knock-on delay from other trains (headways and single lines)" IsChecked="{Binding ForecastKnockOn}" />
+          <CheckBox Content="_Apply timetable rules (a train held until another enters, leaves or arrives)" IsChecked="{Binding ApplyTimetableRules}" Margin="0,4,0,0"
+                    ToolTip="SimSig holds a train named by a WTT rule until the other train's event plus the rule's time. Untick to compare the forecast without them." />
           <Grid Margin="0,6,0,0">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="230" />

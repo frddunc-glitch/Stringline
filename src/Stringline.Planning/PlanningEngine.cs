@@ -442,6 +442,7 @@ public sealed partial class PlanningEngine
         {
             _done.Clear();
             RaiseStep(new PlanStep(PlanStepKind.Reset));
+            LogRules(timetable);
         }
 
         _undone.Clear();
@@ -449,6 +450,22 @@ public sealed partial class PlanningEngine
         _planHistory = null;
         _planVersion++;
         Rebuild();
+    }
+
+    /// <summary>Logs, once a timetable, how many of its rules the forecast applies and any it leaves out (S32).</summary>
+    private void LogRules(WorkingTimetable? timetable)
+    {
+        if (timetable is not { Rules.Count: > 0 })
+        {
+            return;
+        }
+
+        var rules = TimetableRules.For(_basePlan);
+        LogRulesApplied(rules.Rules.Count, timetable.Rules.Count);
+        foreach (var note in rules.Notes)
+        {
+            LogRuleNote(note);
+        }
     }
 
     private void Restore(IReadOnlyList<PlanStep> steps)
@@ -740,6 +757,12 @@ public sealed partial class PlanningEngine
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Finding {Conflicts} conflicts took {Milliseconds:0} ms")]
     private partial void LogConflictsSlow(int conflicts, double milliseconds);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "The forecast applies {Applied} of the timetable's {Rules} rules")]
+    private partial void LogRulesApplied(int applied, int rules);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "{Note}")]
+    private partial void LogRuleNote(string note);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "The forecast failed for {Trains} trains; they are shown without one")]
     private partial void LogForecastUnavailable(int trains);

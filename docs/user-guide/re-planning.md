@@ -56,7 +56,7 @@ Right-click the background for [disruptions and notes](disruptions-and-notes.md)
 
 ## The train detail panel
 
-The panel at the top right shows the selected train: its headcode, state (running and how late, not started, finished, not running, cancelled, terminated short, re-planned), its route, and buttons for **Reset to WTT**, **Cancel train** (or **Reinstate**), **Run anyway** (for a train that will [not run](timetables-and-profiles.md#trains-that-will-not-run)), **Clone…** and, for a live train, **Link…**.
+The panel at the top right shows the selected train: its headcode, state (running and how late, not started, finished, not running, cancelled, terminated short, re-planned), its route, and buttons for **Reset to WTT**, **Cancel train** (or **Reinstate**), **Run anyway** (for a train that will [not run](timetables-and-profiles.md#trains-that-will-not-run)), **Clone…** and, for a live train, **Link…**. The state also says when a [timetable rule](conflicts-and-suggestions.md#timetable-rules-in-the-forecast) holds the train ("held by rule: after 2Y28 leaves (+25 min), until 09:12"), and lists the rules that choose between it and another train ("rule: does not run if 2Y01 runs").
 
 Below is its schedule, one row per timing point:
 
