@@ -246,7 +246,8 @@ try {
     Write-Host 'Install again, and uninstall with /REMOVEUSERDATA'
     Check ((Setup $New 'reinstall') -eq 0) 'setup succeeds'
     $folder = (Installed).InstallLocation
-    Uninstall @('/REMOVEUSERDATA') { -not (Test-Path $roaming) -and -not (Test-Path $local) }
+    # The unpacked files go last (RemoveUserData in Stringline.iss), so wait for them too.
+    Uninstall @('/REMOVEUSERDATA') { -not (Test-Path $roaming) -and -not (Test-Path $local) -and -not (Test-Path $unpacked) }
     Check (-not (Installed)) 'the uninstall entry is gone'
     Check (-not (Test-Path $roaming)) 'the settings and profiles are removed'
     Check (-not (Test-Path $local)) 'the logs and help pages are removed'
