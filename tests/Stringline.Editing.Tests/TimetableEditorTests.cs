@@ -107,7 +107,8 @@ public sealed class TimetableEditorTests(ITestOutputHelper output) : IDisposable
     {
         var store = new DraftStore(_folder.FullName);
         var document = TwoTrains();
-        var editor = new TimetableEditor(document, sourcePath: @"C:\Timetables\test.wtt");
+        var sourcePath = Path.Combine(_folder.FullName, "Timetables", "test.wtt");
+        var editor = new TimetableEditor(document, sourcePath);
         var states = new List<string> { Tree(document) };
         editor.Apply(TimetableEdit.SetField(Node(document, "1A01").Element, "Notes", "x"));
         states.Add(Tree(document));
@@ -125,7 +126,7 @@ public sealed class TimetableEditorTests(ITestOutputHelper output) : IDisposable
         opened.Problem.Should().BeNull();
         var restored = TimetableEditor.Restore(opened.Document, opened.State);
 
-        restored.SourcePath.Should().Be(@"C:\Timetables\test.wtt");
+        restored.SourcePath.Should().Be(sourcePath);
         restored.Current.IsDirty.Should().BeTrue();
         restored.Current.RedoDescription.Should().Be("Renumber 1B01 as 1B09");
         restored.Redo();
