@@ -24,7 +24,7 @@ internal static class CorridorsCommand
         var force = new Option<bool>("--force") { Description = "Overwrite the --profile file if it exists." };
         var headways = new Option<bool>("--headways") { Description = "Also list each section's headway: where it comes from, and the spacing the WTT books trains at." };
         var log = new Option<FileInfo?>("--log") { Description = "With --headways: a recording (.sslog) made with this timetable, to show the spacing trains actually ran at beside the WTT's (reported only, never applied)." };
-        var places = new Option<FileInfo?>("--places") { Description = "With --headways: a profile with learned signal places (S37) for this sim, to measure each section's block headway (S39)." };
+        var places = new Option<FileInfo?>("--places") { Description = "A profile with learned signal places and run times (S37) for this sim: the axis is spaced by the learned run times, and each section's block headway is measured (S39); implies --headways." };
         var minSamples = new Option<int>("--min-samples") { Description = "With --places: samples a learned place needs to be used.", DefaultValueFactory = _ => SignallingPlaces.DefaultMinSamples };
         var verbose = new Option<bool>("--verbose") { Description = "Debug logging." };
 
@@ -126,7 +126,8 @@ internal static class CorridorsCommand
         if (learned is not null)
         {
             var blocks = BlockHeadways.Measure(candidates.Select(c => c.Corridor), UsablePlaces.Of(learned, settings.MinSamples));
-            candidates = [.. candidates.Select(c => c with { Corridor = blocks.Apply([c.Corridor], Section.StandardHeadwaySeconds)[0] })];
+            var spaced = (new StringlineProfile { AreaId = tt.AreaId, Corridors = blocks.Apply(candidates.Select(c => c.Corridor), Section.StandardHeadwaySeconds) }.WithPlaces(learned)).WithLearnedRuns(settings.MinSamples);
+            candidates = [.. candidates.Select((c, i) => c with { Corridor = spaced.Corridors[i] })];
         }
 
         var text = new StringWriter(CultureInfo.InvariantCulture);
@@ -201,8 +202,8 @@ internal static class CorridorsCommand
     {
         var c = candidate.Corridor;
         var m = candidate.Measurement;
-        w.WriteLine($"{number}. {c.Id}: {c.Name}. {c.Locations.Count} locations, {m.Trains} trains, {candidate.Traffic} train-sections ({candidate.NewTraffic} not on an earlier corridor).");
-        string[] header = ["#", "Location", "Axis", "Plat", "Calls", "Stops", "Start", "End", "Next run", "Down", "Up", "Runs", "Opp", "Headway", "From", "Hint"];
+        w.WriteLine($"{number}. {c.Id}: {c.Name}. {c.Locations.Count} locations, {m.Trains} trains, {candidate.Traffic} train-sections ({candidate.NewTraffic} not on an earlier corridor){(m.Chords > 0 ? $"; {m.Chords} trains jump across it by a chord" : "")}.");
+        string[] header = ["#", "Location", "Axis", "Plat", "Calls", "Stops", "Start", "End", "Next run", "Learned", "Down", "Up", "Runs", "Opp", "Headway", "From", "Hint"];
         var rows = new List<string[]>();
         for (var i = 0; i < c.Locations.Count; i++)
         {
@@ -221,6 +222,7 @@ internal static class CorridorsCommand
                 ls.Starts.ToString(CultureInfo.InvariantCulture),
                 ls.Terminates.ToString(CultureInfo.InvariantCulture),
                 s is null ? "" : ss!.Samples == 0 ? $"{Duration(s.MinRunSeconds)}?" : Duration(s.MinRunSeconds),
+                Duration(s?.LearnedRunSeconds),
                 Duration(s?.MinRunDownSeconds),
                 Duration(s?.MinRunUpSeconds),
                 ss?.Samples.ToString(CultureInfo.InvariantCulture) ?? "",

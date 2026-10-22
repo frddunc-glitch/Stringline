@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Stringline.Core;
 using Stringline.Core.Timetables;
 
@@ -50,16 +51,20 @@ public sealed class LocationGraph
     private readonly Dictionary<LocationPair, int> _reversing;
     private readonly Dictionary<Tiploc, SortedSet<string>> _neighbours;
 
+    private static readonly ConditionalWeakTable<WorkingTimetable, LocationGraph> Cache = [];
+
     private LocationGraph(
         Dictionary<LocationPair, int> edges,
         Dictionary<(Tiploc, LocationPair), int> through,
         Dictionary<LocationPair, int> reversing,
-        Dictionary<LocationPair, IReadOnlyList<Tiploc>> expansions)
+        Dictionary<LocationPair, IReadOnlyList<Tiploc>> expansions,
+        IReadOnlyList<Tiploc[]> routes)
     {
         _edges = edges;
         _through = through;
         _reversing = reversing;
         Expansions = expansions;
+        Routes = routes;
         _neighbours = [];
         foreach (var pair in edges.Keys)
         {
@@ -78,6 +83,9 @@ public sealed class LocationGraph
 
     public IEnumerable<Tiploc> Locations => _neighbours.Keys;
 
+    /// <summary>Each train's locations in running order, with skip edges expanded (a reversal is one location).</summary>
+    public IReadOnlyList<Tiploc[]> Routes { get; }
+
     /// <summary>Trains that run over the edge between these locations (either direction), 0 if none.</summary>
     public int Weight(Tiploc a, Tiploc b) => _edges.GetValueOrDefault(new LocationPair(a, b));
 
@@ -89,12 +97,25 @@ public sealed class LocationGraph
     /// </summary>
     public int Reversing(LocationPair pair) => _reversing.GetValueOrDefault(pair);
 
+    /// <summary>Trains that run over the edge other than out and back: a line, not a spur (<see cref="Reversing"/>).</summary>
+    public int Line(LocationPair pair) => Weight(pair) - Reversing(pair);
+
     /// <summary>Trains that go <paramref name="from"/>, <paramref name="via"/>, <paramref name="to"/> in a row, in either direction.</summary>
     public int Through(Tiploc from, Tiploc via, Tiploc to) => _through.GetValueOrDefault((via, new LocationPair(from, to)));
 
     /// <summary>The locations joined to this one by an edge, in ordinal order.</summary>
     public IEnumerable<Tiploc> Neighbours(Tiploc location) =>
         _neighbours.TryGetValue(location, out var set) ? set.Select(c => new Tiploc(c)) : [];
+
+    /// <summary>
+    /// The graph of this timetable with the default skip limit, built once and kept as long as the timetable is
+    /// (corridors are measured against it again on every refresh).
+    /// </summary>
+    public static LocationGraph For(WorkingTimetable timetable)
+    {
+        ArgumentNullException.ThrowIfNull(timetable);
+        return Cache.GetValue(timetable, t => Build(t));
+    }
 
     public static LocationGraph Build(WorkingTimetable timetable, int maxSkipped = MaxSkipped)
     {
@@ -167,7 +188,7 @@ public sealed class LocationGraph
             }
         }
 
-        return new LocationGraph(edges, through, reversing, expansions);
+        return new LocationGraph(edges, through, reversing, expansions, sequences.Select(s => s.Select(n => n.Location).ToArray()).ToList());
     }
 
     /// <param name="Arrive">First booked time at the location in this visit, if any (none for an inserted location).</param>

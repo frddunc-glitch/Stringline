@@ -175,6 +175,48 @@ public sealed record LearnedSession(string Id, SimTime UpTo);
 /// <param name="ClearSeconds">A track circuit: the seconds from its occupation to its clearing behind the train (S39).</param>
 public sealed record PlaceSample(SignallingKind Kind, string Id, Tiploc From, Tiploc To, double Fraction, SimTime At, double? End = null, string? Line = null, string? Signal = null, RunKind Run = RunKind.Through, string? Next = null, int? Aspect = null, int? NextSeconds = null, int? ClearSeconds = null);
 
+/// <summary>One timed run between two timing locations from the learner, before it is pooled into a <see cref="LearnedRun"/>.</summary>
+/// <param name="At">When the run reached <paramref name="To"/>.</param>
+public sealed record RunSample(Tiploc From, Tiploc To, RunKind Run, int Seconds, SimTime At);
+
+/// <summary>
+/// How long trains took between two timing locations they reported one after the other, learned from play: runs not
+/// checked at a signal on the way and no slower than the learner's limit (S37). The derived axis is spaced by them
+/// where enough runs are known (<see cref="SignallingPlaces.LearnedRunSeconds"/>), so trains draw as they really run.
+/// </summary>
+public sealed record LearnedRun
+{
+    public required Tiploc From { get; init; }
+
+    public required Tiploc To { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public RunKind Run { get; init; }
+
+    /// <summary>The latest run times in seconds, oldest first.</summary>
+    public IReadOnlyList<int> Seconds { get; init; } = [];
+
+    /// <summary>Every run ever timed, including those no longer kept in <see cref="Seconds"/>.</summary>
+    public int SampleCount { get; init; }
+
+    /// <summary>The fastest run ever timed.</summary>
+    public int FastestSeconds { get; init; }
+
+    /// <summary>The sim time (with its day) of the last run learned from.</summary>
+    public SimTime? LastLearned { get; init; }
+
+    /// <summary>
+    /// The run time of a fast train here: the lower quartile of <see cref="Seconds"/>, so one run timed short by a
+    /// missed report does not set it (0 with none).
+    /// </summary>
+    [JsonIgnore]
+    public int FastSeconds => Seconds.Count == 0 ? 0 : Seconds.Order().ElementAt((Seconds.Count - 1) / 4);
+
+    public bool Is(Tiploc from, Tiploc to, RunKind run) => From == from && To == to && Run == run;
+
+    public override string ToString() => FormattableString.Invariant($"{From}→{To} {Run} {FastSeconds}s ({SampleCount})");
+}
+
 /// <summary>
 /// The signals, track circuits and TD berths learned for a sim (S37, #19), kept in its profile so they can be shared.
 /// Immutable: every change returns a new instance.
@@ -201,11 +243,14 @@ public sealed record SignallingPlaces
 
     public IReadOnlyList<SignallingPlace> Berths { get; init; } = [];
 
+    /// <summary>Run times between timing locations, by kind of run, in order of their locations.</summary>
+    public IReadOnlyList<LearnedRun> Runs { get; init; } = [];
+
     /// <summary>The sessions learned from, oldest first.</summary>
     public IReadOnlyList<LearnedSession> Sessions { get; init; } = [];
 
     [JsonIgnore]
-    public bool IsEmpty => Signals.Count == 0 && TrackCircuits.Count == 0 && Berths.Count == 0 && Sessions.Count == 0;
+    public bool IsEmpty => Signals.Count == 0 && TrackCircuits.Count == 0 && Berths.Count == 0 && Runs.Count == 0 && Sessions.Count == 0;
 
     [JsonIgnore]
     public int Count => Signals.Count + TrackCircuits.Count + Berths.Count;
@@ -230,6 +275,17 @@ public sealed record SignallingPlaces
     public IEnumerable<SignallingPlace> Between(SignallingKind kind, Tiploc a, Tiploc b) =>
         Of(kind).Where(p => (p.From == a && p.To == b) || (p.From == b && p.To == a)).OrderBy(p => p.From != a).ThenBy(p => p.Fraction);
 
+    /// <summary>
+    /// The usual time of a fast train running through from <paramref name="a"/> to <paramref name="b"/> in either
+    /// direction (the faster of the two), from runs passing both, if at least <paramref name="minSamples"/> are known
+    /// in all.
+    /// </summary>
+    public int? LearnedRunSeconds(Tiploc a, Tiploc b, int minSamples)
+    {
+        var runs = Runs.Where(r => r.Run == RunKind.Through && r.Seconds.Count > 0 && ((r.From == a && r.To == b) || (r.From == b && r.To == a))).ToList();
+        return runs.Count == 0 || runs.Sum(r => r.SampleCount) < minSamples ? null : runs.Min(r => r.FastSeconds);
+    }
+
     /// <summary>The session's entry, if it has been learned from.</summary>
     public LearnedSession? FindSession(string id) => Sessions.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.Ordinal));
 
@@ -242,9 +298,15 @@ public sealed record SignallingPlaces
     /// <param name="upTo">The latest sim time the session has reached.</param>
     /// <param name="corridors">The profile's corridors, for each place's direction.</param>
     /// <param name="added">How many samples were new.</param>
-    public SignallingPlaces Learn(IEnumerable<PlaceSample> samples, string sessionId, SimTime upTo, IEnumerable<Corridor> corridors, out int added)
+    public SignallingPlaces Learn(IEnumerable<PlaceSample> samples, string sessionId, SimTime upTo, IEnumerable<Corridor> corridors, out int added) =>
+        Learn(samples, [], sessionId, upTo, corridors, out added);
+
+    /// <inheritdoc cref="Learn(IEnumerable{PlaceSample}, string, SimTime, IEnumerable{Corridor}, out int)"/>
+    /// <param name="runs">The session's timed runs between timing locations, pooled into <see cref="Runs"/> the same way (not counted in <paramref name="added"/>).</param>
+    public SignallingPlaces Learn(IEnumerable<PlaceSample> samples, IEnumerable<RunSample> runs, string sessionId, SimTime upTo, IEnumerable<Corridor> corridors, out int added)
     {
         ArgumentNullException.ThrowIfNull(samples);
+        ArgumentNullException.ThrowIfNull(runs);
         ArgumentException.ThrowIfNullOrEmpty(sessionId);
         ArgumentNullException.ThrowIfNull(corridors);
         var before = FindSession(sessionId)?.UpTo;
@@ -273,6 +335,24 @@ public sealed record SignallingPlaces
             result = result.With(kind, places);
         }
 
+        var learnedRuns = Runs.ToList();
+        foreach (var group in runs.Where(r => (before is not { } b || r.At > b) && r.Seconds > 0 && r.From != r.To).GroupBy(r => (r.From, r.To, r.Run)))
+        {
+            var index = learnedRuns.FindIndex(r => r.Is(group.Key.From, group.Key.To, group.Key.Run));
+            var run = index >= 0 ? learnedRuns[index] : new LearnedRun { From = group.Key.From, To = group.Key.To, Run = group.Key.Run };
+            var ordered = group.OrderBy(r => r.At).ToList();
+            run = Pooled(run, ordered.Select(r => r.Seconds).ToList(), ordered.Count, ordered[^1].At);
+            if (index >= 0)
+            {
+                learnedRuns[index] = run;
+            }
+            else
+            {
+                learnedRuns.Add(run);
+            }
+        }
+
+        result = result.WithRuns(learnedRuns);
         var latest = before is { } previous && previous > upTo ? previous : upTo;
         return result with { Sessions = Sessions.Where(s => s.Id != sessionId).Append(new LearnedSession(sessionId, latest)).TakeLast(MaxSessions).ToList() };
     }
@@ -323,6 +403,25 @@ public sealed record SignallingPlaces
             result = result.With(kind, places);
         }
 
+        var runs = result.Runs.ToList();
+        foreach (var theirs in other.Runs)
+        {
+            var index = runs.FindIndex(r => r.Is(theirs.From, theirs.To, theirs.Run));
+            if (index < 0)
+            {
+                runs.Add(theirs);
+            }
+            else
+            {
+                var mine = runs[index];
+                runs[index] = Pooled(mine, theirs.Seconds, theirs.SampleCount, theirs.LastLearned) with
+                {
+                    FastestSeconds = mine.SampleCount == 0 ? theirs.FastestSeconds : theirs.SampleCount == 0 ? mine.FastestSeconds : Math.Min(mine.FastestSeconds, theirs.FastestSeconds),
+                };
+            }
+        }
+
+        result = result.WithRuns(runs);
         var sessions = Sessions.ToDictionary(s => s.Id, StringComparer.Ordinal);
         foreach (var s in other.Sessions)
         {
@@ -372,7 +471,7 @@ public sealed record SignallingPlaces
             result = result.With(kind, result.Of(kind).Where(p => p.HandSet || !((p.From == a && p.To == b) || (p.From == b && p.To == a))).ToList());
         }
 
-        return result;
+        return result.WithRuns(result.Runs.Where(r => !((r.From == a && r.To == b) || (r.From == b && r.To == a))).ToList());
     }
 
     /// <summary>
@@ -384,7 +483,15 @@ public sealed record SignallingPlaces
         Signals = Signals.Where(p => p.HandSet).ToList(),
         TrackCircuits = TrackCircuits.Where(p => p.HandSet).ToList(),
         Berths = Berths.Where(p => p.HandSet).ToList(),
+        Runs = [],
     };
+
+    /// <summary>The places with these learned runs, in order of their locations.</summary>
+    public SignallingPlaces WithRuns(IReadOnlyList<LearnedRun> runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        return this with { Runs = runs.OrderBy(r => r.From.Code, StringComparer.Ordinal).ThenBy(r => r.To.Code, StringComparer.Ordinal).ThenBy(r => r.Run).ToList() };
+    }
 
     public SignallingPlaces With(SignallingKind kind, IReadOnlyList<SignallingPlace> places)
     {
@@ -412,6 +519,14 @@ public sealed record SignallingPlaces
             if (place.Fraction is < 0 or > 1 || place.EndFraction is < 0 or > 1 || double.IsNaN(place.Fraction))
             {
                 return $"The learned {Name(kind)} {place.Id} ({place.From}–{place.To}) has a place outside 0–1.";
+            }
+        }
+
+        foreach (var run in Runs)
+        {
+            if (run.From.IsEmpty || run.To.IsEmpty || run.From == run.To || run.Seconds.Any(t => t <= 0))
+            {
+                return $"A learned run {run.From}–{run.To} needs two different locations and times above 0.";
             }
         }
 
@@ -516,6 +631,15 @@ public sealed record SignallingPlaces
         };
         return place.HandSet ? updated : Settled(updated);
     }
+
+    /// <summary>A learned run with more times added (oldest first): the latest kept, the count and fastest updated.</summary>
+    private static LearnedRun Pooled(LearnedRun run, IReadOnlyList<int> seconds, int count, SimTime? at) => run with
+    {
+        Seconds = run.Seconds.Concat(seconds).TakeLast(MaxKeptSamples).ToList(),
+        SampleCount = run.SampleCount + count,
+        FastestSeconds = seconds.Count == 0 ? run.FastestSeconds : run.SampleCount == 0 ? seconds.Min() : Math.Min(run.FastestSeconds, seconds.Min()),
+        LastLearned = Later(run.LastLearned, at),
+    };
 
     private static SignallingPlace Settled(SignallingPlace place) => place with
     {

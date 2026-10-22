@@ -62,6 +62,17 @@ public sealed class SignalLearnerTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Usable_runs_give_run_times_for_the_axis()
+    {
+        var learned = Fed([.. Run("1", 0), .. Run("2", 10, seconds: 120), .. Run("3", 20, seconds: 200), .. Run("4", 30, approach: 0)]).Learn(Tt);
+
+        learned.RunTimes.Select(r => (r.From, r.To, r.Run, r.Seconds)).Should().BeEquivalentTo(new[] { (A, B, RunKind.Through, 100), (A, B, RunKind.Through, 120) }, "a run over 1.5 × the fastest, or checked at a signal, is left out");
+        var places = SignalLearning.Apply(new StringlineProfile { AreaId = "test" }, learned, "test", minSamples: 2).Profile.Places;
+        places.Runs.Should().ContainSingle().Which.SampleCount.Should().Be(2);
+        places.LearnedRunSeconds(A, B, 2).Should().Be(100);
+    }
+
+    [Fact]
     public void The_signal_passed_next_is_learned_with_each_place()
     {
         var places = Places(Fed([.. Run("1", 0), .. Run("2", 10), .. Run("3", 20)]).Learn(Tt));

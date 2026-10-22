@@ -433,7 +433,7 @@ public static class ProfileEdits
             }
         }
 
-        return Checked((profile with { Corridors = corridors }).ResolveHeadways());
+        return Checked((profile with { Corridors = corridors }).WithLearnedRuns().WithBlockHeadways());
     }
 
     /// <summary>The first rule the profile breaks, including the editor's own rules, or null.</summary>

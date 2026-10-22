@@ -219,4 +219,20 @@ public sealed class CorridorMeasurementTests
 
         act.Should().Throw<ArgumentException>().WithMessage("*A appears twice*");
     }
+
+    [Fact]
+    public void A_chord_between_corridor_locations_is_not_a_run_past_them()
+    {
+        // The corridor goes A–B–C–D the long way; 1D01 is booked A–D direct in 2 minutes, far faster than the
+        // 15 minutes via B and C, so the graph keeps A–D as a line of its own.
+        var tt = Of(
+            Train("2D01", Call("A", null, "10:00"), Call("B", "10:05", "10:05"), Call("C", "10:10", "10:10"), Call("D", "10:15", null)),
+            Train("1D01", Call("A", null, "11:00"), Call("D", "11:02", null)));
+
+        var m = Measure(tt, "A", "B", "C", "D");
+
+        m.Sections.Should().OnlyContain(s => s.Samples == 1 && s.MinRunDownSeconds == 300);
+        CorridorMeasurement.IsChord(LocationGraph.For(tt), Order("A", "B", "C", "D"), 0, 3).Should().BeTrue();
+        CorridorMeasurement.IsChord(LocationGraph.For(tt), Order("A", "B", "C", "D"), 0, 2).Should().BeFalse("nobody runs A–C direct");
+    }
 }

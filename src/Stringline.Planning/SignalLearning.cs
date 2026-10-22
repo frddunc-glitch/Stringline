@@ -54,8 +54,9 @@ public static class SignalLearning
     public static string SessionId(DateTimeOffset created) => "session " + Stamp(created);
 
     /// <summary>
-    /// The profile with the session's samples pooled into its places (<see cref="SignallingPlaces.Learn"/>), and its
-    /// block headways measured from them again (S39, <see cref="StringlineProfile.WithBlockHeadways(int)"/>).
+    /// The profile with the session's samples pooled into its places (<see cref="SignallingPlaces.Learn(IEnumerable{PlaceSample}, IEnumerable{RunSample}, string, Core.SimTime, IEnumerable{Network.Corridor}, out int)"/>), and its
+    /// block headways measured from them again (S39, <see cref="StringlineProfile.WithBlockHeadways(int)"/>), and its
+    /// axis spaced by the learned run times (<see cref="StringlineProfile.WithLearnedRuns"/>).
     /// </summary>
     public static LearnOutcome Apply(StringlineProfile profile, LearnedPlaces learned, string sessionId, int minSamples = SignallingPlaces.DefaultMinSamples)
     {
@@ -65,11 +66,11 @@ public static class SignalLearning
         var added = 0;
         if (learned.UpTo is { } upTo)
         {
-            places = places.Learn(learned.Samples, sessionId, upTo, profile.Corridors, out added);
+            places = places.Learn(learned.Samples, learned.RunTimes, sessionId, upTo, profile.Corridors, out added);
         }
 
         return new LearnOutcome(
-            profile.WithPlaces(places).WithBlockHeadways(minSamples),
+            profile.WithPlaces(places).WithBlockHeadways(minSamples).WithLearnedRuns(minSamples),
             added,
             PlaceCounts.Of(places.Signals, minSamples),
             PlaceCounts.Of(places.TrackCircuits, minSamples),

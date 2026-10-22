@@ -35,7 +35,9 @@ Stringline [works out](timetables-and-profiles.md#trains-that-will-not-run) whic
 
 ### A corridor looks wrong
 
-Corridors are worked out from the timetable. Change them in the [profile editor](timetables-and-profiles.md#the-profile-editor), or **Tools ▸ Regenerate corridors…** to start again.
+Corridors are worked out from the timetable when a sim is first loaded, and kept in its profile. A profile made by an older Stringline keeps the corridors it had: **Tools ▸ Regenerate corridors…** works them out again, with the newer rules (no corridor round a loop, such as Edinburgh's Fife Circle, and branches that follow the main line only as far as their own trains go). You can also change them in the [profile editor](timetables-and-profiles.md#the-profile-editor).
+
+The spacing of a corridor's locations comes from how long trains take between them: the timetable's quickest times at first, then the times trains really took once Stringline has [learned from play](signal-places.md) (at least three through runs between two locations).
 
 ## The graph
 

@@ -7,7 +7,10 @@ namespace Stringline.Network;
 [JsonConverter(typeof(JsonStringEnumConverter<AxisMode>))]
 public enum AxisMode
 {
-    /// <summary>Spaced by the minimum running time of each section, so fast trains draw as near-straight lines.</summary>
+    /// <summary>
+    /// Spaced by the running time of each section (learned from play where known, else the WTT's minimum), so fast
+    /// trains draw as near-straight lines.
+    /// </summary>
     Derived,
 
     /// <summary>Spaced by the configured <see cref="CorridorLocation.DistanceKm"/>; missing distances are interpolated by running time.</summary>
@@ -178,6 +181,18 @@ public sealed record Section(
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? BlockHeadwaySeconds { get; init; }
+
+    /// <summary>
+    /// How long a fast train takes to run through the section as learned from play (<see cref="Profiles.SignallingPlaces.LearnedRunSeconds"/>),
+    /// or null if too few runs are known. Spaces the derived axis ahead of <see cref="MinRunSeconds"/>, so trains draw
+    /// as they really run where the WTT's times are rounded or missing; measured.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LearnedRunSeconds { get; init; }
+
+    /// <summary>The run time that spaces the derived axis: <see cref="LearnedRunSeconds"/>, else <see cref="MinRunSeconds"/>.</summary>
+    [JsonIgnore]
+    public int AxisRunSeconds => LearnedRunSeconds ?? MinRunSeconds;
 
     /// <summary>How many placed signals <see cref="BlockHeadwaySeconds"/> was measured at; measured.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

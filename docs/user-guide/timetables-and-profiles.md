@@ -82,7 +82,7 @@ In the **Tools** menu:
 
 - **Open profile file** opens the profile's JSON file in the program Windows uses for JSON, for hand editing.
 - **Reload profile** reads it again after a hand edit and redraws. A damaged file is reported, and the profile in use is kept.
-- **Regenerate corridors…** works the corridors out afresh from the timetable. If you have changed any by hand, it asks first: **Replace all**, **Keep mine** (beside the new ones), or **Cancel**.
+- **Regenerate corridors…** works the corridors out afresh from the timetable, spaced by the run times learned from play where there are enough. If you have changed any by hand, it asks first: **Replace all**, **Keep mine** (beside the new ones), or **Cancel**.
 - **Export profile…** and **Import profile…** share a profile with other players of the same sim, with its learned signal places. See [Sharing a profile](signal-places.md#sharing-a-profile).
 
 ## Headways

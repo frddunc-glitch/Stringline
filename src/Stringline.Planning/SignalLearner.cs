@@ -41,9 +41,13 @@ public sealed record TrackAttribution(int Occupations, int Attributed, int Ambig
 /// <param name="Runs">Runs between two timing locations.</param>
 /// <param name="RunsUsed">Of those, runs a sample may come from (not stopped, not checked, timed both ends).</param>
 /// <param name="Steps">TD berth steps seen, and how many were put to a train in a usable run.</param>
-public sealed record LearnedPlaces(IReadOnlyList<PlaceSample> Samples, SimTime? UpTo, int Runs, int RunsUsed, TrackAttribution Tracks, int Steps, int StepsPlaced)
+/// <param name="RunTimes">The usable runs' times between timing locations, for the axis (<see cref="LearnedRun"/>).</param>
+public sealed record LearnedPlaces(IReadOnlyList<PlaceSample> Samples, SimTime? UpTo, int Runs, int RunsUsed, TrackAttribution Tracks, int Steps, int StepsPlaced, IReadOnlyList<RunSample>? RunTimes = null)
 {
     public static LearnedPlaces None { get; } = new([], null, 0, 0, TrackAttribution.None, 0, 0);
+
+    /// <summary>The usable runs' times (none if not given).</summary>
+    public IReadOnlyList<RunSample> RunTimes { get; init; } = RunTimes ?? [];
 
     public int Count(SignallingKind kind) => Samples.Count(s => s.Kind == kind);
 }
@@ -188,7 +192,8 @@ public sealed class SignalLearner
             SignalSamples();
             var attribution = TrackSamples();
             var placed = StepSamples();
-            return new LearnedPlaces(_samples, latest, runs, used, attribution, steps.Count, placed);
+            var times = _runs.Values.SelectMany(r => r).Where(r => r.Usable).Select(r => new RunSample(r.A.Location, r.B.Location, r.Kind, r.Seconds, r.B.Time)).ToList();
+            return new LearnedPlaces(_samples, latest, runs, used, attribution, steps.Count, placed, times);
         }
 
         private (int Runs, int Used) FindRuns()

@@ -49,7 +49,8 @@ public sealed record SectionStats(int? MinRunDownSeconds, int? MinRunUpSeconds, 
 
 /// <summary>Timetable statistics for a line of locations, as used to build and refresh a <see cref="Corridor"/>.</summary>
 /// <param name="Trains">Trains with at least one run over a section of the corridor (timed or not).</param>
-public sealed record CorridorMeasurement(IReadOnlyList<LocationStats> Locations, IReadOnlyList<SectionStats> Sections, int Trains)
+/// <param name="Chords">Trains booked along a chord between two of its locations (<see cref="IsChord"/>): they jump across the graph.</param>
+public sealed record CorridorMeasurement(IReadOnlyList<LocationStats> Locations, IReadOnlyList<SectionStats> Sections, int Trains, int Chords = 0)
 {
     /// <summary>
     /// Measures every train in the timetable against this order of locations. A train's points are projected onto
@@ -57,12 +58,17 @@ public sealed record CorridorMeasurement(IReadOnlyList<LocationStats> Locations,
     /// from the departure or pass at one end to the arrival or pass at the other, less the allowances booked in
     /// between. Runs of zero or less (bad data) are ignored. A train booked straight past corridor locations (nothing
     /// in between) has its run shared between the sections it covers (see <see cref="SpreadSpans"/>); a step between
-    /// non-adjacent corridor locations with other points between gives no run time.
+    /// non-adjacent corridor locations with other points between gives no run time. Nor does a <b>chord</b>: a step
+    /// straight between two corridor locations that the timetable's <see cref="LocationGraph"/> joins directly while
+    /// it also joins every section between them, so the train took another route (Edinburgh's Fife Circle trains
+    /// booked Inverkeithing–Inverkeithing North Junction, on a corridor round the circle through Kirkcaldy).
     /// </summary>
-    public static CorridorMeasurement Measure(WorkingTimetable timetable, IReadOnlyList<Tiploc> order)
+    /// <param name="graph">The timetable's location graph; by default <see cref="LocationGraph.For"/>.</param>
+    public static CorridorMeasurement Measure(WorkingTimetable timetable, IReadOnlyList<Tiploc> order, LocationGraph? graph = null)
     {
         ArgumentNullException.ThrowIfNull(timetable);
         ArgumentNullException.ThrowIfNull(order);
+        graph ??= LocationGraph.For(timetable);
         var index = new Dictionary<Tiploc, int>(order.Count);
         for (var i = 0; i < order.Count; i++)
         {
@@ -76,6 +82,7 @@ public sealed record CorridorMeasurement(IReadOnlyList<LocationStats> Locations,
         var sections = Enumerable.Range(0, Math.Max(0, order.Count - 1)).Select(_ => new SectionAccumulator()).ToArray();
         var spans = new List<Run>();
         var trains = 0;
+        var chords = 0;
 
         foreach (var train in timetable.Trains)
         {
@@ -92,12 +99,20 @@ public sealed record CorridorMeasurement(IReadOnlyList<LocationStats> Locations,
             }
 
             var runs = false;
+            var chord = false;
             for (var v = 1; v < visits.Count; v++)
             {
                 var (from, to) = (visits[v - 1], visits[v]);
                 var span = Math.Abs(to.Corridor - from.Corridor);
 
-                // A train booked straight past corridor locations (no points in between) still runs over those sections.
+                // A train booked straight past corridor locations (no points in between) still runs over those
+                // sections, unless it took a chord.
+                if (span != 1 && to.First == from.Last + 1 && IsChord(graph, order, from.Corridor, to.Corridor))
+                {
+                    chord = true;
+                    continue;
+                }
+
                 if (span != 1 && to.First != from.Last + 1)
                 {
                     continue;
@@ -134,13 +149,40 @@ public sealed record CorridorMeasurement(IReadOnlyList<LocationStats> Locations,
             }
 
             trains += runs ? 1 : 0;
+            chords += chord ? 1 : 0;
         }
 
         SpreadSpans(sections, spans);
         return new CorridorMeasurement(
             locations.Select(l => l.ToStats()).ToList(),
             sections.Select(s => s.ToStats()).ToList(),
-            trains);
+            trains,
+            chords);
+    }
+
+    /// <summary>
+    /// True if the graph joins corridor locations <paramref name="i"/> and <paramref name="j"/> directly and also joins
+    /// each section between them: the direct step is another route, not a run past the locations between.
+    /// </summary>
+    public static bool IsChord(LocationGraph graph, IReadOnlyList<Tiploc> order, int i, int j)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(order);
+        var (lo, hi) = (Math.Min(i, j), Math.Max(i, j));
+        if (hi - lo < 2 || graph.Weight(order[lo], order[hi]) == 0)
+        {
+            return false;
+        }
+
+        for (var k = lo; k < hi; k++)
+        {
+            if (graph.Weight(order[k], order[k + 1]) == 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

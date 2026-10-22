@@ -174,7 +174,7 @@ public sealed record StringlineProfile
 
     /// <summary>
     /// The profile brought up to date with a (possibly re-imported) timetable: every corridor's derived values are
-    /// recomputed, headways not set by hand are worked out again, categories new to the timetable get default
+    /// recomputed (with the axis spaced by learned run times, <see cref="WithLearnedRuns"/>), headways not set by hand are worked out again, categories new to the timetable get default
     /// styles, and its title is remembered (<see cref="TimetableTitles"/>). User settings are kept.
     /// </summary>
     public StringlineProfile Refresh(WorkingTimetable timetable)
@@ -185,7 +185,7 @@ public sealed record StringlineProfile
         {
             Corridors = Corridors.Select(c => CorridorBuilder.Refresh(c, timetable, FallbackHeadwaySeconds)).ToList(),
             Categories = [.. Categories, .. CategoryStyle.CreateDefaults(timetable).Where(c => !known.Contains(c.CategoryId))],
-        }).WithTimetableTitle(timetable.Header.Name);
+        }).WithLearnedRuns().WithTimetableTitle(timetable.Header.Name);
     }
 
     /// <summary>The profile with this global default headway, and every headway not set by hand worked out again.</summary>
@@ -197,6 +197,22 @@ public sealed record StringlineProfile
     /// </summary>
     public StringlineProfile WithBlockHeadways(int minSamples = SignallingPlaces.DefaultMinSamples) =>
         WithBlockHeadways(BlockHeadways.Measure(Corridors, UsablePlaces.Of(Places, minSamples)));
+
+    /// <summary>
+    /// The profile with each section's <see cref="Section.LearnedRunSeconds"/> taken from its learned runs that have
+    /// <paramref name="minSamples"/> samples, and every corridor's axis worked out again.
+    /// </summary>
+    public StringlineProfile WithLearnedRuns(int minSamples = SignallingPlaces.DefaultMinSamples)
+    {
+        var places = Places;
+        return this with
+        {
+            Corridors = Corridors.Select(c => CorridorAxis.Apply(c with
+            {
+                Sections = c.Sections.Select(s => s with { LearnedRunSeconds = places.LearnedRunSeconds(s.From, s.To, minSamples) }).ToList(),
+            })).ToList(),
+        };
+    }
 
     /// <summary>The profile with these measured block headways, and its headways worked out again.</summary>
     public StringlineProfile WithBlockHeadways(BlockHeadways blocks)

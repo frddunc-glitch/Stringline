@@ -2381,6 +2381,37 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Questions for Fred
 - 49. **Request stops.** Typing `12r34` makes the point a request stop at 50 % if it had no chance set. Is 50 % SimSig's own default, or should it be another figure?
 
+## 2026-10-22 — Corridors on complex sims, and learned run times (Fred's Edinburgh review)
+
+Fred found the auto corridors on Edinburgh overlapping, confusing and not useful, and asked whether learning could improve the graphs. Out of the plan's order (between S43 and S44).
+
+### Done
+- **What was wrong on Edinburgh** (August 2006 WTT): the Fife corridor went round the circle (Edinburgh–Kirkcaldy–Thornton–Glenrothes–Dunfermline–Inverkeithing North Junction), so the 96 trains booked Inverkeithing–Inverkeithing North Junction jumped across it. The measurement also shared those trains' runs over the 14 locations between, which gave run times of 5–15 s and squeezed half the corridor into the last 15 % of the axis. 125 of 155 forecast conflicts were drawn on it. The East Coast corridor ran on through Waverley to Polmont over the whole main corridor, and a short parallel way (Dunbar–Prestonpans via Stenton) and a Millerhill spur made corridors of their own.
+- **Measurement** (`CorridorMeasurement`): a **chord**, a step between two corridor locations the location graph joins directly while also joining every section between, is not shared over the locations between. The result counts such trains (`Chords`), and `stringline corridors` reports them. `LocationGraph.For` keeps one graph per timetable for this; `LocationGraph` also exposes each train's expanded route (`Routes`) and `Line` (weight less out-and-back).
+- **Generator** (`CorridorGenerator`, `04-…md` §4): ends grow in turn; no step closes a loop (a line to a location more than 2 places back); an end that stopped so after following an earlier corridor goes back to the junction; following an earlier corridor also needs 25 % of the corridor's **own** trains to carry on; a candidate with both ends on earlier corridors and fewer than 3 locations of its own is dropped. New options `MaxChordSkip`, `ChordShare`, `MinNewOnParallel`.
+- **Edinburgh now:** main (Waverley–Polmont), Berwick–Newbridge, Waverley–Cupar via Kirkcaldy, Waverley–Shotts, Waverley–Thornton South Jn via Dunfermline and Glenrothes (axis Inverkeithing 0.35, Dunfermline 0.44), Shotts–Millerhill. Bathgate is 7th, past the default limit of 6. Across the corpus (one WTT per sim, 112 sims) 77 sims change, total corridor locations fall from 5 557 to 5 122 for 499 corridors (488 before), and 13 corridors keep any chord trains (144 trains in all; the most is Carlisle's depot corridor, 55). The slowest sim takes 1.1 s.
+- **Learning and the graph:** the learner now gives each usable run's time between timing locations (`LearnedPlaces.RunTimes`). The profile pools them as `signalling.runs` (`LearnedRun`: the latest 64 times, count, fastest), with places' rules for sessions, pooling and resets. A section's `LearnedRunSeconds` (the lower quartile of through runs either way, once there are *n*) spaces the derived axis ahead of the WTT's minimum (`Section.AxisRunSeconds`). It is set when learning (`SignalLearning.Apply`), refreshing a profile and regenerating corridors, and is not used by the forecast. Waterloo 4 h: 52 learned runs; Queenstown Road–Clapham Junction 78 s against the WTT's 135 s, Earlsfield–Wimbledon 50 s against 98 s. `corridors --places` shows them in a Learned column.
+- **Docs:** `04-…md` §4 (3, 5, 7) and §5, `CLAUDE.md`, the guide's troubleshooting ("A corridor looks wrong") and profile pages.
+- **Tests:** Network +5 (`CorridorGeneratorTests`: no loop on a small Fife Circle, a branch stopping where its own trains stop, a short parallel way; two older tests set `MinNewOnParallel = 0`; `CorridorMeasurementTests`: a chord; `SignallingPlacesTests`: run times pooled, reset and pooled across profiles, and spacing the axis, with JSON); Planning +1 (`SignalLearnerTests`: usable runs give run times).
+- Totals: 2 051 (Network 205, Planning 340, others unchanged). Green on Windows (Debug); the corpus's build-time test failed once in a parallel run and passed alone and in the final run (known). The solution and the portable solution build with `-warnaserror`. Linux not run.
+
+### Decisions
+- **Most of Edinburgh's trouble was not something learning could fix:** it came from the generator and the measurement, and only the WTT is needed to put it right. Learning helps where the WTT is weakest, the run times that space the axis, so that is where it is used. Learned links between timing locations are not used to build corridors: a train reporting A then C may have passed B unreported (S36), so a learned link is not proof two locations are neighbours.
+- **The lower quartile, not the fastest,** of learned runs: one run timed short by a missed report would otherwise set the spacing.
+- **Saved profiles are not regenerated automatically:** Fred's Edinburgh profile keeps its corridors until Tools ▸ Regenerate corridors…. The measurement fix applies at once on load (the Fife corridor's axis is re-measured), but the loop stays until regenerated.
+
+### Next
+- 👤 **Regenerate Edinburgh's corridors** (Tools ▸ Regenerate corridors…) and say whether they now look right; then play it for an hour or two with learning on, so its axis is spaced by real running.
+- S44 (the draft on the graph).
+
+### Known issues
+- `LocationGraph` can still take a short loop (6 locations or fewer, booked no slower than 2 × the direct time + 5 min) for a skip chain and route a direct edge round it. Real timings usually prevent it; it showed only in a test with one minute between every location.
+- Chord trains remain on 13 corpus corridors (triangles near depots and junctions skipping 3 or more locations).
+- Locations very close together still lose their labels (Rosyth beside Inverkeithing North Junction); learned spacing does not change that.
+
+### Questions for Fred
+- 50. **How far should a branch follow the main line?** Edinburgh's Berwick corridor still runs through Waverley to Newbridge Junction (enough of its trains do), and four corridors share Waverley–Haymarket West Junction. Is that how you want a hub sim drawn, or should a branch stop at the first big station it reaches?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

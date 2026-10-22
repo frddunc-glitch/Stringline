@@ -5,7 +5,7 @@ public static class CorridorAxis
 {
     /// <summary>
     /// The axis position of each location. <see cref="AxisMode.Derived"/> spaces them by the cumulative
-    /// <see cref="Section.MinRunSeconds"/>. <see cref="AxisMode.Distance"/> uses the configured
+    /// <see cref="Section.AxisRunSeconds"/> (learned from play where known, else the WTT's minimum). <see cref="AxisMode.Distance"/> uses the configured
     /// <see cref="CorridorLocation.DistanceKm"/>: between two known distances, positions are interpolated by run time,
     /// and beyond the outer ones they are extrapolated at the average km per second of the known stretch. With fewer
     /// than two distinct known distances, the derived axis is used.
@@ -13,7 +13,7 @@ public static class CorridorAxis
     public static IReadOnlyList<double> Positions(Corridor corridor)
     {
         ArgumentNullException.ThrowIfNull(corridor);
-        return Positions(corridor.Locations.Select(l => l.DistanceKm).ToList(), corridor.Sections.Select(s => s.MinRunSeconds).ToList(), corridor.Axis);
+        return Positions(corridor.Locations.Select(l => l.DistanceKm).ToList(), corridor.Sections.Select(s => s.AxisRunSeconds).ToList(), corridor.Axis);
     }
 
     /// <summary>The corridor with every <see cref="CorridorLocation.AxisPosition"/> recomputed.</summary>

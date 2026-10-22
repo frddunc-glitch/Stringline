@@ -28,6 +28,25 @@ public sealed record CorridorGeneratorOptions
 
     /// <summary>Most locations a skip edge may stand for (see <see cref="LocationGraph"/>).</summary>
     public int MaxSkipped { get; init; } = LocationGraph.MaxSkipped;
+
+    /// <summary>
+    /// A corridor is not extended to a location joined directly to one it already has more than this many locations
+    /// back: that would close a loop, and trains taking the short way would jump across the graph.
+    /// </summary>
+    public int MaxChordSkip { get; init; } = 2;
+
+    /// <summary>
+    /// A line closes a loop only if at least this share of the trains on the step being taken run over it (and at
+    /// least <see cref="MinTrains"/>): a rare move does not cut a corridor short.
+    /// </summary>
+    public double ChordShare { get; init; } = 0.1;
+
+    /// <summary>
+    /// A candidate after the first whose two ends are both on earlier corridors (another way between places they
+    /// already show, such as a loop line booked through other timing points) needs at least this many locations no
+    /// earlier corridor has.
+    /// </summary>
+    public int MinNewOnParallel { get; init; } = 3;
 }
 
 /// <param name="Traffic">Trains over each of the corridor's sections, summed (a train over 5 sections counts 5).</param>
@@ -36,11 +55,14 @@ public sealed record CorridorCandidate(Corridor Corridor, CorridorMeasurement Me
 
 /// <summary>
 /// Proposes corridors from a WTT (<c>04-…md</c> §4). Greedy: the busiest edge of the <see cref="LocationGraph"/> not
-/// yet on a corridor seeds a new one, which grows at each end towards the neighbour most trains run through to, for
-/// as long as enough of them do. A corridor may run along part of an earlier one: a branch follows its trains onto
-/// the main line, so each graph shows its trains end to end (Fred's choice). Each corridor is then oriented with the
-/// Up end first, from SimSig's Down flags; a timetable without them puts the end where more trains start or finish
-/// first. The first candidate is <c>main</c>.
+/// yet on a corridor seeds a new one, which grows at its two ends in turn towards the neighbour most trains run
+/// through to, for as long as enough of them do. A corridor may run along part of an earlier one: a branch follows its
+/// trains onto the main line, so each graph shows its trains end to end (Fred's choice), as long as enough of the
+/// branch's own trains carry on (not of all the main line's). A corridor never closes a loop (Edinburgh's Fife
+/// Circle): it stops short of a location joined directly to one it already has further back, and an end that stopped
+/// so drops the stretch of an earlier corridor it had followed, ending at the junction. Each corridor is then oriented
+/// with the Up end first, from SimSig's Down flags; a timetable without them puts the end where more trains start or
+/// finish first. The first candidate is <c>main</c>.
 /// </summary>
 public static class CorridorGenerator
 {
@@ -61,11 +83,13 @@ public static class CorridorGenerator
         var ids = new HashSet<string>(StringComparer.Ordinal);
         var flags = timetable.Trains.Any(t => t.Points.Any(p => p.DownDirection is not null));
 
+        var routesOver = RoutesOver(graph);
+
         while (candidates.Count < options.MaxCorridors)
         {
             // Out-and-back moves (run-rounds, shunts into sidings) do not make a line worth a graph.
             var seed = graph.Edges
-                .Select(e => new KeyValuePair<LocationPair, int>(e.Key, e.Value - graph.Reversing(e.Key)))
+                .Select(e => new KeyValuePair<LocationPair, int>(e.Key, graph.Line(e.Key)))
                 .Where(e => !covered.Contains(e.Key) && e.Value >= options.MinTrains)
                 .OrderByDescending(e => e.Value)
                 .ThenBy(e => e.Key.A.Code, StringComparer.Ordinal)
@@ -77,25 +101,22 @@ public static class CorridorGenerator
                 break;
             }
 
-            var path = new List<Tiploc> { pair.A, pair.B };
-            Extend(graph, path, options.ThroughFraction);
-            path.Reverse();
-            Extend(graph, path, options.ThroughFraction);
+            var path = new Growth(graph, routesOver, covered, options, pair).Run();
 
             var edges = path.Zip(path.Skip(1), (a, b) => new LocationPair(a, b)).ToList();
             var newTraffic = edges.Where(e => !covered.Contains(e)).Sum(graph.Weight);
             covered.UnionWith(edges);
             var traffic = edges.Sum(graph.Weight);
-            if (candidates.Count > 0 && (path.Count < options.MinLocations || candidates.Any(c => path.All(c.Corridor.Contains)) || newTraffic < options.MinNewShare * traffic))
+            if (candidates.Count > 0 && (path.Count < options.MinLocations || candidates.Any(c => path.All(c.Corridor.Contains)) || newTraffic < options.MinNewShare * traffic || IsParallel(path, candidates, options)))
             {
-                continue; // Too short, a chord between locations an earlier corridor has, or a spur adding next to nothing.
+                continue; // Too short, a chord between locations an earlier corridor has, a spur adding next to nothing, or a short parallel way.
             }
 
-            var measurement = CorridorMeasurement.Measure(timetable, path);
+            var measurement = CorridorMeasurement.Measure(timetable, path, graph);
             if (ShouldReverse(timetable, path, measurement, flags))
             {
                 path.Reverse();
-                measurement = CorridorMeasurement.Measure(timetable, path);
+                measurement = CorridorMeasurement.Measure(timetable, path, graph);
             }
 
             var id = candidates.Count == 0 ? "main" : UniqueId($"{path[0].Code}-{path[^1].Code}".ToLowerInvariant(), ids);
@@ -107,27 +128,189 @@ public static class CorridorGenerator
         return candidates;
     }
 
-    /// <summary>Grows the path at its last location while enough trains run through to an unvisited neighbour.</summary>
-    private static void Extend(LocationGraph graph, List<Tiploc> path, double throughFraction)
+    /// <summary>Both ends on earlier corridors, and fewer than <see cref="CorridorGeneratorOptions.MinNewOnParallel"/> locations of its own.</summary>
+    private static bool IsParallel(List<Tiploc> path, List<CorridorCandidate> earlier, CorridorGeneratorOptions options)
     {
-        var visited = new HashSet<Tiploc>(path);
-        while (true)
+        bool Shown(Tiploc t) => earlier.Any(c => c.Corridor.Contains(t));
+        return Shown(path[0]) && Shown(path[^1]) && path.Count(t => !Shown(t)) < options.MinNewOnParallel;
+    }
+
+    /// <summary>For each edge, the routes (<see cref="LocationGraph.Routes"/>, by index) that run over it.</summary>
+    private static Dictionary<LocationPair, List<int>> RoutesOver(LocationGraph graph)
+    {
+        var over = new Dictionary<LocationPair, List<int>>();
+        for (var r = 0; r < graph.Routes.Count; r++)
         {
-            var (previous, at) = (path[^2], path[^1]);
-            var arriving = graph.Weight(previous, at);
+            var route = graph.Routes[r];
+            for (var i = 1; i < route.Length; i++)
+            {
+                var pair = new LocationPair(route[i - 1], route[i]);
+                var list = over.TryGetValue(pair, out var l) ? l : over[pair] = [];
+                if (list.Count == 0 || list[^1] != r)
+                {
+                    list.Add(r);
+                }
+            }
+        }
+
+        return over;
+    }
+
+    /// <summary>One corridor growing from its seed edge, an end at a time.</summary>
+    private sealed class Growth(LocationGraph graph, Dictionary<LocationPair, List<int>> routesOver, HashSet<LocationPair> covered, CorridorGeneratorOptions options, LocationPair seed)
+    {
+        private readonly List<Tiploc> _path = [seed.A, seed.B];
+        private readonly HashSet<Tiploc> _visited = [seed.A, seed.B];
+
+        /// <summary>Routes over the corridor's edges no earlier corridor has: its own trains.</summary>
+        private readonly HashSet<int> _own = [];
+
+        /// <summary>For each end, its own trains where it joined an earlier corridor (null until it has).</summary>
+        private readonly int?[] _joined = new int?[2];
+
+        private readonly bool[] _looped = new bool[2];
+
+        public List<Tiploc> Run()
+        {
+            Own(seed);
+            var open = new[] { true, true };
+            while (open[0] || open[1])
+            {
+                for (var end = 0; end < 2; end++)
+                {
+                    open[end] = open[end] && Step(end);
+                }
+            }
+
+            for (var end = 0; end < 2; end++)
+            {
+                // An end that ran into a loop along an earlier corridor goes back to the junction it joined it at.
+                while (_looped[end] && _path.Count > 2 && covered.Contains(new LocationPair(At(end, 0), At(end, 1))))
+                {
+                    _path.RemoveAt(end == 0 ? _path.Count - 1 : 0);
+                }
+            }
+
+            return _path;
+        }
+
+        /// <summary>The location <paramref name="k"/> places in from an end (0: the end itself). End 0 is the last location, end 1 the first.</summary>
+        private Tiploc At(int end, int k) => end == 0 ? _path[_path.Count - 1 - k] : _path[k];
+
+        /// <summary>Adds the next location at this end, or returns false if the end stops here.</summary>
+        private bool Step(int end)
+        {
+            var (previous, at) = (At(end, 1), At(end, 0));
             var best = graph.Neighbours(at)
-                .Where(n => !visited.Contains(n))
+                .Where(n => !_visited.Contains(n))
                 .Select(n => (Next: n, Through: graph.Through(previous, at, n), Weight: graph.Weight(at, n)))
                 .OrderByDescending(x => x.Through)
                 .ThenByDescending(x => x.Weight)
                 .FirstOrDefault();
-            if (best.Through < Math.Max(1, throughFraction * arriving))
+            if (best.Next.IsEmpty)
             {
-                return;
+                return false;
             }
 
-            path.Add(best.Next);
-            visited.Add(best.Next);
+            if (best.Through < Math.Max(1, options.ThroughFraction * graph.Weight(previous, at)))
+            {
+                return false;
+            }
+
+            var edge = new LocationPair(at, best.Next);
+            if (covered.Contains(edge) && _own.Count > 0)
+            {
+                // Following its trains along an earlier corridor: also only as far as enough of its own trains go.
+                var joined = _joined[end] ??= Count(previous, at, null);
+                if (Count(previous, at, best.Next) < Math.Max(1, options.ThroughFraction * joined))
+                {
+                    return false;
+                }
+            }
+
+            if (ClosesLoop(end, best.Next, best.Weight))
+            {
+                _looped[end] = true;
+                return false;
+            }
+
+            if (end == 0)
+            {
+                _path.Add(best.Next);
+            }
+            else
+            {
+                _path.Insert(0, best.Next);
+            }
+
+            _visited.Add(best.Next);
+            if (!covered.Contains(edge))
+            {
+                Own(edge);
+            }
+
+            return true;
+        }
+
+        /// <summary>True if <paramref name="next"/> is joined by a line to a location more than <see cref="CorridorGeneratorOptions.MaxChordSkip"/> places back.</summary>
+        private bool ClosesLoop(int end, Tiploc next, int weight)
+        {
+            var least = Math.Max(options.MinTrains, options.ChordShare * weight);
+            for (var k = options.MaxChordSkip + 1; k < _path.Count; k++)
+            {
+                if (graph.Line(new LocationPair(next, At(end, k))) >= least)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void Own(LocationPair edge)
+        {
+            if (routesOver.TryGetValue(edge, out var routes))
+            {
+                _own.UnionWith(routes);
+            }
+        }
+
+        /// <summary>Own trains that run <paramref name="a"/>, <paramref name="b"/> (then <paramref name="c"/>, if given) in a row, either way.</summary>
+        private int Count(Tiploc a, Tiploc b, Tiploc? c)
+        {
+            var count = 0;
+            foreach (var r in routesOver.GetValueOrDefault(new LocationPair(a, b)) ?? [])
+            {
+                if (_own.Contains(r) && Runs(graph.Routes[r], a, b, c))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static bool Runs(Tiploc[] route, Tiploc a, Tiploc b, Tiploc? c)
+        {
+            for (var i = 1; i < route.Length; i++)
+            {
+                if (route[i] != b)
+                {
+                    continue;
+                }
+
+                if (route[i - 1] == a && (c is not { } after || (i + 1 < route.Length && route[i + 1] == after)))
+                {
+                    return true;
+                }
+
+                if (i + 1 < route.Length && route[i + 1] == a && (c is not { } before || route[i - 1] == before))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 

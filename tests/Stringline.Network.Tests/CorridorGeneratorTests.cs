@@ -137,7 +137,7 @@ public sealed class CorridorGeneratorTests
         // Two routes from A to D: via B (busier) and via C.
         var trains = BothWays("1", 5, "A", "B", "D").Concat(BothWays("2", 3, "A", "C", "D")).ToList();
 
-        var names = CorridorGenerator.Generate(Of(trains, []), new CorridorGeneratorOptions { MinNewShare = 0 }).Select(c => (c.Corridor.Id, c.Corridor.Name)).ToList();
+        var names = CorridorGenerator.Generate(Of(trains, []), new CorridorGeneratorOptions { MinNewShare = 0, MinNewOnParallel = 0 }).Select(c => (c.Corridor.Id, c.Corridor.Name)).ToList();
 
         names.Should().Equal(("main", "A – D"), ("a-d", "A – D via C"));
     }
@@ -153,8 +153,53 @@ public sealed class CorridorGeneratorTests
     {
         var trains = BothWays("1", 5, "A", "B", "C", "D").Concat(BothWays("2", 3, "A", "X", "Y", "D")).Concat(BothWays("3", 2, "A", "P", "Q", "D")).ToList();
 
-        var ids = CorridorGenerator.Generate(Of(trains, []), new CorridorGeneratorOptions { MinNewShare = 0 }).Select(c => c.Corridor.Id).ToList();
+        var ids = CorridorGenerator.Generate(Of(trains, []), new CorridorGeneratorOptions { MinNewShare = 0, MinNewOnParallel = 0 }).Select(c => c.Corridor.Id).ToList();
 
         ids.Should().Equal("main", "a-d", "a-d-2");
+    }
+
+    private static List<string> Either(Corridor c, params string[] codes) =>
+        Codes(c)[0] == codes[0] ? Codes(c) : [.. Enumerable.Reverse(Codes(c))];
+
+    [Fact]
+    public void A_corridor_never_closes_a_loop()
+    {
+        // Edinburgh's Fife Circle in small: E–H–I, then round the circle I–K1–K2–T (and on to C, the main line), and
+        // back I–N–D1–…–G–T, longer than a skip chain. Circle trains go out one way and back the other.
+        var trains = BothWays("1", 8, "E", "H", "I", "K1", "K2", "T", "C")
+            .Concat(BothWays("2", 4, "E", "H", "I", "N", "D1", "D2", "D3", "D4", "G", "T", "K2", "K1", "I", "H", "E"))
+            .ToList();
+
+        var candidates = CorridorGenerator.Generate(Of(trains, []));
+
+        candidates.Should().HaveCount(2);
+        Either(candidates[0].Corridor, "E").Should().Equal("E", "H", "I", "K1", "K2", "T", "C");
+        Either(candidates[1].Corridor, "E").Should().Equal("E", "H", "I", "N", "D1", "D2", "D3", "D4", "G", "T");
+    }
+
+    [Fact]
+    public void A_branch_follows_the_main_line_only_as_far_as_its_own_trains_go()
+    {
+        // Main line T–J–M–N–P (10 each way). The branch Y–X–J has 4 trains each way to N and one to P: a quarter of
+        // all trains at N carry on to P, but only a fifth of the branch's.
+        var trains = BothWays("1", 10, "T", "J", "M", "N", "P")
+            .Concat(BothWays("2", 4, "Y", "X", "J", "M", "N"))
+            .Concat(BothWays("3", 1, "Y", "X", "J", "M", "N", "P"))
+            .ToList();
+
+        var candidates = CorridorGenerator.Generate(Of(trains, []));
+
+        candidates.Should().HaveCount(2);
+        Either(candidates[1].Corridor, "Y").Should().Equal("Y", "X", "J", "M", "N");
+    }
+
+    [Fact]
+    public void A_short_parallel_way_between_corridor_locations_is_not_a_corridor()
+    {
+        // Two ways from A to E: via B, C, D (busier) and via X, Y. The second shows two locations of its own.
+        var trains = BothWays("1", 6, "A", "B", "C", "D", "E").Concat(BothWays("2", 3, "A", "X", "Y", "E")).ToList();
+
+        CorridorGenerator.Generate(Of(trains, [])).Should().ContainSingle();
+        CorridorGenerator.Generate(Of(trains, []), new CorridorGeneratorOptions { MinNewOnParallel = 2 }).Should().HaveCount(2);
     }
 }

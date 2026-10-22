@@ -269,4 +269,46 @@ public sealed class SignallingPlacesTests
 
         act.Should().Throw<ProfileFormatException>().WithMessage($"*{message}*");
     }
+
+    private static RunSample Timed(int seconds, string at, Tiploc? from = null, Tiploc? to = null, RunKind run = RunKind.Through) =>
+        new(from ?? A, to ?? B, run, seconds, SimTime.Parse(at));
+
+    [Fact]
+    public void Learning_pools_run_times_and_gives_a_fast_train_time()
+    {
+        var places = SignallingPlaces.Empty.Learn([], [Timed(100, "06:01"), Timed(90, "06:11"), Timed(130, "06:21"), Timed(95, "06:25"), Timed(70, "06:28", run: RunKind.Starting)], "one", SimTime.Parse("06:30"), [Main], out _);
+
+        var through = places.Runs.Should().ContainSingle(r => r.Run == RunKind.Through).Subject;
+        through.SampleCount.Should().Be(4);
+        through.FastestSeconds.Should().Be(90);
+        through.FastSeconds.Should().Be(90, "the lower quartile of 90, 95, 100, 130");
+        places.LearnedRunSeconds(A, B, 3).Should().Be(90);
+        places.LearnedRunSeconds(B, A, 3).Should().Be(90, "either direction");
+        places.LearnedRunSeconds(A, B, 5).Should().BeNull("too few runs");
+        places.LearnedRunSeconds(B, C, 1).Should().BeNull();
+        places.IsEmpty.Should().BeFalse();
+
+        var again = places.Learn([], [Timed(100, "06:01"), Timed(80, "06:40")], "one", SimTime.Parse("06:45"), [Main], out _);
+        again.Runs.Single(r => r.Run == RunKind.Through).SampleCount.Should().Be(5, "only the run after 06:30 is new");
+
+        var pooled = places.Pool(again);
+        pooled.Runs.Single(r => r.Run == RunKind.Through).Should().Match<LearnedRun>(r => r.SampleCount == 9 && r.FastestSeconds == 80);
+        places.Reset(B, A).Runs.Should().BeEmpty();
+        places.ResetAll().Runs.Should().BeEmpty();
+        places.FindProblem().Should().BeNull();
+    }
+
+    [Fact]
+    public void Learned_run_times_space_the_derived_axis()
+    {
+        var places = SignallingPlaces.Empty.Learn([], [Timed(60, "06:01"), Timed(60, "06:02"), Timed(60, "06:03"), Timed(180, "06:04", B, C), Timed(180, "06:05", C, B), Timed(180, "06:06", B, C)], "one", SimTime.Parse("06:30"), [Main], out _);
+        var profile = new StringlineProfile { AreaId = "test", Corridors = [Main] }.WithPlaces(places);
+
+        var spaced = profile.WithLearnedRuns().Corridors[0];
+
+        spaced.Sections.Select(s => s.LearnedRunSeconds).Should().Equal(60, 180);
+        spaced.Locations.Select(l => l.AxisPosition).Should().Equal(0, 0.25, 1);
+        profile.WithLearnedRuns(4).Corridors[0].Locations.Select(l => l.AxisPosition).Should().Equal(0, 0.5, 1);
+        ProfileJson.Deserialize(ProfileJson.Serialize(profile.WithLearnedRuns())).Should().BeEquivalentTo(profile.WithLearnedRuns());
+    }
 }
