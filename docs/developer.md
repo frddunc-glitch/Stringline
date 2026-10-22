@@ -79,6 +79,7 @@ A few rules run through the code:
 | `record` | Records a live gateway session to an `.sslog` (`--td` adds the train describer and signalling; `--user` for payware sims, with the password from `STRINGLINE_PASSWORD` or a prompt) |
 | `replay-server` | Plays a recording on port 51515 as a stand-in for SimSig (`--speed`, `--start`; Space pauses, `+`/`-` change speed) |
 | `wtt-dump` | Prints a timetable, one train (`--train`) or its import warnings; the rules the forecast applies and those it leaves out (S32) |
+| `wtt-save` | Opens a timetable losslessly and saves it as a new version (`--bump`), optionally shifting trains' times (`--shift-train 1A23 +5`); a round-trip and smoke tool for the S40 writer, not the editor |
 | `match` | Matches a recording's trains to a timetable and lists the ones it could not |
 | `corridors` | Proposes corridors, sections, run times and headways from a timetable, and can write a starter profile; `--places` takes a learned profile's signal blocks for each section's block headway (S39) |
 | `render-png` | Draws a corridor's graph to a PNG or PDF with the app's renderer, including multi-page plots (`--plot`) and learned signals on the axis (`--signals`) |

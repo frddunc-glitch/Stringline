@@ -2211,6 +2211,43 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - 42. **Default hold time.** Hold at signal… offers 2 min after the train is forecast to get there, rounded to the half minute (as Hold here… does). Is that a useful default?
 - 43. **Standing trains.** Should a train already standing at a red signal be offered a hold there at all? Today it is (2F84 at S28 on the 4× recording), as a reminder to keep it there.
 
+## 2026-10-22 — S40: Lossless timetable document and writer (#20)
+
+### Done
+- **Fred's choices** (asked during the session): a timetable with no version is saved as **1.0.1** (taken as 1.0.0 before its first bump); a renumber changes **only the activities and rules that resolve to that train**, so other trains with the same headcode keep their links.
+- **Corpus survey** (285 `.wtt`, `04-…md` §1 "How SimSig writes it"): every file is a zip of the same two entries, indented two spaces with CRLF and a closing CRLF, no declaration or BOM; text escapes the five entities and writes non-ASCII and line feeds as `&#x00BD;`-style references; the header is the root's `[TH]` children; one child order per element that no file breaks; trains, trips, activities and rules leave out no and 0; 206 files write `-1`/`0` and 78 `True`/`False`.
+- **`Stringline.Timetable.Editing`** (`08-…md` §3, §3.4):
+  - `WttDocument`: the `XDocument` plus the zip's other entries; the file's yes/no style; `Revision`; typed views `HeaderNode`, `CategoryNode`, `TrainNode`, `TripNode`, `ActivityNode`, `RuleNode`, `SeedGroupNode`, and `ListNode`s for `Decisions`, `TTClassOfServiceRules` and `CautionSpeedSets`; `Clone`; `Import()`/`ToWorkingTimetable()` through `WttReader`'s own import of the in-memory tree.
+  - `WttSchema`: SimSig's element orders, header fields, yes/no fields and default rules, from the corpus. A new child goes after the last of its kind or earlier in the order.
+  - `TimetableEdit`: set a field, set attributes, insert (at an index or in SimSig's order), remove, move, composite (rolled back if one part fails), and `Change(node, n => …)`, which diffs a copy changed by the typed setters into field edits. `Apply` returns the undo; undo restores the same elements, including self-closing ones. `Renumber` uses `WttDocumentImport`, which maps imported trains, points, activities and rules back to their elements (the reader now records `ImportSources`).
+  - `WttWriter`: SimSig's layout and escaping, a regenerated `TimetableHeader.xml`, atomic save (temporary file then move), version bumps (`WttVersion`, `VersionBump`; 0–65 535), backups to `%LOCALAPPDATA%\Stringline\timetable-backups\{area}\{name} {version} {time}.wtt`, the newest 20 kept.
+- **`SimTimeNotation`** (Core): parses and formats `12:30`, `930`, `1230`, `12/34`, `12d34`, `12t34`, `12w34`, `12r34`, `1234H`, `13:45H`/`½`, `12:30:15`, `24:01`, `+3`/`+2H`; a clock time more than 12 h before the previous one is the next day's.
+- **CLI:** `stringline wtt-save in.wtt out.wtt [--bump build|minor|major|none] [--shift-train 1A23 +5] [--backup-folder dir]`.
+- **Round trip:** open → save → open on all 285 corpus files: XML trees equal element by element, headers equal to SimSig's (bar Newport's three self-inconsistent ones), `WttReader` results equal. **271 come back byte for byte**, Waterloo and Llangollen included; the other 14 (among them Carlisle 79-80, Leamington 2009, Penzance and Staffordshire 2019) hold raw line breaks from hand edits, written back as `&#x000A;`.
+- **Docs:** `04-…md` §1, `08-…md` §3.4, the plan's "Built in S40", `02-…md`, `CLAUDE.md`, `docs/developer.md`. No UI change, so no guide change.
+- **Tests:** Timetable +46 (`WttRoundTripTests` 15: fixtures byte for byte, the corpus, SimSig's layout, header, escaping, empty forms, bare XML, other entries, Latin-1, damaged XML, the document's own import; `WttNodeTests` 9: both yes/no styles, defaults, order, unknown fields kept, Waterloo's views, seed groups and lists, a new dwell element; `TimetableEditTests` 15: each edit's undo and redo restoring the exact tree, identity, self-closing, a Waterloo shift, refusing a structural `Change`, attributes, rollback, revisions and clones, import mapping, renumbers by headcode, UID and on Waterloo; `WttWriterTests` 9: bumps, the limit, a save, unversioned, backups and pruning, no backup); Core +39 (`SimTimeNotationTests`); Tools +5 (`WttSaveCommandTests`).
+- Totals: 1 936 (Core 319, Architecture 18, Gateway 211, Timetable 214, Network 199, Planning 339, Persistence 13, Graph 302, Optimiser 25, Tools 86, App 210). Green on Windows (Debug); the solution and the portable solution build with `-warnaserror`. Linux not run.
+
+### Decisions
+- **Copy SimSig's bytes, not just its tree.** The design asked only for equal trees, but matching the layout and escaping makes an unedited save identical for SimSig-saved files, which removes most doubt from the gate.
+- **One path for conventions:** the typed setters know the file's style, defaults and order; edits are made by running them on a copy and diffing (`Change`), so the editor never has two ways to write a field.
+- **Edits return their undo** instead of holding mutable "old value" state, so every edit stays immutable and undo, redo and composites need no extra bookkeeping.
+- **A document needs the whole tree:** damaged XML that the reader imports in part cannot be opened for editing (`WttFormatException`), so a save can never drop what came after the damage.
+- **`SimTimeNotation` lives in Core**, beside `SimTime`.
+
+### Next
+- 👤 **S40's gate:** load a round-tripped Waterloo and one payware timetable in SimSig and run F4 ▸ Tools 1 ▸ Timetable Analyser; the output should match the original's. To make them: `dotnet run --project src/Stringline.Tools -- wtt-save "tests/fixtures/waterloo 2010.WTT" "…\Timetables\waterloo\Waterloo 2010 Stringline.wtt"` (gives 1.0.3), and the same for a payware one. With `--bump none` the XML is byte for byte, so a version-bumped save is the more useful test; `--shift-train 1W51 +5` checks an edit too.
+- S41 (sim knowledge), which can now also run alongside S42.
+
+### Known issues
+- Raw line breaks in hand-edited descriptions come back as `&#x000A;`: XML cannot tell them apart once read. SimSig writes line feeds that way itself, so it should read them the same.
+- A Latin-1 file is saved as UTF-8 with character references (as SimSig writes); the original encoding is not kept.
+- `Renumber` imports the whole document to find the links (about 0.5 s on Waterloo); fine for one train, but S46's bulk renumber should share one import.
+- `WttDocumentImport` goes stale after any edit; S43's editor will re-import per snapshot.
+
+### Questions for Fred
+- 44. **Hand-edited line breaks.** 14 corpus files hold raw line breaks in descriptions (Carlisle 79-80, Leamington 2009, Penzance, Staffordshire 2019…). Saved, they become `&#x000A;`. If one of these is to hand, does SimSig show the description the same after a round trip?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

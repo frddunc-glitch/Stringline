@@ -20,12 +20,12 @@ namespace Stringline.Timetable;
 /// <remarks>Thread-safe; each <c>Read</c> is independent.</remarks>
 public sealed partial class WttReader
 {
-    private const string TimetableEntry = "SavedTimetable.xml";
+    internal const string TimetableEntry = "SavedTimetable.xml";
 
     /// <summary>SimSig allowances are stored in half minutes (checked against run times in 284 timetables).</summary>
     private const int AllowanceUnitSeconds = 30;
 
-    private static readonly XmlReaderSettings XmlSettings = new()
+    internal static readonly XmlReaderSettings XmlSettings = new()
     {
         DtdProcessing = DtdProcessing.Prohibit,
         XmlResolver = null,
@@ -53,23 +53,52 @@ public sealed partial class WttReader
     public WttImportResult Read(Stream stream, string? sourceName = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
-        var xml = ExtractXml(stream);
+        var xml = ExtractXml(ReadAll(stream), out _);
         var import = new Import(_logger);
-        using (var reader = CreateXmlReader(xml, import))
+        using (var reader = CreateXmlReader(xml, message => import.Warn(ImportSeverity.Info, message)))
         {
             import.ReadDocument(reader);
         }
 
+        return Finish(import, sourceName);
+    }
+
+    /// <summary>
+    /// Imports a timetable already parsed into a tree (an editor's <see cref="Editing.WttDocument"/>), exactly as
+    /// <see cref="Read(Stream, string?)"/> imports the file it came from. The result also records where in the tree
+    /// each train, timing point, activity and rule came from (<see cref="WttImportResult.Sources"/>).
+    /// </summary>
+    public WttImportResult Read(XDocument document, string? sourceName = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var import = new Import(_logger);
+        using (var reader = document.CreateReader())
+        {
+            import.ReadDocument(reader);
+        }
+
+        return Finish(import, sourceName);
+    }
+
+    private WttImportResult Finish(Import import, string? sourceName)
+    {
         var result = import.Finish();
         LogImported(sourceName ?? "timetable", result.Timetable.AreaId, result.Timetable.Trains.Count, result.SkippedTrains, result.Warnings.Count);
         return result;
     }
 
-    private static byte[] ExtractXml(Stream stream)
+    internal static byte[] ReadAll(Stream stream)
     {
         using var buffer = new MemoryStream();
         stream.CopyTo(buffer);
-        var bytes = buffer.ToArray();
+        return buffer.ToArray();
+    }
+
+    /// <summary>The bytes of <c>SavedTimetable.xml</c>, from a <c>.wtt</c> zip or from a file that is that XML on its own.</summary>
+    /// <param name="others">The zip's other entries in order, by full name, or empty for bare XML.</param>
+    internal static byte[] ExtractXml(byte[] bytes, out List<KeyValuePair<string, byte[]>> others)
+    {
+        others = [];
         if (bytes.AsSpan().StartsWith("PK\u0003\u0004"u8))
         {
             try
@@ -77,10 +106,12 @@ public sealed partial class WttReader
                 using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
                 var entry = zip.Entries.FirstOrDefault(e => string.Equals(e.Name, TimetableEntry, StringComparison.OrdinalIgnoreCase))
                     ?? throw new WttFormatException($"The file is a zip but has no {TimetableEntry}, so it is not a SimSig timetable.");
-                using var entryStream = entry.Open();
-                using var xml = new MemoryStream();
-                entryStream.CopyTo(xml);
-                return xml.ToArray();
+                foreach (var other in zip.Entries.Where(e => e != entry))
+                {
+                    others.Add(new(other.FullName, ReadEntry(other)));
+                }
+
+                return ReadEntry(entry);
             }
             catch (InvalidDataException ex)
             {
@@ -102,17 +133,24 @@ public sealed partial class WttReader
         return bytes;
     }
 
+    private static byte[] ReadEntry(ZipArchiveEntry entry)
+    {
+        using var entryStream = entry.Open();
+        return ReadAll(entryStream);
+    }
+
     /// <summary>
     /// SimSig writes UTF-8 without a declaration. A hand-edited file may be in a Windows code page instead; read that
     /// as Latin-1 rather than fail, which keeps every ASCII character (all codes, times and numbers) intact.
     /// </summary>
-    private static XmlReader CreateXmlReader(byte[] xml, Import import)
+    /// <param name="latin1">Told why, when the XML is read as Latin-1.</param>
+    internal static XmlReader CreateXmlReader(byte[] xml, Action<string>? latin1 = null)
     {
         var head = Encoding.ASCII.GetString(xml, 0, Math.Min(xml.Length, 200));
         var declaresEncoding = head.StartsWith("<?xml", StringComparison.Ordinal) && head.Contains("encoding", StringComparison.OrdinalIgnoreCase);
         if (!declaresEncoding && !Utf8.IsValid(xml))
         {
-            import.Warn(ImportSeverity.Info, "The XML is not valid UTF-8; read it as Latin-1, so some accented characters in descriptions may be wrong.");
+            latin1?.Invoke("The XML is not valid UTF-8; read it as Latin-1, so some accented characters in descriptions may be wrong.");
             return XmlReader.Create(new StreamReader(new MemoryStream(xml), Encoding.Latin1), XmlSettings);
         }
 
@@ -131,6 +169,10 @@ public sealed partial class WttReader
         private readonly List<Train> _trains = [];
         private readonly List<RawRule> _rules = [];
         private readonly List<SeedGroup> _seedGroups = [];
+        private readonly List<TrainSource> _trainSources = [];
+        private readonly List<int> _ruleSources = [];
+        private int _trainElements;
+        private int _ruleElements;
         private readonly Dictionary<Train, string> _rawDescriptions = new(ReferenceEqualityComparer.Instance);
         private string _areaId = string.Empty;
         private string _simSigVersion = string.Empty;
@@ -244,10 +286,11 @@ public sealed partial class WttReader
                 else if (reader.LocalName == "Timetable")
                 {
                     _trainsSeen++;
-                    ReadTrain((XElement)XNode.ReadFrom(reader));
+                    ReadTrain((XElement)XNode.ReadFrom(reader), _trainElements++);
                 }
                 else
                 {
+                    _trainElements++;
                     CountUnknown("Timetables/" + reader.LocalName);
                     reader.Skip();
                 }
@@ -348,6 +391,7 @@ public sealed partial class WttReader
         {
             foreach (var child in element.Elements())
             {
+                var ordinal = _ruleElements++;
                 if (child.Name.LocalName != "TimetableRule")
                 {
                     CountUnknown("TimetableRules/" + child.Name.LocalName);
@@ -363,6 +407,7 @@ public sealed partial class WttReader
                 }
 
                 Tiploc? location = Tiploc.TryCreate(Text(child, "Location"), out var t) ? t : null;
+                _ruleSources.Add(ordinal);
                 _rules.Add(new RawRule(
                     code,
                     Text(child, "TrainUID"),
@@ -374,7 +419,8 @@ public sealed partial class WttReader
             }
         }
 
-        private void ReadTrain(XElement e)
+        /// <param name="ordinal">The element's place among the children of <c>Timetables</c>.</param>
+        private void ReadTrain(XElement e, int ordinal)
         {
             var idText = Text(e, "ID");
             if (!Headcode.TryCreate(idText, out var headcode))
@@ -387,18 +433,24 @@ public sealed partial class WttReader
             var name = headcode.Value;
             CheckElements(e, "Timetable", Known.Train);
             var points = new List<TimingPoint>();
+            var tripSources = new List<int>();
+            var activitySources = new List<IReadOnlyList<int>>();
             var trips = e.Element("Trips");
+            var tripOrdinal = -1;
             foreach (var trip in trips?.Elements() ?? [])
             {
+                tripOrdinal++;
                 if (trip.Name.LocalName != "Trip")
                 {
                     CountUnknown("Trips/" + trip.Name.LocalName);
                     continue;
                 }
 
-                if (ReadPoint(trip, points.Count, name) is { } point)
+                if (ReadPoint(trip, points.Count, name, out var activityOrdinals) is { } point)
                 {
                     points.Add(point);
+                    tripSources.Add(tripOrdinal);
+                    activitySources.Add(activityOrdinals);
                 }
             }
 
@@ -439,10 +491,13 @@ public sealed partial class WttReader
             };
             _rawDescriptions[train] = Text(e, "Description") ?? string.Empty;
             _trains.Add(train);
+            _trainSources.Add(new TrainSource(ordinal, tripSources, activitySources));
         }
 
-        private TimingPoint? ReadPoint(XElement trip, int index, string train)
+        /// <param name="activityOrdinals">Each activity's place among the children of <c>Activities</c>.</param>
+        private TimingPoint? ReadPoint(XElement trip, int index, string train, out List<int> activityOrdinals)
         {
+            activityOrdinals = [];
             CheckElements(trip, "Trip", Known.Trip);
             var locationText = Text(trip, "Location");
             if (!Tiploc.TryCreate(locationText, out var location))
@@ -454,8 +509,10 @@ public sealed partial class WttReader
             var context = $"{train} at {location}";
             var isPass = ParseBool(Text(trip, "IsPassTime"), "IsPassTime", context) ?? false;
             var activities = new List<TrainActivity>();
+            var activityOrdinal = -1;
             foreach (var activity in trip.Element("Activities")?.Elements() ?? [])
             {
+                activityOrdinal++;
                 if (activity.Name.LocalName != "Activity")
                 {
                     CountUnknown("Activities/" + activity.Name.LocalName);
@@ -477,6 +534,7 @@ public sealed partial class WttReader
 
                 Headcode? associatedHeadcode = Headcode.TryCreate(Text(activity, "AssociatedTrain"), out var h) ? h : null;
                 activities.Add(new TrainActivity(kind, code, associatedHeadcode, Text(activity, "AssociatedUID"), null));
+                activityOrdinals.Add(activityOrdinal);
             }
 
             return new TimingPoint
@@ -547,7 +605,7 @@ public sealed partial class WttReader
             }
 
             var timetable = new WorkingTimetable(header, _categories, linked, rules) { SeedGroups = [.. _seedGroups] };
-            return new WttImportResult(timetable, _warnings, _unknown, _skipped);
+            return new WttImportResult(timetable, _warnings, _unknown, _skipped) { Sources = new ImportSources(_trainSources, _ruleSources) };
         }
 
         /// <summary>Fills in category defaults and the description, once the header and categories are known.</summary>

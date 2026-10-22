@@ -532,6 +532,7 @@ Fred raised #20 on 2026-10-20: SimSig's editor and outside tools handle timetabl
   - the header extract;
   - the notation's parse and format (every code, `H`, past midnight).
 - 👤 **Gate:** Fred loads a round-tripped Waterloo and one payware timetable in SimSig and runs the Analyser. The output must be the same as the original's. If SimSig reads them differently, find out why (element order, a default) before S43.
+- *Built in S40:* Fred chose (asked during the session) **1.0.1** as the first saved version of a file with none, and that a renumber changes **only the links that resolve to that train**. The corpus gave SimSig's element orders (no file disagrees), its defaults (trains, trips, activities and rules leave out no and 0) and its layout and escaping, so the writer copies them: 271 of the 285 files, Waterloo and Llangollen included, save back byte for byte, and the other 14 differ only where hand edits left raw line breaks. Field edits go through `TimetableEdit.Change`, which diffs a copy changed by the typed setters (`08-…md` §3.4). `wtt-save` with `--bump none` is the round trip for the gate.
 
 ### S41 — Sim knowledge (portable)
 - **New project `Stringline.Editing`** (`net10.0`; it references Timetable, Network and Planning). Its tests go in `tests/Stringline.Editing.Tests` and in `Stringline.Portable.slnf`, and the architecture tests learn the new layer.

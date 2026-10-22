@@ -46,6 +46,15 @@ Out of scope: reading SimSig's simulation data. `.sim` files are encrypted zips 
 - **Round-trip test (corpus):** open → save → open for every `.wtt` under `STRINGLINE_WTT_CORPUS`. The two XML trees must be equal element by element (names, order, text, attributes), and `WttReader` must give equal timetables. Byte equality is not required: zip compression and attribute quoting may differ.
 - 👤 Fred loads a round-tripped Waterloo and one payware timetable in SimSig and runs the Analyser once (S40's gate). The output must match the original's.
 
+### 3.4 Built in S40
+- **The writer copies SimSig's layout and escaping**, not just its tree (`04-…md` §1, "How SimSig writes it"): two-space indent, CRLF, a CRLF at the end, `<DwellTimes/>`, the five entities and `&#x00BD;`-style references for everything outside printable ASCII. So a save with no edits is **byte for byte** for 271 of the 285 corpus files (Waterloo and Llangollen included), and the regenerated header equals SimSig's. The other 14 hold raw line breaks from hand edits and differ only in how a line feed is written.
+- **SimSig's element order and defaults come from the corpus** (`WttSchema`): one order per element, which no file breaks; trains, trips, activities and rules leave out no and 0; categories, the header, seed groups and lists write every value.
+- **`TimetableEdit.Change(node, n => …)`** runs a node's typed setters on a copy and turns what changed into field edits of the original, so one code path (the setters) knows the conventions, and the elements keep their identity. Adding or removing repeated items (trips, activities) is `Insert`/`Remove`, never `Change`.
+- **Primitive edits:** set a field, set attributes, insert (at an index or in SimSig's order), remove, move, composite. `Apply` returns the undo, whose `Apply` returns the redo; the undo restores the same elements in the same places, including a self-closing element.
+- **`WttDocumentImport`** maps each imported train, timing point, activity and rule back to its element (the reader records where each came from). **Renumber** uses it: it changes only the activities and rules that resolve to *this* train, by headcode or UID, whichever they hold (Fred: headcodes repeat, so other trains with the same headcode keep their links).
+- **Versions:** a file with none is taken as 1.0.0, so its first save is 1.0.1 (Fred). Backups go to `{folder}\{area}\{name} {version} {yyyyMMdd-HHmmss}.wtt`, the newest 20 kept.
+- **`SimTimeNotation`** is in Core (the grid in the App and the CSV in Editing both need it). A clock time more than 12 h before the previous time is taken as the next day's.
+
 ## 4. Sim knowledge (`SimKnowledge`, portable)
 
 Built per sim (area ID) from:

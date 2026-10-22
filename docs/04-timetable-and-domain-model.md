@@ -64,6 +64,15 @@ A `.wtt` is a **zip** of `TimetableHeader.xml` (header only) and `SavedTimetable
 - Seeded trains with no group (Penrith's W595TU and 3SP7) are seeded at the timetable's start (00:00) and did not appear at 14:00.
 - The recording is 14 minutes, so trains much later in the day are not checked; the rule only needs the start.
 
+**How SimSig writes it (S40, from the 285-file corpus; `WttDocument` and `WttWriter` keep to it, `08-…md` §3)**
+- Every file is a zip of `SavedTimetable.xml` then `TimetableHeader.xml` (deflate), and no other entries. The XML is indented two spaces with CRLF line ends, ends with a CRLF, and has no declaration and no byte order mark. An empty container is `<DwellTimes/>`; an empty text field is `<Description></Description>`.
+- Text escapes the five entities (`&amp;` `&lt;` `&gt;` `&apos;` `&quot;`) and writes anything outside printable ASCII but the tab as a character reference with four upper-case hex digits (`&#x00BD;` for ½, `&#x000A;` for a line feed). No file holds a raw non-ASCII byte.
+- `TimetableHeader.xml` is the root with its attributes and its `[TH]` children in the file's order: `Name`, `Description`, `StartTime`, `FinishTime`, `VMajor`, `VMinor`, `VBuild`, `TrainDescriptionTemplate`, `SeedGroupSummary`, `ScenarioOptions`. It matches the timetable's own fields in every file but three (Newport SO 2015, whose header has `VBuild` 0 against 1).
+- **Defaults are left out** on trains, trips, activities and rules: a yes/no field is written only when yes, and a number only when not 0 (0 is written for an activity's code, a rule's number, `ClassOfService` and `ShuntInterpose`). Categories, the header, seed groups and the lists write every value.
+- Each element's children come in one fixed order, with no file disagreeing (`WttSchema`). For example a `Trip` is `Location`, `NewCategory`, `DepPassTime`, `SetDownKind`, `SetDownOnly`, `ArrTime`, `Platform`, `Line`, `Path`, `Auto…`, the allowances, `IsPassTime`, … `RequestPercent`, `Activities`.
+- A file's yes/no style is the same throughout: 206 files use `-1`/`0` and 78 `True`/`False` (one has no yes/no values).
+- Saved through `WttWriter` with no edits, 271 of the 285 come back byte for byte. The other 14 were edited by hand and hold raw line breaks in descriptions, which XML reads as line feeds and the writer writes as `&#x000A;` (SimSig's own form); their trees are equal.
+
 Location display names are **not** in the WTT; they come from the profile (user-entered or imported CSV).
 
 ## 2. Domain model (Stringline.Core)

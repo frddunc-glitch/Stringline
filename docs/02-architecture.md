@@ -7,7 +7,7 @@ Stringline.sln
 ├─ src/
 │  ├─ Stringline.Core/          net10.0   Domain model, sim time, IDs, shared abstractions
 │  ├─ Stringline.Gateway/       net10.0   STOMP client, message parsing, recorder, replay source
-│  ├─ Stringline.Timetable/     net10.0   .wtt import, train matching; lossless WttDocument + writer (S40, planned)
+│  ├─ Stringline.Timetable/     net10.0   .wtt import, train matching; lossless WttDocument, edits and writer (Editing, S40)
 │  ├─ Stringline.Network/       net10.0   Corridors, sections, profile I/O, auto-generation, distance axis
 │  ├─ Stringline.Planning/      net10.0   Working plan + commands, forecaster, conflicts, suggestions, re-planning (IReplanner, rules)
 │  ├─ Stringline.Optimiser/     net10.0   CP-SAT re-planner (Google OR-Tools, native solver for Windows, Linux and macOS)
