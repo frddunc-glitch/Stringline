@@ -615,6 +615,11 @@ Fred raised #20 on 2026-10-20: SimSig's editor and outside tools handle timetabl
   - the benchmark with a 500-train draft still under 33 ms a frame.
 - *Built in S44:* Fred chose (asked during the session) the board as a **pane in the editor window**, a drag clamped to the **sim's least known run** for the train's band, else the **original timetable's**, corridors **generated from the draft** when the sim has no profile, and **30 s nudges**. A draft checked against its own bookings never conflicts (the detector allows a pair as close as the timetable books it), so booked conflicts are found against the **timetable the draft was made from** (`ConflictRequest.Booked`). The draft draws as the plan layer, the original's changed trains as the faint WTT layer under it. Pan frames of a 500-train draft take about 17 ms. See `08-…md` §7.2.
 
+### S44a — Moss Vale fixes (#21, #22, #23) (portable, editor 🪟)
+Out of the phase's order, from Fred's issues on the Moss Vale sim. Done 2026-10-22.
+- **#21 Untimed trains matched.** A WTT train with no times (a shunt or a train run as required) is matched by headcode when no timed train with it is due within the window (`MatchMethod.Untimed`); an unmatched working is tried again at each timing location it reports, unless unlinked by hand. The forecaster keeps why a train's forecast failed, and the engine logs it once a train.
+- **#22, #23 Drawn at a corridor location.** `Corridor.DrawAt` (`CorridorDrawAt`, `04-…md` §4.9): a loop or yard with its own code draws at its station (`HARDN10` at `HARDEN`), and an entry point beyond an end at that end (`EJUNEE` at `JUNEE`), found from the WTT and editable in the profile editor's new **Drawn at a corridor location** list. Entering trains' booked, plan and forecast lines lead in from the entry.
+
 ### S45 — Activities, rules, seed groups, categories and the rest 🪟 (edits portable)
 - **Activities**, per trip:
   - add, edit, delete and reorder;

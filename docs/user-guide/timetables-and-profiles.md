@@ -67,6 +67,7 @@ The profile is saved in `%APPDATA%\Stringline\profiles` under the sim's name, an
   - **From**: where the headway comes from (Hand, Blocks, WTT or Default). Its tooltip explains it;
   - **Aspects**: the signalling's aspects (2, 3 or 4) for the section's block headway. Leave it blank to go by what play shows; its tooltip says what that is;
   - the WTT's least running time through the section.
+- **Drawn at a corridor location**, for the selected corridor: locations off it that trains are drawn at one of its own. A loop, yard or platform with a code of its own is drawn at its station, so a train booked into Harden's platform 10 to be overtaken stands at Harden on the graph rather than vanishing; and an entry point beyond an end is drawn at that end, so a train entering at Junee is drawn from Junee, not from the first station it is booked at. Stringline finds these from the timetable (**From** says *From the WTT*). Pick another corridor location, or **Not drawn**, to set one by hand; **Draw a location here…** adds one; **Back to the WTT's** undoes a choice. Only drawing changes: conflicts and forecasts still go by the location itself.
 
 **Signals**
 

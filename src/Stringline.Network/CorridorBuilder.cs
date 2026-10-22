@@ -13,7 +13,7 @@ public static class CorridorBuilder
     /// (<see cref="Section.ResolveHeadway"/>).
     /// </summary>
     public static Corridor Create(string id, string name, IReadOnlyList<Tiploc> order, WorkingTimetable timetable, int fallbackHeadwaySeconds = Section.StandardHeadwaySeconds) =>
-        Create(id, name, order, CorridorMeasurement.Measure(timetable, order), fallbackHeadwaySeconds);
+        CorridorDrawAt.Apply(Create(id, name, order, CorridorMeasurement.Measure(timetable, order), fallbackHeadwaySeconds), timetable);
 
     public static Corridor Create(string id, string name, IReadOnlyList<Tiploc> order, CorridorMeasurement measurement, int fallbackHeadwaySeconds = Section.StandardHeadwaySeconds)
     {
@@ -36,7 +36,8 @@ public static class CorridorBuilder
     /// positions) and keeps what the user sets (order, distances, tracks, hand-set headways, axis mode). A location's
     /// platform count is kept if set, else taken from the WTT. A section keeps its settings if its two locations are
     /// still adjacent (in either order); a new pair of neighbours gets a default double-line section. Headways not set
-    /// by hand are worked out again against <paramref name="fallbackHeadwaySeconds"/>.
+    /// by hand are worked out again against <paramref name="fallbackHeadwaySeconds"/>. The locations drawn at the
+    /// corridor's (<see cref="Corridor.DrawAt"/>) are found again, keeping those set by hand.
     /// </summary>
     public static Corridor Refresh(Corridor corridor, WorkingTimetable timetable, int fallbackHeadwaySeconds = Section.StandardHeadwaySeconds)
     {
@@ -55,7 +56,7 @@ public static class CorridorBuilder
                 ?? new Section(a, b, Section.DoubleLine, fallbackHeadwaySeconds, Section.DefaultMinRunSeconds);
             return Measured(existing with { From = a, To = b }, s, fallbackHeadwaySeconds);
         }).ToList();
-        return CorridorAxis.Apply(corridor with { Locations = locations, Sections = sections });
+        return CorridorDrawAt.Apply(CorridorAxis.Apply(corridor with { Locations = locations, Sections = sections }), timetable);
     }
 
     /// <summary>The corridor with every headway not set by hand worked out again (<see cref="Section.ResolveHeadway"/>).</summary>

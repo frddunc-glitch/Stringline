@@ -67,6 +67,12 @@ public sealed record TrainPlan(
     /// <summary>The index of the last point the train runs to.</summary>
     public int LastIndex => TerminatesAt ?? Points.Count - 1;
 
+    /// <summary>The entry point the train enters the area at, from the WTT (#22); null if it does not enter at one.</summary>
+    public Tiploc? EntryPoint { get; init; }
+
+    /// <summary>How long before its first point the train enters (<see cref="Train.EntryLeadSeconds"/>); kept when the plan is retimed.</summary>
+    public int? EntryLeadSeconds { get; init; }
+
     /// <summary>Where the train is held at signals between its points (S33), in the order made; none in the WTT.</summary>
     public IReadOnlyList<SignalHold> SignalHolds { get; init; } = [];
 
@@ -105,7 +111,11 @@ public sealed record TrainPlan(
             points[i] = PlannedPoint.From(train.Points[i]) with { Index = i };
         }
 
-        return new(train.Id, train.Headcode, train.CategoryId, PlanOrigin.Wtt, train.Id, points, false, null, false);
+        return new(train.Id, train.Headcode, train.CategoryId, PlanOrigin.Wtt, train.Id, points, false, null, false)
+        {
+            EntryPoint = train.EntryPoint,
+            EntryLeadSeconds = train.EntryLeadSeconds,
+        };
     }
 
     /// <summary>True if both plans have the same points (by value), cancellation, termination and signal holds.</summary>

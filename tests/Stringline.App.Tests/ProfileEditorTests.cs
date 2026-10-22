@@ -240,6 +240,39 @@ public sealed class ProfileEditorTests
     }
 
     [Fact]
+    public async Task A_location_drawn_at_the_corridors_is_turned_off_by_hand_and_back()
+    {
+        // #23: Waterloo's carriage sidings are drawn at Waterloo, found from the WTT.
+        await using var app = new TestApp();
+        await LoadWaterloo(app);
+        var sidings = new Tiploc("WLOOCHS");
+
+        await Edit(app, e =>
+        {
+            e.SelectedCorridor = e.Corridors.Single(c => c.Id == "main");
+            var row = e.DrawAt.Single(r => r.Location == sidings);
+            row.At.Should().Be(e.DrawAtChoices[1], "the first choice after Not drawn is the corridor's first location, Waterloo");
+            row.Source.Should().Be("From the WTT");
+            e.SelectedDrawAt = row;
+            e.ResetDrawAtCommand.CanExecute(null).Should().BeFalse("it is not set by hand");
+
+            row.At = DrawAtRow.NotDrawn;
+            e.Error.Should().BeNull();
+            row = e.DrawAt.Single(r => r.Location == sidings);
+            row.Source.Should().Be("Set by hand");
+            e.SelectedDrawAt = row;
+            e.ResetDrawAtCommand.Execute(null);
+            e.DrawAt.Single(r => r.Location == sidings).Source.Should().Be("From the WTT");
+
+            e.DrawAt.Single(r => r.Location == sidings).At = DrawAtRow.NotDrawn;
+            e.OkCommand.Execute(null);
+        });
+
+        new ProfileStore(app.Paths.Profiles).Load("waterloo")!.FindCorridor("main")!.DrawAt
+            .Should().ContainSingle(d => d.Location == sidings).Which.Should().Be(new DrawnAt(sidings, null, HandSet: true));
+    }
+
+    [Fact]
     public async Task Corridors_and_locations_are_added_moved_and_removed()
     {
         await using var app = new TestApp();

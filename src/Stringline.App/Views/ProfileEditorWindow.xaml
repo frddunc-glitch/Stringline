@@ -153,6 +153,8 @@
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="0.6*" />
               </Grid.RowDefinitions>
               <DockPanel>
                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
@@ -220,6 +222,39 @@
                       </DataGridTextColumn.CellStyle>
                     </DataGridTextColumn>
                     <DataGridTextColumn Header="Min run (WTT)" Binding="{Binding MinRun, Mode=OneWay}" IsReadOnly="True" Width="110" />
+                  </DataGrid.Columns>
+                </DataGrid>
+              </DockPanel>
+              <GridSplitter Grid.Row="3" Height="6" HorizontalAlignment="Stretch" Background="Transparent" />
+              <DockPanel Grid.Row="4">
+                <DockPanel DockPanel.Dock="Top" Margin="0,4,0,4">
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button Content="_Draw a location here…" Command="{Binding AddDrawAtCommand}" />
+                    <Button Content="Back to the _WTT's" Margin="0" Command="{Binding ResetDrawAtCommand}"
+                            ToolTip="Draw the selected location where the timetable suggests, or not at all if it suggests nowhere." />
+                  </StackPanel>
+                  <StackPanel>
+                    <TextBlock Text="Drawn at a corridor location" FontWeight="SemiBold" />
+                    <TextBlock Style="{StaticResource Hint}" Text="Locations off the corridor that trains are drawn at one of its own: a loop, yard or platform with a code of its own (a train booked into it is drawn standing at the station), or an entry point beyond an end (a train entering there is drawn from that end). Found from the timetable; pick another place or Not drawn to set one by hand." />
+                  </StackPanel>
+                </DockPanel>
+                <DataGrid ItemsSource="{Binding DrawAt}" SelectedItem="{Binding SelectedDrawAt}">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="TIPLOC" Binding="{Binding Code, Mode=OneWay}" IsReadOnly="True" Width="100" />
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name, Mode=OneWay}" IsReadOnly="True" Width="*" />
+                    <DataGridComboBoxColumn Header="Drawn at" SelectedItemBinding="{Binding At, UpdateSourceTrigger=PropertyChanged}" Width="1.2*">
+                      <DataGridComboBoxColumn.ElementStyle>
+                        <Style TargetType="ComboBox">
+                          <Setter Property="ItemsSource" Value="{Binding DataContext.DrawAtChoices, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        </Style>
+                      </DataGridComboBoxColumn.ElementStyle>
+                      <DataGridComboBoxColumn.EditingElementStyle>
+                        <Style TargetType="ComboBox">
+                          <Setter Property="ItemsSource" Value="{Binding DataContext.DrawAtChoices, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        </Style>
+                      </DataGridComboBoxColumn.EditingElementStyle>
+                    </DataGridComboBoxColumn>
+                    <DataGridTextColumn Header="From" Binding="{Binding Source, Mode=OneWay}" IsReadOnly="True" Width="100" />
                   </DataGrid.Columns>
                 </DataGrid>
               </DockPanel>

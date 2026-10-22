@@ -131,6 +131,7 @@ internal static class MatchCommand
         MatchMethod.NextWorking => "next working",
         MatchMethod.Formed => "formed",
         MatchMethod.Manual => "manual",
+        MatchMethod.Untimed => "untimed",
         _ => "-",
     };
 }

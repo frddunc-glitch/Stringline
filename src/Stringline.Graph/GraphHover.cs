@@ -328,6 +328,7 @@ public static class GraphHover
             MatchMethod.NextWorking => "Matched (next working)",
             MatchMethod.Formed => "Matched (formed)",
             MatchMethod.Manual => "Linked by hand",
+            MatchMethod.Untimed => "Matched (untimed in the WTT)",
             _ => "Matched",
         },
         MatchStatus.Pending => "Matching…",

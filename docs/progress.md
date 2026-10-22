@@ -2446,6 +2446,37 @@ Fred found the auto corridors on Edinburgh overlapping, confusing and not useful
 ### Questions for Fred
 - 51. **Original or sim-wide spacing?** The draft board accepts a pair of trains as close as the original timetable booked them, even after one is retimed. Should a retimed train instead be held to the section's headway against everyone? That is stricter, but trains the original books tighter than Stringline's headway estimate would then show conflicts as soon as one of them is touched.
 
+## 2026-10-22 — S44a: Moss Vale fixes (#21, #22, #23)
+
+From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the plan's order, between S44 and S45.
+
+### Done
+- **#21, 3332 not graphed.** The log showed `Unmatched uid 28 3332: No 3332 booked within 60 min (nearest 17895697 min off)`. 3332 is in the WTT with **no times at all** (enters at ECTADYN, JINDLEE–YASSJYD untimed), as are T307, T309 and the two 2SSRs: trains the signaller brings on when wanted. The matcher scored them with the span sentinel (`int.MaxValue / 2` seconds), so they were unmatched on their first report, and Unmatched was final. Now (`TrainMatcher`, `04-…md` §3): an untimed train is a candidate by headcode alone when no timed train with the headcode is within the window, ranked by penalties (off-path points, seeding) and decided as timed ones are (`MatchMethod.Untimed`, "Matched (untimed in the WTT)" on the hover); and `LiveState` tries an Unmatched working again at each timing location it reports, unless it was unlinked by hand (logging Unmatched only when it becomes so). A shunt in Yass Junction's yard also needed #23's mapping to show on the main corridor (YASSJS, YASSJN, YASSNTH at YASSJ).
+- **The log's "forecast failed for 1 trains".** It repeated through Fred's log without saying which train. The forecaster now keeps each failed train's exception (`TrainForecast.Failure`) and the engine logs it once a train with its headcode. I could not reproduce the failure from the WTT alone (no Moss Vale recording); the next log will name it.
+- **#22 Junee and #23 HARDN10: drawn at a corridor location.** Up trains from Junee enter at `EJUNEE` and first book Cootamundra (and Picton's at `EPICTON`, first booking Tahmoor), so nothing was drawn between the JUNEE row and Cootamundra. 3MB7 and others are booked into `HARDN10` (Harden platform 10) to be overtaken; it is not on the corridor, so the line ran straight from Harden 02:04 to Yass 03:39. `Corridor.DrawAt` (`DrawnAt`: location, at, hand-set; JSON `drawAt`, written only when there are some) maps such locations, found per corridor by `CorridorDrawAt` (`04-…md` §4.9) when corridors are generated or refreshed, so existing profiles get them on load. The scene builder's path accumulator draws through it (`Corridor.DrawIndexOf`), and entering trains' WTT, plan and not-started forecast lines lead in from the entry's location at the entry time (`Train.EntryLeadSeconds`, `TrainPlan.EntryPoint`/`EntryLeadSeconds`; the vertex has `GraphSceneBuilder.EntryVertex`, no plan point, so no grip). Sections, measurement, forecast and conflicts are unchanged. Moss Vale's main corridor gets HARDN10→HARDEN, EJUNEE→JUNEE, EPICTON→PICTON, CTMNDRS/CTMNDRW→CTMNDR, MOSSVLS→MOSSVLE, TAHMORN→TAHMORJ and four Yass locations; Waterloo only WLOOCHS→WLOO. A Moss Vale render now draws 3MB4/3MB9/ST22 up from Junee and 3MB7 standing at Harden 02:07–02:30.
+- **Profile editor:** a **Drawn at a corridor location** list under Sections (TIPLOC, name, Drawn at as a drop-down with Not drawn, From), **Draw a location here…** and **Back to the WTT's** (`ProfileEdits.WithDrawAt`, `ResetDrawAt`). `stringline corridors` lists each corridor's entries.
+- **Docs:** `04-…md` §3, §4.8–9, §5; the guide's profile editor and troubleshooting pages; the plan's S44a; `CLAUDE.md`.
+- **Tests:** Network +11 (`CorridorDrawAtTests`: a platform within a station and an entry beyond an end on a small Moss Vale, a place sharing a prefix but 20 minutes away left out, the prefix rule, refresh keeping hand-set entries and resetting, refused edits, JSON with and without, an entry turned off); Graph +4 (`GraphDrawAtTests`: the lead-in and the dwell at the station with point indices, none without the mapping, forecast and retimed plan lead-ins, an unmatched train reported in the loop); Timetable +4 (`TrainMatcherTests`: untimed by headcode, a timed one in the window wins, two untimed alike wait for the path; `LiveStateTests`: unmatched tried again at a timing location, not when unlinked by hand); App +1 (`ProfileEditorTests`: Waterloo's sidings turned off by hand, reset, turned off and saved).
+- Totals: 2 086 (Core 319, Architecture 20, Gateway 211, Timetable 227, Network 216, Planning 341, Persistence 16, Graph 316, Optimiser 25, Editing 82, Tools 93, App 220). Green on Windows (Debug), all in one parallel run. The solution and the portable solution build with `-warnaserror`. Benchmarks `--quick`: pan frames 7.5 ms. Linux not run.
+
+### Decisions
+- **Draw-at is per corridor and drawing only.** What counts as "within" a location depends on what the corridor shows (CTMNDRS is a row of its own on the Cootamundra corridor and drawn at CTMNDR on the main one). Mapping it in `Corridor.IndexOf` would have changed sections, run times, conflicts and the forecast too.
+- **Found from codes and booked runs, then editable**, rather than only by hand: Fred's profiles get it on the next load, and the guesses are few (a shared prefix of at least 4 and all but two characters of the shorter code, within 5 min, or an entry code naming a location next to the train's first). HARDING-like places sharing a prefix are kept apart by the run limit.
+- **The lead-in runs from the booked entry time**, not the corridor's run time from the end: it is when SimSig brings the train in. 3MB7 enters at 00:27 and first books Cootamundra at 01:21, so its line from Junee is slower than the line onwards; that is how the WTT books it.
+- **Untimed trains rank behind any timed train within the window**, so a timetable with a timed and an untimed train of one headcode keeps matching the timed one when it is due.
+
+### Next
+- S45 (activities, rules, seed groups, categories and the rest, #20).
+- 👤 **Moss Vale:** load your profile (it gets the new entries on load), and check Harden's overtakes and the Junee and Picton entries look right; play until 3332 or a 2SSR runs, and send the log if the forecast still fails for a train (it now says which and why).
+
+### Known issues
+- Actual lines still start at a train's first report: entry points never appear as gateway locations.
+- An entry mapped to an end whose run to the train's first point is long (Junee to Cootamundra, 54 min booked) draws a long lead-in; it is the WTT's entry time, not Stringline's.
+- The forecast failure in Fred's #21 log is not reproduced or fixed; only its logging is.
+
+### Questions for Fred
+- 52. **Untimed trains on the graph.** An untimed train matched now draws its actual line in its category colour, but it has no booked or forecast line (it has no times). Would you like a forecast for it from where it is, by the sim's run times, or is the actual line enough?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

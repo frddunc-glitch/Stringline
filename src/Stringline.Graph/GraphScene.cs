@@ -41,7 +41,8 @@ public readonly record struct GraphVertex(double Time, double Axis);
 /// </param>
 /// <param name="Points">
 /// For a WTT, plan or forecast path: the plan point index (the same as the WTT's) of each vertex, so an edit on the
-/// graph knows which timing point it is at. A stop with a dwell has two vertices with the same index. Null for actuals.
+/// graph knows which timing point it is at. A stop with a dwell has two vertices with the same index, and an entering
+/// train's lead-in from its entry point (#22) has <see cref="GraphSceneBuilder.EntryVertex"/>, no point. Null for actuals.
 /// </param>
 /// <param name="IsCancelled">A cancelled train on the plan layer: drawn thin and grey with crosses at its ends (S12).</param>
 /// <param name="Style">
@@ -82,7 +83,7 @@ public sealed record GraphPath(
     public string? SignalAt(int vertex) => Signals is { } signals && vertex >= 0 && vertex < signals.Count ? signals[vertex] : null;
 
     /// <summary>The plan point index of vertex <paramref name="vertex"/>, if the path has them.</summary>
-    public int? PointAt(int vertex) => Points is { } points && vertex >= 0 && vertex < points.Count ? points[vertex] : null;
+    public int? PointAt(int vertex) => Points is { } points && vertex >= 0 && vertex < points.Count && points[vertex] >= 0 ? points[vertex] : null;
 
     /// <summary>
     /// True if vertex <paramref name="vertex"/> is the departure end of a stop: the second of two vertices at one

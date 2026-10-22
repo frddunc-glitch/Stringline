@@ -406,3 +406,48 @@ internal static class ProfileEditorText
 
     private static string Capital(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 }
+
+/// <summary>
+/// An off-corridor location drawn at one of the selected corridor's (#22, #23): a loop or yard within a station, or an
+/// entry point beyond an end. Found from the WTT or set by hand; picking where it draws sets it by hand.
+/// </summary>
+internal sealed class DrawAtRow(ProfileEditorViewModel editor, string corridorId, Tiploc location) : ProfileEditorRow(editor)
+{
+    /// <summary>The choice for an entry that is not drawn.</summary>
+    public const string NotDrawn = "Not drawn";
+
+    private string _name = string.Empty;
+    private string _at = string.Empty;
+    private bool _handSet;
+
+    public Tiploc Location { get; } = location;
+
+    public string Code => Location.Code;
+
+    /// <summary>The location's display name, if it has one.</summary>
+    public string Name => _name;
+
+    /// <summary>Where it draws, as a choice from <see cref="ProfileEditorViewModel.DrawAtChoices"/>, or <see cref="NotDrawn"/>.</summary>
+    public string At
+    {
+        get => _at;
+        set => Edit(value ?? NotDrawn, _at, nameof(At), p => p.WithDrawAt(corridorId, Location, Editor.ParseDrawAt(value)));
+    }
+
+    public bool IsHandSet => _handSet;
+
+    /// <summary>"Set by hand" or "From the WTT".</summary>
+    public string Source => _handSet ? "Set by hand" : "From the WTT";
+
+    public void Load(DrawnAt entry, StringlineProfile profile)
+    {
+        Show(ref _name, profile.DisplayName(Location) is var name && name != Location.Code ? name : string.Empty, nameof(Name));
+        Show(ref _at, entry.At is { } at ? ProfileEditorViewModel.Choice(profile, at) : NotDrawn, nameof(At));
+        if (_handSet != entry.HandSet)
+        {
+            _handSet = entry.HandSet;
+            OnPropertyChanged(nameof(IsHandSet));
+            OnPropertyChanged(nameof(Source));
+        }
+    }
+}

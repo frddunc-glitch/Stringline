@@ -92,6 +92,13 @@ public sealed record Train
     public SimTime? FirstTime => Points.Select(p => p.FirstTime).FirstOrDefault(t => t is not null) ?? EntryTime;
 
     /// <summary>
+    /// How long before its first booked time the train enters at <see cref="EntryPoint"/> (#22): from
+    /// <see cref="EntryTime"/> to the first point's time, if both are booked and the entry is earlier; null otherwise.
+    /// </summary>
+    public int? EntryLeadSeconds =>
+        EntryPoint is not null && EntryTime is { } entry && Points.Count > 0 && Points[0].FirstTime is { } first && first > entry ? first - entry : null;
+
+    /// <summary>
     /// When the train is booked to come into the sim: its entry time if it enters, else its first booked time (see
     /// <see cref="FirstTime"/>). Seeded trains are in the sim from the start.
     /// </summary>

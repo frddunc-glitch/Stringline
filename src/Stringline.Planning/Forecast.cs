@@ -102,6 +102,9 @@ public sealed record TrainForecast(
     /// <summary>Why the train is <see cref="TrainForecastStatus.NotRunning"/>; null otherwise.</summary>
     public NotRunningReason? NotRunning { get; init; }
 
+    /// <summary>Why the forecast failed for an <see cref="TrainForecastStatus.Unavailable"/> train (#21); null otherwise.</summary>
+    public Exception? Failure { get; init; }
+
     /// <summary>
     /// A seeded train of the start group not seen soon after the sim started (S34): it may have been removed. It is
     /// still forecast.

@@ -323,4 +323,45 @@ public sealed class TrainMatcherTests
 
         new TrainMatcher(tt).Match(request).Should().BeEquivalentTo(new TrainMatcher(tt).Match(request));
     }
+
+    /// <summary>An untimed point, as the WTT books a train the signaller brings on when wanted.</summary>
+    private static TimingPoint Untimed(string location) => new() { Index = 0, Location = new Tiploc(location) };
+
+    [Fact]
+    public void An_untimed_train_is_matched_by_headcode_alone()
+    {
+        // Moss Vale's 3332 (#21): a grain train booked with no times at all.
+        var tt = Of(Train("3332", start: TrainStart.EntryPoint, points: [Untimed("JINDLEE"), Untimed("HARDEN"), Untimed("YASSJ")]));
+
+        var decision = Match(tt, "3332", Actual("S12", "15:59", atTimingPoint: false));
+
+        decision.Status.Should().Be(MatchStatus.Matched);
+        decision.Train.Should().Be(new TrainId("3332"));
+        decision.Method.Should().Be(MatchMethod.Untimed);
+        decision.DeviationSeconds.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_timed_train_within_the_window_wins_over_an_untimed_one()
+    {
+        var tt = Of(
+            Train("3332", id: "3332U", points: [Untimed("AAA"), Untimed("BBB")]),
+            Train("3332", points: [Pass("AAA", "10:00"), Pass("BBB", "10:10")]));
+
+        Match(tt, "3332", Actual("AAA", "10:20")).Should().BeEquivalentTo(new { Train = new TrainId("3332"), Method = MatchMethod.HeadcodeAndTime });
+        Match(tt, "3332", Actual("AAA", "15:00")).Should().BeEquivalentTo(new { Train = new TrainId("3332U"), Method = MatchMethod.Untimed }, "the timed one is hours away");
+    }
+
+    [Fact]
+    public void Untimed_trains_alike_wait_for_their_path_to_tell_them_apart()
+    {
+        // Moss Vale's two 2SSRs: one runs into Yass Junction yard, the other out of it.
+        var tt = Of(
+            Train("2SSR", id: "2SSRA", points: [Untimed("YASSJ"), Untimed("YASSJS"), Untimed("YASSJYD")]),
+            Train("2SSR", id: "2SSRB", points: [Untimed("YASSJS"), Untimed("YASSJ"), Untimed("HARDEN")]));
+
+        Match(tt, "2SSR", Actual("S40", "12:00", atTimingPoint: false)).Status.Should().Be(MatchStatus.Pending);
+        Match(tt, "2SSR", Actual("S40", "12:00", atTimingPoint: false), Actual("HARDEN", "12:20"))
+            .Should().BeEquivalentTo(new { Status = MatchStatus.Matched, Train = new TrainId("2SSRB") }, "only 2SSRB runs to Harden");
+    }
 }

@@ -51,7 +51,8 @@ public sealed record MatchRequest(
 /// <param name="TimingPoints">How many reported timing points were on its path and timed.</param>
 /// <param name="OffPath">How many reported timing points were not on its path.</param>
 /// <param name="Score">Deviation plus penalties; lower is better.</param>
-public sealed record CandidateScore(TrainId Train, int DeviationSeconds, int TimingPoints, int OffPath, int Score);
+/// <param name="Untimed">The train has no booked times at all (#21): its deviation means nothing, and it is ranked by penalties alone.</param>
+public sealed record CandidateScore(TrainId Train, int DeviationSeconds, int TimingPoints, int OffPath, int Score, bool Untimed = false);
 
 /// <summary>The matcher's answer for one working.</summary>
 public sealed record MatchDecision(
@@ -83,6 +84,9 @@ public sealed record MatchDecision(
 /// train has passed only signals), the score is how far the first actual lies outside the train's booked span.</item>
 /// <item>Candidates whose deviation exceeds the window are dropped. One left: matched (even on signals alone). Several:
 /// matched once the best leads by the margin, or after a few timing points; until then pending.</item>
+/// <item>None within the window, but a WTT train with the headcode has no booked times at all (#21, a train the
+/// signaller brings on when wanted): the untimed one with the fewest penalties is taken, as with timed candidates
+/// (ties wait for a timing point, then a few, then go to file order).</item>
 /// </list>
 /// </remarks>
 public sealed class TrainMatcher
@@ -140,7 +144,12 @@ public sealed class TrainMatcher
             .Select(t => Score(t, request, anySeeded))
             .OrderBy(s => s.Score)
             .ToList();                                 // OrderBy is stable, so ties stay in file order.
-        var inWindow = scores.Where(s => s.DeviationSeconds <= Options.WindowSeconds).ToList();
+        var inWindow = scores.Where(s => !s.Untimed && s.DeviationSeconds <= Options.WindowSeconds).ToList();
+        if (inWindow.Count == 0 && scores.Any(s => s.Untimed))
+        {
+            return MatchUntimed(scores, request);
+        }
+
         if (inWindow.Count == 0)
         {
             return MatchDecision.Unmatched(
@@ -171,6 +180,30 @@ public sealed class TrainMatcher
         }
 
         return MatchDecision.Pending(string.Create(CultureInfo.InvariantCulture, $"{inWindow.Count} candidates within {Options.MarginSeconds} s of each other"), scores);
+    }
+
+    /// <summary>
+    /// Step 4: the untimed candidates, by penalties (off-path points, seeding). One, or a clear best: matched. Several
+    /// alike: pending until a timing point, and taken in file order after <see cref="MatcherOptions.DecideAfterTimingPoints"/>.
+    /// </summary>
+    private MatchDecision MatchUntimed(IReadOnlyList<CandidateScore> scores, MatchRequest request)
+    {
+        var untimed = scores.Where(s => s.Untimed).ToList();          // Already in score order, ties in file order.
+        var best = untimed[0];
+        var timingPoints = request.Actuals.Count(a => a.AtTimingPoint);
+        if (untimed.Count == 1 || untimed[1].Score - best.Score >= Options.MarginSeconds || timingPoints >= Options.DecideAfterTimingPoints)
+        {
+            var note = untimed.Count > 1 && untimed[1].Score - best.Score < Options.MarginSeconds
+                ? string.Create(CultureInfo.InvariantCulture, $"Close call: {untimed[1].Train} is untimed too")
+                : null;
+            return new MatchDecision(MatchStatus.Matched, best.Train, MatchMethod.Untimed, null, note, scores);
+        }
+
+        return MatchDecision.Pending(
+            timingPoints == 0
+                ? string.Create(CultureInfo.InvariantCulture, $"{untimed.Count} untimed candidates; waiting for a timing point")
+                : string.Create(CultureInfo.InvariantCulture, $"{untimed.Count} untimed candidates alike"),
+            scores);
     }
 
     /// <summary>Step 1: the same uid under a new headcode continues as a train its previous train forms.</summary>
@@ -226,14 +259,15 @@ public sealed class TrainMatcher
             }
         }
 
-        var deviation = timed > 0 ? (int)(total / timed) : SpanDistance(train, request.Actuals[0].Time);
+        var untimed = train.EntryTime is null && train.Points.All(p => p.Arrive is null && p.Depart is null);
+        var deviation = untimed ? 0 : timed > 0 ? (int)(total / timed) : SpanDistance(train, request.Actuals[0].Time);
         var penalty = offPath * Options.OffPathPenaltySeconds;
         if (train.Start == TrainStart.Seeded ? !request.PresentAtStart : request.PresentAtStart && anySeeded)
         {
             penalty += Options.SeedMismatchPenaltySeconds;
         }
 
-        return new CandidateScore(train.Id, deviation, timed, offPath, deviation + penalty);
+        return new CandidateScore(train.Id, deviation, timed, offPath, deviation + penalty, untimed);
     }
 
     /// <summary>

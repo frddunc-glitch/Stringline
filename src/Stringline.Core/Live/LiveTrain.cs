@@ -44,6 +44,12 @@ public enum MatchMethod
 
     /// <summary>Linked by the user.</summary>
     Manual,
+
+    /// <summary>
+    /// Same headcode, a WTT train with no booked times (#21): one the signaller brings on when wanted, such as a
+    /// shunt or a grain train run as required. Taken only when no timed train with the headcode is within the window.
+    /// </summary>
+    Untimed,
 }
 
 /// <summary>

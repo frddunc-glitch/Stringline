@@ -121,7 +121,7 @@ public static class CorridorGenerator
 
             var id = candidates.Count == 0 ? "main" : UniqueId($"{path[0].Code}-{path[^1].Code}".ToLowerInvariant(), ids);
             ids.Add(id);
-            var corridor = CorridorBuilder.Create(id, Name(path, candidates), path, measurement);
+            var corridor = CorridorDrawAt.Apply(CorridorBuilder.Create(id, Name(path, candidates), path, measurement), timetable);
             candidates.Add(new CorridorCandidate(corridor, measurement, traffic, newTraffic));
         }
 

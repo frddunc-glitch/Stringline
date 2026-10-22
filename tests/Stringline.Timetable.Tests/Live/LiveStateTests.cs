@@ -437,4 +437,29 @@ public sealed class LiveStateTests
         before.Actuals.Should().HaveCount(1);
         state.Find("31")!.Actuals.Should().HaveCount(2);
     }
+
+    [Fact]
+    public void An_unmatched_working_is_tried_again_at_each_timing_point_unless_unlinked_by_hand()
+    {
+        // 1A01 is booked 06:00 at WLOO; reported first more than an hour late it is unmatched, and is matched once
+        // it is reported within the window (#21).
+        var tt = Of(Train("1A01", points: [Call("WLOO", null, "06:00"), Pass("VAUX", "08:00")]));
+        var state = new LiveState(tt);
+        state.Apply(Clock("05:50"));
+        state.Apply(Location("1", "1A01", "WLOO", "07:10", TrainLocationAction.Depart));
+        state.Find("1")!.Current.Status.Should().Be(MatchStatus.Unmatched);
+
+        state.Apply(Location("1", "1A01", "S9", "07:20"));
+        state.Find("1")!.Current.Status.Should().Be(MatchStatus.Unmatched, "a signal is not a timing point");
+
+        state.Apply(Location("1", "1A01", "VAUX", "08:05"));
+        state.Find("1")!.Current.Should().BeEquivalentTo(new { Status = MatchStatus.Matched, Train = (TrainId?)new TrainId("1A01") });
+
+        var unlinked = new LiveState(tt);
+        unlinked.Apply(Clock("05:50"));
+        unlinked.Apply(Location("1", "1A01", "WLOO", "07:10", TrainLocationAction.Depart));
+        unlinked.Link("1", null);
+        unlinked.Apply(Location("1", "1A01", "VAUX", "08:05"));
+        unlinked.Find("1")!.Current.Status.Should().Be(MatchStatus.Unmatched, "unlinked by hand stays so");
+    }
 }

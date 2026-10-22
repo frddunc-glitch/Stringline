@@ -113,6 +113,9 @@ public static class GraphSceneBuilder
     /// <summary>The colour of a not-running train's WTT line: its category colour, fainter.</summary>
     public static Colour NotRunningColour(Colour colour) => colour with { A = (byte)Math.Round(colour.A * NotRunningAlpha) };
 
+    /// <summary>The point index (<see cref="GraphPath.Points"/>) of an entering train's lead-in vertex at its entry point (#22): no plan point.</summary>
+    public const int EntryVertex = -2;
+
     public static GraphScene Build(GraphSceneRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -364,6 +367,11 @@ public static class GraphSceneBuilder
     private static void AddWtt(List<GraphPath> paths, Corridor corridor, Train train, Colour colour, LineStyle style)
     {
         var builder = new PathAccumulator(corridor);
+        if (train.Points.Count > 0)
+        {
+            AddEntry(builder, corridor, train.EntryPoint, train.EntryLeadSeconds, train.Points[0].Location, train.Points[0].FirstTime);
+        }
+
         for (var i = 0; i < train.Points.Count; i++)
         {
             var point = train.Points[i];
@@ -383,7 +391,13 @@ public static class GraphSceneBuilder
         ArgumentNullException.ThrowIfNull(corridor);
         ArgumentNullException.ThrowIfNull(train);
         var builder = new PathAccumulator(corridor);
-        foreach (var point in train.RunningPoints)
+        var running = train.RunningPoints;
+        if (running.Count > 0 && running[0].Index == 0)
+        {
+            AddEntry(builder, corridor, train.EntryPoint, train.EntryLeadSeconds, running[0].Location, running[0].FirstTime);
+        }
+
+        foreach (var point in running)
         {
             AddBooked(builder, point.Location, point.Arrive, point.Depart, point.IsPass, point.Index);
         }
@@ -409,6 +423,14 @@ public static class GraphSceneBuilder
         var colour = request.Profile.StyleFor(categoryId).Colour;
         var byDelay = request.ColourMode == GraphColourMode.Delay;
         var builder = new PathAccumulator(corridor);
+        if (first == 0 && forecast.Status == TrainForecastStatus.NotStarted && forecast.Points[0] is { Index: 0, Basis: ForecastBasis.Forecast } start)
+        {
+            // Not in the sim yet: from its entry point, as long before as the plan books it.
+            var plan = request.Plan?.Find(forecast.Train);
+            var wtt = plan is null ? request.Timetable?.Find(forecast.Train) : null;
+            AddEntry(builder, corridor, plan?.EntryPoint ?? wtt?.EntryPoint, plan?.EntryLeadSeconds ?? wtt?.EntryLeadSeconds, start.Location, start.FirstTime);
+        }
+
         if (forecast.Points[first].Basis == ForecastBasis.Forecast)
         {
             for (var k = first - 1; k >= 0; k--)
@@ -497,6 +519,21 @@ public static class GraphSceneBuilder
     }
 
     /// <summary>A booked or planned point: one vertex for a pass or a point with one time, two for a stop with a dwell.</summary>
+    /// <summary>
+    /// An entering train's lead-in (#22): a first vertex at the corridor location its entry point draws at
+    /// (<see cref="Corridor.DrawAt"/>), <paramref name="lead"/> before its first point, so a train entering beyond the
+    /// corridor's end is drawn from that end. Nothing if the entry does not draw on the corridor, or draws where the
+    /// first point does.
+    /// </summary>
+    private static void AddEntry(PathAccumulator builder, Corridor corridor, Tiploc? entry, int? lead, Tiploc first, SimTime? firstTime)
+    {
+        if (entry is { } at && lead is { } seconds && firstTime is { } time
+            && corridor.DrawIndexOf(at) is var index and >= 0 && index != corridor.DrawIndexOf(first))
+        {
+            builder.Add(at, time - seconds, point: EntryVertex);
+        }
+    }
+
     private static void AddBooked(PathAccumulator builder, Tiploc location, SimTime? arrive, SimTime? depart, bool isPass, int index)
     {
         if (arrive is null && depart is null)
@@ -651,12 +688,15 @@ public static class GraphSceneBuilder
         /// <param name="point">The plan point index, for booked, planned and forecast points; -1 for none.</param>
         public void Add(Tiploc location, SimTime time, int? delay = null, int point = -1)
         {
-            var index = corridor.IndexOf(location);
+            // A location within a corridor location, or an entry point beyond its end, draws there (#22, #23).
+            var index = corridor.DrawIndexOf(location);
             if (index < 0)
             {
                 _away |= _current is not null;
                 return;
             }
+
+            location = corridor.Locations[index].Tiploc;
 
             if (_current is null || (_away && index == _lastIndex))
             {

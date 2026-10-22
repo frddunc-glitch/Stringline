@@ -234,6 +234,10 @@ internal static class CorridorsCommand
         }
 
         WttDumpCommand.WriteTable(w, header, rows);
+        if (c.DrawAt.Count > 0)
+        {
+            w.WriteLine($"Drawn at a corridor location: {string.Join(", ", c.DrawAt.Select(d => $"{d.Location} at {d.At?.Code ?? "(not drawn)"}"))}.");
+        }
     }
 
     /// <summary>

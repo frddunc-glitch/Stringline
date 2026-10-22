@@ -124,7 +124,7 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
     public ObservableCollection<CorridorRow> Corridors { get; } = [];
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(RemoveCorridorCommand), nameof(MoveCorridorUpCommand), nameof(MoveCorridorDownCommand), nameof(AddLocationCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveCorridorCommand), nameof(MoveCorridorUpCommand), nameof(MoveCorridorDownCommand), nameof(AddLocationCommand), nameof(AddDrawAtCommand))]
     public partial CorridorRow? SelectedCorridor { get; set; }
 
     /// <summary>Generated corridors not yet in the profile.</summary>
@@ -141,6 +141,17 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
     public partial CorridorLocationRow? SelectedLocation { get; set; }
 
     public ObservableCollection<SectionRow> Sections { get; } = [];
+
+    /// <summary>The selected corridor's off-corridor locations drawn at one of its own (#22, #23).</summary>
+    public ObservableCollection<DrawAtRow> DrawAt { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ResetDrawAtCommand))]
+    public partial DrawAtRow? SelectedDrawAt { get; set; }
+
+    /// <summary>Where a <see cref="DrawAt"/> entry can draw: <see cref="DrawAtRow.NotDrawn"/>, then the corridor's locations.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<string> DrawAtChoices { get; private set; } = [];
 
     /// <summary>The selected corridor's locations on its axis, for the preview.</summary>
     [ObservableProperty]
@@ -202,6 +213,7 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
     {
         Locations.Clear();
         Sections.Clear();
+        DrawAt.Clear();
         SyncCorridor();
     }
 
@@ -334,6 +346,55 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
         }
     }
 
+    /// <summary>Draws a location off the selected corridor at one of its locations (#23), set by hand.</summary>
+    [RelayCommand(CanExecute = nameof(HasCorridor))]
+    private void AddDrawAt()
+    {
+        if (CurrentCorridor is not { } corridor)
+        {
+            return;
+        }
+
+        var prompt = new PromptViewModel(
+            "Draw a location at the corridor's",
+            $"Trains booked or reported at a location off {corridor.Name} (a loop, yard or platform with a code of its own, or an entry point) are drawn at the corridor location you pick.",
+            new PromptField("Location", string.Empty, LocationOptions(corridor), "A TIPLOC, or pick one the timetable uses."),
+            new PromptField("Drawn at", string.Empty, DrawAtChoices.Skip(1).ToList(), "A location on the corridor."))
+        {
+            Validate = p => ParseLocation(p[0]) is not { } t ? "Choose a location."
+                : corridor.Contains(t) ? $"{t} is already on the corridor."
+                : ParseDrawAt(p[1]) is not { } at || !corridor.Contains(at) ? "Choose a location on the corridor to draw it at." : null,
+        };
+        if (!_dialogs.Prompt(prompt))
+        {
+            return;
+        }
+
+        var location = ParseLocation(prompt[0])!.Value;
+        if (TryEdit(p => p.WithDrawAt(corridor.Id, location, ParseDrawAt(prompt[1]))))
+        {
+            SelectedDrawAt = DrawAt.FirstOrDefault(r => r.Location == location);
+        }
+    }
+
+    /// <summary>The selected entry back to what the WTT suggests (removed if it suggests nothing).</summary>
+    [RelayCommand(CanExecute = nameof(CanResetDrawAt))]
+    private void ResetDrawAt()
+    {
+        if (CurrentCorridor is { } corridor && SelectedDrawAt is { } row)
+        {
+            TryEdit(p => p.ResetDrawAt(corridor.Id, row.Location, _timetable));
+        }
+    }
+
+    /// <summary>A <see cref="DrawAtChoices"/> entry as a location; null for <see cref="DrawAtRow.NotDrawn"/> or blank.</summary>
+    internal Tiploc? ParseDrawAt(string? text) =>
+        text is null || string.Equals(text.Trim(), DrawAtRow.NotDrawn, StringComparison.OrdinalIgnoreCase) ? null : ParseLocation(text);
+
+    /// <summary>A location as offered in a list: "Name (TIPLOC)", or the TIPLOC if it has no name.</summary>
+    internal static string Choice(StringlineProfile profile, Tiploc tiploc) =>
+        profile.DisplayName(tiploc) is var name && name != tiploc.Code ? $"{name} ({tiploc.Code})" : tiploc.Code;
+
     [RelayCommand(CanExecute = nameof(HasLocation))]
     private void RemoveLocation()
     {
@@ -422,6 +483,8 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
     private bool HasCorridor() => SelectedCorridor is not null;
 
     private bool HasLocation() => SelectedLocation is not null;
+
+    private bool CanResetDrawAt() => SelectedDrawAt is { IsHandSet: true };
 
     private bool CanMoveCorridorUp() => SelectedCorridor is { } row && Corridors.IndexOf(row) > 0;
 
@@ -593,6 +656,8 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
             {
                 Locations.Clear();
                 Sections.Clear();
+                DrawAt.Clear();
+                DrawAtChoices = [];
                 AxisMarks = [];
             }
             else
@@ -628,6 +693,7 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
                     Sections[i].Load(corridor.Sections[i], Draft);
                 }
 
+                SyncDrawAt(corridor);
                 AxisMarks = corridor.Locations
                     .Select(l => new AxisMark(Draft.DisplayName(l.Tiploc), l.AxisPosition, !l.Minor && (l.Platforms > 0 || !l.IsTimingPointOnly), l.Minor))
                     .ToList();
@@ -641,6 +707,36 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
         {
             _syncing = wasSyncing;
         }
+    }
+
+    /// <summary>The selected corridor's drawn-at entries and the choices for them.</summary>
+    private void SyncDrawAt(Corridor corridor)
+    {
+        var choices = new List<string> { DrawAtRow.NotDrawn };
+        choices.AddRange(corridor.Locations.Select(l => Choice(Draft, l.Tiploc)));
+        if (!choices.SequenceEqual(DrawAtChoices))
+        {
+            DrawAtChoices = choices;
+        }
+
+        if (!DrawAt.Select(r => r.Location).SequenceEqual(corridor.DrawAt.Select(d => d.Location)))
+        {
+            var selected = SelectedDrawAt?.Location;
+            DrawAt.Clear();
+            foreach (var entry in corridor.DrawAt)
+            {
+                DrawAt.Add(new DrawAtRow(this, corridor.Id, entry.Location));
+            }
+
+            SelectedDrawAt = DrawAt.FirstOrDefault(r => r.Location == selected);
+        }
+
+        for (var i = 0; i < corridor.DrawAt.Count; i++)
+        {
+            DrawAt[i].Load(corridor.DrawAt[i], Draft);
+        }
+
+        ResetDrawAtCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>Locations to offer: the timetable's, less those already on <paramref name="corridor"/>, as "Name (TIPLOC)".</summary>

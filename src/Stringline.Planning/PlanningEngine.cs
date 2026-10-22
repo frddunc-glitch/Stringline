@@ -62,6 +62,7 @@ public sealed partial class PlanningEngine
     private readonly TimeProvider _time;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
+    private readonly HashSet<TrainId> _failureLogged = [];
     private readonly List<GatewayEvent> _history = [];
     private readonly List<PlanHistoryEntry> _done = [];
     private readonly List<PlanHistoryEntry> _undone = [];
@@ -692,6 +693,11 @@ public sealed partial class PlanningEngine
         if (_forecast.Trains.Count(t => t.Status == TrainForecastStatus.Unavailable) is var failed and > 0)
         {
             LogForecastUnavailable(failed);
+            foreach (var train in _forecast.Trains.Where(t => t.Status == TrainForecastStatus.Unavailable && _failureLogged.Add(t.Train)))
+            {
+                // Once per train, with why (#21): the count alone says nothing about which train or what went wrong.
+                LogTrainForecastFailed(train.Failure, train.Headcode, train.Train);
+            }
         }
     }
 
@@ -766,4 +772,7 @@ public sealed partial class PlanningEngine
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "The forecast failed for {Trains} trains; they are shown without one")]
     private partial void LogForecastUnavailable(int trains);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The forecast failed for {Headcode} ({Train})")]
+    private partial void LogTrainForecastFailed(Exception? ex, Headcode headcode, TrainId train);
 }

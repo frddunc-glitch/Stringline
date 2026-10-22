@@ -246,10 +246,11 @@ public static class Forecaster
                 action();
             }
 #pragma warning disable CA1031 // One train's failure must not stop the others (02-…md §6): it is marked unavailable.
-            catch (Exception)
+            catch (Exception ex)
 #pragma warning restore CA1031
             {
                 runner.Failed = true;
+                runner.Failure ??= ex;
                 runner.ReleaseAll(this);
                 DropWatchers(runner, useResults: false);
             }
@@ -1391,6 +1392,8 @@ public static class Forecaster
 
         public bool Failed { get; set; }
 
+        public Exception? Failure { get; set; }
+
         public bool Done { get; set; }
 
         /// <summary>Where a block held the train (<see cref="TrainForecast.BlockHolds"/>).</summary>
@@ -1461,7 +1464,7 @@ public static class Forecaster
         {
             if (Failed)
             {
-                return new TrainForecast(Train.Id, Train.Headcode, TrainForecastStatus.Unavailable, [], LiveUid);
+                return new TrainForecast(Train.Id, Train.Headcode, TrainForecastStatus.Unavailable, [], LiveUid) { Failure = Failure };
             }
 
             if (Status == TrainForecastStatus.NotRunning)

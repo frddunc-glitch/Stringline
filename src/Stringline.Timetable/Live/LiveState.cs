@@ -321,8 +321,11 @@ public sealed partial class LiveState
         }
 
         live = Replace(live with { Actuals = live.Actuals.Add(new ActualEvent(e.Location, e.Action, e.Time, e.Platform, atTimingPoint, live.CurrentIndex, e.AspectPassed, e.AspectApproach)) });
-        if (live.Current.Status == MatchStatus.Pending)
+        if (live.Current.Status == MatchStatus.Pending
+            || (live.Current.Status == MatchStatus.Unmatched && atTimingPoint && !_manualLinks.ContainsKey((live.SimUid, live.Headcode))))
         {
+            // Unmatched is tried again at each timing point (#21): a late train may come back within the window, or
+            // another working may free its WTT train. Unlinked by hand stays so.
             Rematch(live, live.CurrentIndex);
         }
 
@@ -367,7 +370,7 @@ public sealed partial class LiveState
             _matched[train] = (live.SimUid, index);
             LogMatched(live.SimUid, working.Headcode, train, decision.Method, decision.DeviationSeconds);
         }
-        else if (decision.Status == MatchStatus.Unmatched)
+        else if (decision.Status == MatchStatus.Unmatched && working.Status != MatchStatus.Unmatched)
         {
             LogUnmatched(live.SimUid, working.Headcode, decision.Reason);
         }

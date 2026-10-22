@@ -240,6 +240,38 @@ public static class ProfileEdits
             return c with { Locations = c.Locations.Select((l, i) => i == index ? l with { Minor = minor } : l).ToList() };
         });
 
+    /// <summary>
+    /// <paramref name="location"/>, off the corridor, drawn at the corridor's <paramref name="at"/> (#23), or not drawn
+    /// if null; set by hand, so a refresh keeps it.
+    /// </summary>
+    public static StringlineProfile WithDrawAt(this StringlineProfile profile, string id, Tiploc location, Tiploc? at) =>
+        profile.EditCorridor(id, c =>
+        {
+            if (c.Contains(location))
+            {
+                throw new ProfileEditException($"{location} is on the corridor: it is drawn on its own row.");
+            }
+
+            if (at is { } target && !c.Contains(target))
+            {
+                throw new ProfileEditException($"{target} is not on the corridor.");
+            }
+
+            var entry = new DrawnAt(location, at, HandSet: true);
+            return c with { DrawAt = [.. c.DrawAt.Where(d => d.Location != location).Append(entry).OrderBy(d => d.Location.Code, StringComparer.Ordinal)] };
+        });
+
+    /// <summary>
+    /// <paramref name="location"/>'s entry no longer set by hand: drawn where the WTT suggests
+    /// (<see cref="CorridorDrawAt"/>), or not at all if it suggests nowhere (no timetable: removed).
+    /// </summary>
+    public static StringlineProfile ResetDrawAt(this StringlineProfile profile, string id, Tiploc location, WorkingTimetable? timetable) =>
+        profile.EditCorridor(id, c =>
+        {
+            var rest = c with { DrawAt = [.. c.DrawAt.Where(d => d.Location != location)] };
+            return timetable is null ? rest : CorridorDrawAt.Apply(rest, timetable);
+        });
+
     public static StringlineProfile RemoveLocation(this StringlineProfile profile, string id, int index, WorkingTimetable? timetable) =>
         profile.EditLocations(id, timetable, locations =>
         {
@@ -503,7 +535,8 @@ public static class ProfileEdits
         && a.Axis == b.Axis
         && a.Locations.Count == b.Locations.Count
         && a.Locations.Zip(b.Locations).All(p => p.First.Tiploc == p.Second.Tiploc && p.First.DistanceKm == p.Second.DistanceKm && p.First.Platforms == p.Second.Platforms && p.First.Minor == p.Second.Minor)
-        && a.Sections.Zip(b.Sections).All(p => SameHandHeadway(p.First, p.Second) && p.First.Tracks.SequenceEqual(p.Second.Tracks));
+        && a.Sections.Zip(b.Sections).All(p => SameHandHeadway(p.First, p.Second) && p.First.Tracks.SequenceEqual(p.Second.Tracks))
+        && a.DrawAt.Where(d => d.HandSet).SequenceEqual(b.DrawAt.Where(d => d.HandSet));
 
     private static bool SameHandHeadway(Section a, Section b) =>
         (a.HeadwaySource == HeadwaySource.Hand) == (b.HeadwaySource == HeadwaySource.Hand)

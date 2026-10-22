@@ -59,6 +59,52 @@ public sealed record Corridor(
 
     public bool Contains(Tiploc location) => IndexOf(location) >= 0;
 
+    /// <summary>
+    /// Locations off the corridor that the graph draws at a corridor location (#22, #23): a loop or yard within a
+    /// station (Harden's <c>HARDN10</c> at <c>HARDEN</c>), or an entry point beyond the corridor's end (<c>EJUNEE</c>
+    /// at <c>JUNEE</c>). Found from the WTT (<see cref="CorridorDrawAt"/>) or set by hand. Drawing only: sections,
+    /// the forecast and conflicts still see the location itself.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<DrawnAt> DrawAt
+    {
+        get => _drawAt ?? [];
+        init => _drawAt = value is { Count: > 0 } ? value : null;
+    }
+
+    /// <summary><see cref="DrawAt"/> as saved: left out of the profile when there are none.</summary>
+    [JsonInclude]
+    [JsonPropertyName("drawAt")]
+    private IReadOnlyList<DrawnAt>? DrawAtJson
+    {
+        get => _drawAt;
+        init => _drawAt = value is { Count: > 0 } ? value : null;
+    }
+
+    private readonly IReadOnlyList<DrawnAt>? _drawAt;
+
+    /// <summary>
+    /// The index of the corridor location this location draws at: its own, else the one <see cref="DrawAt"/> gives, or -1.
+    /// </summary>
+    public int DrawIndexOf(Tiploc location)
+    {
+        var index = IndexOf(location);
+        if (index >= 0)
+        {
+            return index;
+        }
+
+        foreach (var drawn in DrawAt)
+        {
+            if (drawn.Location == location)
+            {
+                return drawn.At is { } at ? IndexOf(at) : -1;
+            }
+        }
+
+        return -1;
+    }
+
     /// <summary>The axis position (0..1) of this location, or null if it is not on the corridor.</summary>
     public double? PositionOf(Tiploc location) => IndexOf(location) is var i and >= 0 ? Locations[i].AxisPosition : null;
 
@@ -105,6 +151,15 @@ public sealed record Corridor(
 
     public override string ToString() => $"{Id} ({Name}, {Locations.Count} locations)";
 }
+
+/// <summary>An off-corridor location drawn at a corridor location (<see cref="Corridor.DrawAt"/>).</summary>
+/// <param name="Location">The location as the WTT or the sim names it.</param>
+/// <param name="At">The corridor location it draws at; null if it is not drawn (set by hand to turn an automatic one off).</param>
+/// <param name="HandSet">Set in the profile editor: kept when the corridor is refreshed. Automatic ones are found again.</param>
+public sealed record DrawnAt(
+    Tiploc Location,
+    Tiploc? At = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool HandSet = false);
 
 /// <param name="AxisPosition">Position on the distance axis, 0 at the first location and 1 at the last.</param>
 /// <param name="DistanceKm">Configured distance from a fixed origin, if the user entered one.</param>
