@@ -80,6 +80,7 @@ A few rules run through the code:
 | `replay-server` | Plays a recording on port 51515 as a stand-in for SimSig (`--speed`, `--start`; Space pauses, `+`/`-` change speed) |
 | `wtt-dump` | Prints a timetable, one train (`--train`) or its import warnings; the rules the forecast applies and those it leaves out (S32) |
 | `wtt-save` | Opens a timetable losslessly and saves it as a new version (`--bump`), optionally shifting trains' times (`--shift-train 1A23 +5`); a round-trip and smoke tool for the S40 writer, not the editor |
+| `simdata` | Builds (or reads from its cache) what Stringline knows about a sim from its timetables, saved sessions, recordings (`--log`) and profile, and prints a summary, a location (`--location`) or a link (`--link A B`) (S41) |
 | `match` | Matches a recording's trains to a timetable and lists the ones it could not |
 | `corridors` | Proposes corridors, sections, run times and headways from a timetable, and can write a starter profile; `--places` takes a learned profile's signal blocks for each section's block headway (S39) |
 | `render-png` | Draws a corridor's graph to a PNG or PDF with the app's renderer, including multi-page plots (`--plot`) and learned signals on the axis (`--signals`) |

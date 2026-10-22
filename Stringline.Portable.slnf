@@ -10,6 +10,7 @@
       "src\\Stringline.Optimiser\\Stringline.Optimiser.csproj",
       "src\\Stringline.Persistence\\Stringline.Persistence.csproj",
       "src\\Stringline.Graph\\Stringline.Graph.csproj",
+      "src\\Stringline.Editing\\Stringline.Editing.csproj",
       "src\\Stringline.Tools\\Stringline.Tools.csproj",
       "benchmarks\\Stringline.Benchmarks\\Stringline.Benchmarks.csproj",
       "tests\\Stringline.Core.Tests\\Stringline.Core.Tests.csproj",
@@ -21,6 +22,7 @@
       "tests\\Stringline.Optimiser.Tests\\Stringline.Optimiser.Tests.csproj",
       "tests\\Stringline.Persistence.Tests\\Stringline.Persistence.Tests.csproj",
       "tests\\Stringline.Tools.Tests\\Stringline.Tools.Tests.csproj",
+      "tests\\Stringline.Editing.Tests\\Stringline.Editing.Tests.csproj",
       "tests\\Stringline.Architecture.Tests\\Stringline.Architecture.Tests.csproj"
     ]
   }

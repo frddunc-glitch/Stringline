@@ -2248,6 +2248,41 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Questions for Fred
 - 44. **Hand-edited line breaks.** 14 corpus files hold raw line breaks in descriptions (Carlisle 79-80, Leamington 2009, Penzance, Staffordshire 2019…). Saved, they become `&#x000A;`. If one of these is to hand, does SimSig show the description the same after a round trip?
 
+## 2026-10-22 — S41: Sim knowledge (#20)
+
+### Done
+- **Fred's choices** (asked during the session): run times by **fixed speed bands** (up to 50, 51–75, 76–90, 91–100, 101–125, over 125 mph, each passenger or freight); **dwells by station and band** (category IDs are random per timetable); the **saved sessions for the area** as the default play, with `--log` for more.
+- **New project `Stringline.Editing`** (`net10.0`; references Core, Timetable, Network and Planning), in the solution and `Stringline.Portable.slnf`, with `tests/Stringline.Editing.Tests`. The architecture tests check it is portable, that it uses only those layers, and that nothing below uses it.
+- **`SimKnowledge`** (`Stringline.Editing.Knowledge`, `08-…md` §4.1): locations with their roles (timing, station, key, reversing, entry, seed, reported), names and corridors from the profile, and the platform, line and path codes booked there and the platforms reported there, with counts; directed links A → B with A's lines, B's paths, Down/Up counts and run times by band (least and usual, net of allowances); dwells by station and band; skip chains (`LocationGraph` over all the sim's timetables); signals reported in play, the signals trains entered at with their WTT entry points, and the profile's learned signals, track circuits and berths. Lookups: `Location`, `Link`, `LinksFrom`, `RunTime`/`NearestRunTime`, `Dwell`/`NearestDwell`, `Signal`, and `Chain(A, B)` (a skip chain, else the fewest booked links), for S42's checks and fixes and S46's auto-fill.
+- **`SimKnowledgeBuilder`** takes timetables, play (gateway events) and a profile in any order. **`SimKnowledgeStore`** finds the sources (`WttCatalogue.FindForArea` over the timetable folders, the play files, the profile; the draft excluded), and caches `{area}.simdata.json` beside the profile, rebuilt when any source is added, removed or changed (path, time and size) or the format changes. Unreadable sources are named and left out.
+- **`PlayFiles`** (Persistence): a sim's play among the saved sessions (live sessions, and replays' recordings once each), and the events of a recording or session.
+- **CLI:** `stringline simdata --area waterloo [--folder f] [--sessions dir|--no-sessions] [--log x] [--profile p|--no-profile] [--exclude draft.wtt] [--cache-folder d] [--rebuild] [--location WIMB] [--link WLOO VAUX]`.
+- **Waterloo** (fixture WTT and the 4 h recording, 1.5 s): 39 locations, 56 links, all timed; WLOO → VAUX booked 452 times on DMS 285, DWF 164, DMF 3, 91–100 mph 3:00 least / 3:30 usual, through INTJN by its skip chain; 170 signals, 8 of them entry signals, each with one entry point (S4304 ↔ EUPMNS 47, S4306 ↔ EUPMNF 43, S4409 ↔ EWINSLO 21, S457 ↔ ECY457 17…). **Llangollen:** CARROG a station, key and reversing location (platform 1, 20 calls), REVCA19 and the other sidings reversing; LLANGOLLEN → BERWYN never booked direct but through GOODSJNC.
+- **Corpus** (285 timetables, 112 sims; times per sim, Debug, this PC): 23.4 s in all, none over 1 s. The slowest: cardiff 0.97 s (7 timetables, 6 499 trains), threebridges 0.91 s (3, 8 397), sydneynsw 0.87 s (4, 8 334), carlisle 0.84 s (7, 7 989), wimbledon 0.77 s (3, 7 385), kingsx 0.60 s, cardiffvalleys 0.58 s, strathfield 0.56 s, marylebone 0.45 s, victoriaeast 0.42 s, sandhills 0.42 s, victoria 0.41 s; most others 0.05–0.35 s; waterloo 0.15 s (2 timetables). The full list is in the corpus test's output (`dotnet test tests/Stringline.Editing.Tests --filter Every_sim --logger "console;verbosity=detailed"`).
+- **Docs:** `08-…md` §4.1, the plan's "Built in S41", `02-…md` (layout, the cache file), `CLAUDE.md`, `docs/developer.md`, `PRIVACY.md` (the cache in the profiles folder). No UI change, so no guide change.
+- **Tests:** Editing +32 (`SimKnowledgeBuilderTests` 21: bands and their text, a link's codes, direction and run times net of allowances, roles, dwells, one call per location, the nearest band, chains, play's locations, signals and entry signals, another sim's play, another sim's timetable, the profile, JSON round trip and format; `SimKnowledgeFixtureTests` 4: Waterloo's codes, links and run times, its recording's signals and entry signals, Llangollen, the corpus; `SimKnowledgeStoreTests` 7: the cache's name, built once then cached, a changed, added and removed timetable, the profile as a source, the draft left out, a damaged source, a damaged or old cache); Persistence +3 (`PlayFilesTests`); Tools +4 (`SimdataCommandTests`); Architecture +2 (Editing portable; its layers).
+- Totals: 1 977 (Core 319, Architecture 20, Gateway 211, Timetable 214, Network 199, Planning 339, Persistence 16, Graph 302, Optimiser 25, Editing 32, Tools 90, App 210). Green on Windows (Debug), except `HelpTests`' F1 test, which failed once in the full parallel run (13 s) and passed alone, a timing flake; the solution and the portable solution build with `-warnaserror`. Linux not run.
+
+### Decisions
+- **Editing learns from events, not files:** recordings and sessions are read by Persistence (`PlayFiles`) and handed over as a `PlayReader`, so the editing layer stays on Timetable, Network and Planning as `08-…md` §10 says.
+- **Anything reported that is not a timing location is a signal:** SimSig reports only timing locations and signals, and older recordings (Waterloo's 4×) carry no aspects, so a location is a timing location when some timetable books it, a corridor holds it or a train stopped there.
+- **An unreadable source stays a source** for the cache, so a damaged file does not force a rebuild on every use; it is tried again when it changes.
+- **Knowledge is evidence, never proof:** everything is a count of what was seen, so S42's checks can say "never seen" with how much was looked at.
+
+### Next
+- S42 (checks before SimSig), using `SimKnowledge` for the sim-knowledge checks and `Chain` for the "no known path" fix.
+- 👤 **S40's gate** is still open (round-tripped Waterloo and a payware timetable through SimSig's Analyser).
+
+### Known issues
+- Dwells and run times are from the booked times, which are to the half minute, so least and usual are in 30 s steps.
+- An entry signal's entry point is found by headcode; a headcode with several entry points in the sim's timetables gives none.
+- A timing location no timetable books, on no corridor and where no train stopped (passed only) is taken for a signal.
+- The app does not build knowledge yet; S42 and S43 will (the store is ready for it).
+- `HelpTests.Help_user_guide_and_F1_open_the_page_for_the_panel_with_the_focus` can time out when the whole suite runs in parallel on a loaded PC; it passes alone. Untouched by S41.
+
+### Questions for Fred
+- 45. **Entry signals.** A train first reported more than 2 min after play began is taken to have entered at that signal (as the live state takes it). On Waterloo this gives one entry point per entry signal. Is there a sim where trains appear mid-area (not at an entry), which this would mistake for an entry?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

@@ -25,7 +25,7 @@ Nothing else is sent:
 | What | Where | What is in it |
 |---|---|---|
 | Settings | `%APPDATA%\Stringline\settings.json` | The gateway's host and port, your SimSig user name, whether to remember the password, and the password itself only if you ticked **Remember** (see below). Also your options, the timetables you last used, the folders you chose and the window layout. |
-| Sim profiles | `%APPDATA%\Stringline\profiles` | Each sim's corridors, location names, distances, headways and colours. Nothing about you. |
+| Sim profiles | `%APPDATA%\Stringline\profiles` | Each sim's corridors, location names, distances, headways and colours, and what Stringline has learned about the sim from its timetables and recordings (`.simdata.json`). Nothing about you. |
 | Logs | `%LOCALAPPDATA%\Stringline\logs` | What the app did, one file a day, kept for 14 days unless you change it (Tools ▸ Options ▸ Logging and housekeeping). Each connection's line names the host, the port and your SimSig user name. Logs never hold your password. |
 | The user guide | `%LOCALAPPDATA%\Stringline\help` | The guide as web pages, written the first time you open help. |
 | Unpacked parts of the app | `%TEMP%\.net\Stringline` | Libraries Windows unpacks from `Stringline.exe` the first time it runs. |

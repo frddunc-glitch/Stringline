@@ -8,6 +8,8 @@
     <ProjectReference Include="..\..\src\Stringline.Planning\Stringline.Planning.csproj" />
     <ProjectReference Include="..\..\src\Stringline.Persistence\Stringline.Persistence.csproj" />
     <ProjectReference Include="..\..\src\Stringline.Graph\Stringline.Graph.csproj" />
+    <ProjectReference Include="..\..\src\Stringline.Editing\Stringline.Editing.csproj" />
+    <ProjectReference Include="..\..\src\Stringline.Optimiser\Stringline.Optimiser.csproj" />
     <ProjectReference Include="..\..\src\Stringline.Tools\Stringline.Tools.csproj" />
   </ItemGroup>
 

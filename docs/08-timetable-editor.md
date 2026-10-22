@@ -71,6 +71,18 @@ It holds:
 
 `stringline simdata --area waterloo [--folder f] [--location WIMB]` prints it.
 
+### 4.1 Built in S41
+- **Bands** (Fred): a train's maximum speed (its own, else its category's) in fixed bands, up to 50, 51–75, 76–90, 91–100, 101–125 and over 125 mph (plus unknown), each passenger or freight (`RunBand`, written `76-90` or `51-75 freight`). Category IDs are random per timetable, so **dwells are keyed by station and band** too (Fred), the same key as run times.
+- **Run times** are from the departure or pass at A to the arrival or pass at B, less A's allowances, as `CorridorMeasurement` measures them; runs of zero or less are left out. Consecutive points at one location are one call. "Usual" is the median (the lower middle), "least" the fastest. When a band has none, `NearestRunTime` and `NearestDwell` use the same freight flag at the nearest speed (the slower of two equally near), then the other flag.
+- **Dwells** are learned at intermediate stops with no activity (a next working or join books its own wait).
+- **Roles:** timing (booked in a timetable), station (a booked stop), key (an activity), reversing (out and back, or a next working that goes back the way it came), entry, seed, and reported (in play).
+- **Links** are directed (A → B is not B → A), with A's line and B's path counted, and Down or Up from SimSig's direction flag at B (else A). **Skip chains** are `LocationGraph`'s expansions over all the sim's timetables at once. `Chain(A, B)` gives a skip chain with those ends (either way round), else the fewest booked links from A to B, the most booked on a tie: S42's "no known path" fix and S46's insert timing points.
+- **Play:** a reported location is a timing location if some timetable books it, it is on a corridor, or a train stopped there; anything else is a signal (SimSig reports only those two, and older recordings carry no aspect). A train first reported more than 2 min after play began (as `LiveState`) entered the sim at that signal; its WTT entry point is found by headcode when the headcode has only one. On Waterloo's 4 h recording every entry signal maps to one entry point (S4304 ↔ EUPMNS, S457 ↔ ECY457…). A recording whose clock names another sim is left out.
+- **Profile:** location names, corridors, and the learned signals, track circuits and berths with their places.
+- **Sources** (Fred): every `.wtt` for the sim in the timetable folders; the **saved sessions for the area** (live ones by their frames, replays by their recording, `PlayFiles.ForArea` in Persistence); any recordings given; and the profile. Editing never reads recordings or sessions itself: it is given a `PlayReader`, so it keeps to Timetable, Network and Planning.
+- **Cache:** `SimKnowledgeStore` keys it by each source's path, time and size; a source added, removed or changed rebuilds it, as does another format. A source that cannot be read is named and left out, and stays left out until it changes. The excluded files (the draft) are never sources.
+- **Speed:** the 112 sims of the 285-file corpus build in 23 s in all, none over 1 s (Cardiff, 7 timetables and 6 499 trains, is the slowest at about 1 s). Waterloo with its 4 h recording builds in 1.5 s.
+
 ## 5. Checks (`TimetableValidator`, portable)
 
 Each issue is `ValidationIssue(Severity, Code, Train?, PointIndex?, Message, Hint, QuickFix?)`. The severities are Error (SimSig will refuse it or the train will fail), Warning (likely wrong) and Info.

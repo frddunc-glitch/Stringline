@@ -17,6 +17,7 @@ public class LayeringTests
         "Stringline.Optimiser",
         "Stringline.Persistence",
         "Stringline.Graph",
+        "Stringline.Editing",
         "stringline", // Stringline.Tools
     };
 
@@ -31,6 +32,26 @@ public class LayeringTests
 
         assembly.GetCustomAttribute<TargetFrameworkAttribute>()!.FrameworkName.Should().Be(".NETCoreApp,Version=v10.0");
         assembly.GetReferencedAssemblies().Select(a => a.Name).Should().NotIntersectWith(WindowsOnlyAssemblies);
+    }
+
+    /// <summary>
+    /// The timetable editor's core (S41, <c>08-…md</c> §10) sits on the timetable, network and planning layers. It learns
+    /// from play through gateway events (Core), so it never reads recordings or sessions itself, and nothing below it
+    /// may use it.
+    /// </summary>
+    [Fact]
+    public void The_editing_layer_uses_only_the_layers_below_it()
+    {
+        var allowed = new[] { "Stringline.Core", "Stringline.Timetable", "Stringline.Network", "Stringline.Planning" };
+        var editing = XDocument.Load(Path.Combine(FindRepoRoot(), "src", "Stringline.Editing", "Stringline.Editing.csproj"));
+
+        editing.Descendants("ProjectReference").Select(r => Path.GetFileNameWithoutExtension(r.Attribute("Include")!.Value)).Should().BeSubsetOf(allowed);
+        Assembly.Load(new AssemblyName("Stringline.Editing")).GetReferencedAssemblies().Select(a => a.Name).Where(n => n!.StartsWith("Stringline", StringComparison.Ordinal))
+            .Should().BeSubsetOf(allowed);
+        foreach (var below in allowed.Append("Stringline.Gateway").Append("Stringline.Persistence").Append("Stringline.Graph").Append("Stringline.Optimiser"))
+        {
+            Assembly.Load(new AssemblyName(below)).GetReferencedAssemblies().Select(a => a.Name).Should().NotContain("Stringline.Editing", "{0} is below the editing layer", below);
+        }
     }
 
     [Fact]

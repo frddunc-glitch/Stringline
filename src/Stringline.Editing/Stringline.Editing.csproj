@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Stringline.Editing</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Stringline.Core\Stringline.Core.csproj" />
+    <ProjectReference Include="..\Stringline.Timetable\Stringline.Timetable.csproj" />
+    <ProjectReference Include="..\Stringline.Network\Stringline.Network.csproj" />
+    <ProjectReference Include="..\Stringline.Planning\Stringline.Planning.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Stringline.Editing.Tests" />
+  </ItemGroup>
+
+</Project>

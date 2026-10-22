@@ -553,6 +553,7 @@ Fred raised #20 on 2026-10-20: SimSig's editor and outside tools handle timetabl
   - the cache's invalidation;
   - the draft left out;
   - the corpus: every sim builds in a few seconds, and the time per sim is recorded in `progress.md`.
+- *Built in S41:* Fred chose (asked during the session) **fixed speed bands** (up to 50, 51–75, 76–90, 91–100, 101–125, over 125 mph, each passenger or freight), **dwells by station and band** (category IDs are random per timetable, so they cannot key anything across timetables), and the **saved sessions for the area** as the default play, with `--log` for more. Editing is given a `PlayReader` rather than reading recordings itself; `PlayFiles` (Persistence) finds and reads them. A reported location no timetable books, no corridor holds and no train stopped at is taken for a signal. Every sim of the corpus builds in under about 1 s (`08-…md` §4.1).
 
 ### S42 — Checks before SimSig (portable)
 - **`TimetableValidator`** (`08-…md` §5) gives `ValidationIssue(Severity, Code, Train?, PointIndex?, Message, Hint, QuickFix?)`. It covers:
