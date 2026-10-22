@@ -595,6 +595,7 @@ Fred raised #20 on 2026-10-20: SimSig's editor and outside tools handle timetabl
   - the replace-or-new prompt;
   - autosave and restore after a simulated crash;
   - the session's WTT untouched while a draft is edited.
+- *Built in S43:* Fred chose (asked during the session) a new file's **date from the original's name** (else its year, else today's), greyed rows as the **points Stringline inserted** until edited, **one draft at a time**, and a crashed draft **offered back at start**. The undo history survives in `.draft.json` as edits recorded by element path (`TimetableEdit.ApplyRecorded`). The editor runs on the UI thread (an edit with Waterloo's import and check is about 130 ms). The workspace is `EditorWindow` with its own Draft and Edit menus; the main window's Timetable menu is between Plan and Tools. See `08-…md` §7.1.
 
 ### S44 — The draft on the graph 🪟 (scene portable)
 - **Draft board:** a graph board (S21) whose source is a `DraftSnapshot`, with the profile's corridors.

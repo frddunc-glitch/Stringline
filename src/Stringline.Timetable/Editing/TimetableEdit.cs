@@ -31,6 +31,37 @@ public abstract class TimetableEdit
     private protected abstract TimetableEdit ApplyCore(WttDocument document);
 
     /// <summary>
+    /// Makes the change as <see cref="Apply"/> does, and records it and its undo as steps that name elements by their
+    /// place in the tree (<see cref="EditRecord"/>), so they can be saved and applied again in another session, to the
+    /// same document reopened from disk (a draft's undo history, <c>08-…md</c> §6).
+    /// </summary>
+    public RecordedChange ApplyRecorded(WttDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var forward = new List<EditStep>();
+        var backward = new List<EditStep>();
+        var undo = ApplyRecording(document, forward, backward);
+        backward.Reverse();
+        return new RecordedChange(undo, new EditRecord(Description, forward), new EditRecord(undo.Description, backward));
+    }
+
+    /// <summary>
+    /// Applies one primitive edit: its step is recorded in the tree as it is before, and its undo's step in the tree as
+    /// it is after, which is the tree the undo will be applied to (after every later edit has been undone).
+    /// </summary>
+    internal virtual TimetableEdit ApplyRecording(WttDocument document, List<EditStep> forward, List<EditStep> backward)
+    {
+        var step = ToStep(document);
+        var undo = ApplyCore(document);
+        forward.Add(step);
+        backward.Add(undo.ToStep(document));
+        return undo;
+    }
+
+    /// <summary>This primitive edit as a step, with its elements named by their place in the document as it is now.</summary>
+    internal abstract EditStep ToStep(WttDocument document);
+
+    /// <summary>
     /// The elements the edit changes, adds to or takes from (a removed node's parent too), so incremental checks can
     /// find the trains it touches.
     /// </summary>
@@ -293,6 +324,8 @@ public sealed class SetFieldEdit : TimetableEdit
 
     public override IEnumerable<XElement> Targets => [Owner];
 
+    internal override EditStep ToStep(WttDocument document) => EditStep.SetField(ElementPath.Of(document, Owner), Field, Text);
+
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
         CheckIn(document, Owner);
@@ -324,6 +357,8 @@ internal sealed class SetLeafEdit(XElement leaf, string? text, string descriptio
 {
     public override IEnumerable<XElement> Targets => [leaf];
 
+    internal override EditStep ToStep(WttDocument document) => EditStep.SetLeaf(ElementPath.Of(document, leaf), text);
+
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
         CheckIn(document, leaf);
@@ -350,6 +385,9 @@ internal sealed class SetLeafEdit(XElement leaf, string? text, string descriptio
 internal sealed class AttributesEdit(XElement element, IReadOnlyList<(XName Name, string Value)> attributes, string description) : TimetableEdit(description)
 {
     public override IEnumerable<XElement> Targets => [element];
+
+    internal override EditStep ToStep(WttDocument document) =>
+        EditStep.SetAttributes(ElementPath.Of(document, element), attributes.Select(a => new EditAttributeValue(a.Name.ToString(), a.Value)).ToList());
 
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
@@ -380,6 +418,8 @@ public sealed class InsertNodeEdit : TimetableEdit
     public int? Index { get; }
 
     public override IEnumerable<XElement> Targets => [Parent, Node];
+
+    internal override EditStep ToStep(WttDocument document) => EditStep.Insert(ElementPath.Of(document, Parent), Index, Node.ToString(SaveOptions.DisableFormatting));
 
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
@@ -418,6 +458,8 @@ public sealed class RemoveNodeEdit : TimetableEdit
 
     public override IEnumerable<XElement> Targets => _parent is null ? [Node] : [_parent, Node];
 
+    internal override EditStep ToStep(WttDocument document) => EditStep.Remove(ElementPath.Of(document, Node));
+
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
         CheckIn(document, Node);
@@ -445,6 +487,8 @@ public sealed class MoveNodeEdit : TimetableEdit
 
     public override IEnumerable<XElement> Targets => [Node];
 
+    internal override EditStep ToStep(WttDocument document) => EditStep.Move(ElementPath.Of(document, Node), Index);
+
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
         CheckIn(document, Node);
@@ -467,6 +511,35 @@ public sealed class CompositeEdit : TimetableEdit
     public IReadOnlyList<TimetableEdit> Edits { get; }
 
     public override IEnumerable<XElement> Targets => Edits.SelectMany(e => e.Targets);
+
+    internal override EditStep ToStep(WttDocument document) => throw new InvalidOperationException("A composite edit is recorded part by part.");
+
+    internal override TimetableEdit ApplyRecording(WttDocument document, List<EditStep> forward, List<EditStep> backward)
+    {
+        var (forwardCount, backwardCount) = (forward.Count, backward.Count);
+        var undos = new List<TimetableEdit>(Edits.Count);
+        try
+        {
+            foreach (var edit in Edits)
+            {
+                undos.Add(edit.ApplyRecording(document, forward, backward));
+            }
+        }
+        catch
+        {
+            for (var i = undos.Count - 1; i >= 0; i--)
+            {
+                undos[i].Apply(document);
+            }
+
+            forward.RemoveRange(forwardCount, forward.Count - forwardCount);
+            backward.RemoveRange(backwardCount, backward.Count - backwardCount);
+            throw;
+        }
+
+        undos.Reverse();
+        return new CompositeEdit(Description, undos);
+    }
 
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {

@@ -118,3 +118,21 @@ public sealed class NotNullToBooleanConverter : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>An issue mark's colour in the timetable editor (S43): red for an Error, orange for a Warning, grey-blue for Info, none for no issue.</summary>
+public sealed class IssueSeverityBrushConverter : IValueConverter
+{
+    private static readonly Brush Error = StatusLightBrushConverter.Frozen(0xC6, 0x28, 0x28);
+    private static readonly Brush Warning = StatusLightBrushConverter.Frozen(0xEF, 0x6C, 0x00);
+    private static readonly Brush Info = StatusLightBrushConverter.Frozen(0x78, 0x90, 0x9C);
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch
+    {
+        Editing.Validation.IssueSeverity.Error => Error,
+        Editing.Validation.IssueSeverity.Warning => Warning,
+        Editing.Validation.IssueSeverity.Info => Info,
+        _ => Brushes.Transparent,
+    };
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}

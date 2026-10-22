@@ -30,14 +30,18 @@ In the app, **Help ▸ User guide** opens this guide, and **F1** opens the page 
 12. [Sessions, recordings and review](sessions-and-review.md)
 13. [Exports and reports](exports-and-reports.md): pictures, PDFs, multi-page plots and CSV
 
+**Writing timetables**
+
+14. [The timetable editor](timetable-editor.md): drafts, the trip grid, checks before SimSig, and saving new versions
+
 **Reference**
 
-14. [Settings](settings.md)
-15. [Troubleshooting and logs](troubleshooting.md)
-16. [Glossary](glossary.md)
-17. [Keyboard and mouse](keyboard-and-mouse.md)
-18. [Further reading](further-reading.md)
-19. [Privacy](privacy.md): what Stringline stores, what it sends, and how to remove it
+15. [Settings](settings.md)
+16. [Troubleshooting and logs](troubleshooting.md)
+17. [Glossary](glossary.md)
+18. [Keyboard and mouse](keyboard-and-mouse.md)
+19. [Further reading](further-reading.md)
+20. [Privacy](privacy.md): what Stringline stores, what it sends, and how to remove it
 
 ## Five-minute start
 

@@ -1,0 +1,360 @@
+<Window x:Class="Stringline.App.Views.EditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:Stringline.App.Views"
+        xmlns:services="clr-namespace:Stringline.App.Services"
+        views:Help.Topic="{x:Static services:HelpTopics.TimetableEditor}"
+        Title="{Binding Title}" Icon="pack://application:,,,/Stringline;component/Assets/stringline.ico"
+        Width="1280" Height="800" MinWidth="760" MinHeight="480"
+        UseLayoutRounding="True" WindowStartupLocation="CenterOwner">
+  <!-- The timetable editor workspace (S43, 08-…md §7): trains, the selected train's details and trip grid, the header,
+       and the issues. A window of its own, like a board window (S21), so it can sit on a second monitor. -->
+  <Window.Resources>
+    <views:NotNullToVisibilityConverter x:Key="NotNull" />
+    <views:IssueSeverityBrushConverter x:Key="SeverityBrush" />
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    <Style TargetType="DataGrid">
+      <Setter Property="AutoGenerateColumns" Value="False" />
+      <Setter Property="CanUserAddRows" Value="False" />
+      <Setter Property="CanUserDeleteRows" Value="False" />
+      <Setter Property="CanUserReorderColumns" Value="False" />
+      <Setter Property="HeadersVisibility" Value="Column" />
+      <Setter Property="GridLinesVisibility" Value="Horizontal" />
+      <Setter Property="HorizontalGridLinesBrush" Value="#E0E0E0" />
+      <Setter Property="RowHeaderWidth" Value="0" />
+      <Setter Property="EnableRowVirtualization" Value="True" />
+    </Style>
+    <Style TargetType="TextBlock" x:Key="Hint">
+      <Setter Property="Foreground" Value="#757575" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style TargetType="Button">
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="Margin" Value="0,0,6,0" />
+    </Style>
+    <!-- A labelled box in the train's details -->
+    <Style TargetType="Label">
+      <Setter Property="Padding" Value="0,0,4,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style TargetType="TextBox" x:Key="Detail">
+      <Setter Property="Width" Value="90" />
+      <Setter Property="Margin" Value="0,2,12,2" />
+      <Setter Property="Padding" Value="2" />
+    </Style>
+    <!-- The issue mark at the start of a row: a dot in the worst issue's colour, the issues on hover -->
+    <DataTemplate x:Key="IssueMark">
+      <TextBlock Text="●" HorizontalAlignment="Center" Foreground="{Binding Worst, Converter={StaticResource SeverityBrush}}"
+                 ToolTip="{Binding IssueTip}" ToolTipService.ShowDuration="60000" />
+    </DataTemplate>
+    <!-- An editable drop-down for a code cell: typed text with completion from the codes other timetables use -->
+    <Style TargetType="ComboBox" x:Key="CodeBox">
+      <Setter Property="IsEditable" Value="True" />
+      <Setter Property="IsTextSearchEnabled" Value="True" />
+      <Setter Property="TextSearch.TextPath" Value="Code" />
+      <Setter Property="StaysOpenOnEdit" Value="True" />
+      <Setter Property="ItemTemplate">
+        <Setter.Value>
+          <DataTemplate>
+            <TextBlock Text="{Binding Label}" />
+          </DataTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+
+  <DockPanel>
+    <Menu DockPanel.Dock="Top" x:Name="EditorMenu">
+      <MenuItem Header="_Draft">
+        <MenuItem Header="_Save" InputGestureText="Ctrl+S" Command="{Binding SaveDraftCommand}" />
+        <MenuItem Header="Save _as…" Command="{Binding SaveDraftAsCommand}" />
+        <MenuItem Header="_Release version…" Command="{Binding ReleaseVersionCommand}"
+                  ToolTip="Raise the minor or major version number (the build goes back to 0) and save" />
+        <Separator />
+        <MenuItem Header="C_heck timetable" InputGestureText="F7" Command="{Binding CheckAllCommand}" />
+        <Separator />
+        <MenuItem Header="_Close draft" Command="{Binding CloseDraftCommand}" />
+      </MenuItem>
+      <MenuItem Header="_Edit">
+        <MenuItem Header="{Binding UndoHeader}" InputGestureText="Ctrl+Z" Command="{Binding UndoCommand}" />
+        <MenuItem Header="{Binding RedoHeader}" InputGestureText="Ctrl+Y" Command="{Binding RedoCommand}" />
+        <Separator />
+        <MenuItem Header="_New train…" Command="{Binding NewTrainCommand}" />
+        <MenuItem Header="_Copy train…" Command="{Binding CopyTrainCommand}" />
+        <MenuItem Header="_Delete trains…" Command="{Binding DeleteTrainsCommand}" />
+        <Separator />
+        <MenuItem Header="_Insert point above" InputGestureText="Insert" Command="{Binding Train.InsertPointCommand}" />
+        <MenuItem Header="Insert point _below" Command="{Binding Train.InsertPointAfterCommand}" />
+        <MenuItem Header="Re_move points" InputGestureText="Ctrl+Delete" Command="{x:Static views:EditorWindow.DeletePointsCommand}" />
+        <MenuItem Header="_Fill down" InputGestureText="Ctrl+D" Command="{x:Static views:EditorWindow.FillDownCommand}" />
+      </MenuItem>
+    </Menu>
+
+    <StatusBar DockPanel.Dock="Bottom">
+      <StatusBarItem>
+        <TextBlock Text="{Binding IssueSummary}" FontWeight="SemiBold" />
+      </StatusBarItem>
+      <Separator />
+      <StatusBarItem>
+        <Grid>
+          <TextBlock Text="{Binding Error}" Foreground="#C62828" TextTrimming="CharacterEllipsis" ToolTip="{Binding Error}"
+                     Visibility="{Binding Error, Converter={StaticResource NotNull}}" />
+          <TextBlock Text="{Binding Status}" TextTrimming="CharacterEllipsis" ToolTip="{Binding FileSummary}"
+                     Visibility="{Binding Error, Converter={StaticResource NotNull}, ConverterParameter=invert}" />
+        </Grid>
+      </StatusBarItem>
+      <StatusBarItem HorizontalAlignment="Right">
+        <TextBlock Text="{Binding KnowledgeSummary}" Style="{StaticResource Hint}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxWidth="520"
+                   ToolTip="{Binding KnowledgeSummary}" />
+      </StatusBarItem>
+    </StatusBar>
+
+    <Grid Margin="6">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="400" MinWidth="220" />
+        <ColumnDefinition Width="6" />
+        <ColumnDefinition Width="*" MinWidth="320" />
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*" MinHeight="200" />
+        <RowDefinition Height="6" />
+        <RowDefinition Height="200" MinHeight="80" />
+      </Grid.RowDefinitions>
+
+      <!-- Trains -->
+      <DockPanel Grid.RowSpan="3" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorTrains}">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+          <Label Content="_Trains" Target="{Binding ElementName=TrainFilterBox}" FontWeight="SemiBold" />
+          <CheckBox DockPanel.Dock="Right" Content="With _issues" VerticalAlignment="Center" IsChecked="{Binding IssuesOnly}"
+                    ToolTip="Only trains with Errors or Warnings" />
+          <TextBox x:Name="TrainFilterBox" Margin="4,0,8,0" Padding="2" Text="{Binding TrainFilter, UpdateSourceTrigger=PropertyChanged}"
+                   ToolTip="Filter by headcode, UID, entry time or place, category or seed group" />
+        </DockPanel>
+        <WrapPanel DockPanel.Dock="Bottom" Margin="0,4,0,0">
+          <Button Content="New…" Command="{Binding NewTrainCommand}" />
+          <Button Content="Copy…" Command="{Binding CopyTrainCommand}" />
+          <Button Content="Delete…" Command="{Binding DeleteTrainsCommand}" />
+        </WrapPanel>
+        <DataGrid x:Name="TrainsGrid" ItemsSource="{Binding Trains}" SelectedItem="{Binding SelectedTrainRow}" SelectionMode="Extended"
+                  IsReadOnly="True" CanUserSortColumns="True" SelectionChanged="OnTrainsSelectionChanged">
+          <DataGrid.Columns>
+            <DataGridTemplateColumn Width="18" CellTemplate="{StaticResource IssueMark}" SortMemberPath="Issues" />
+            <DataGridTextColumn Header="Headcode" Binding="{Binding Headcode}" Width="70" />
+            <DataGridTextColumn Header="UID" Binding="{Binding Uid}" Width="60" />
+            <DataGridTextColumn Header="Entry" Binding="{Binding EntryTime}" SortMemberPath="EntrySeconds" Width="55" />
+            <DataGridTextColumn Header="From" Binding="{Binding Entry}" Width="80" />
+            <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="*" />
+            <DataGridTextColumn Header="Seed group" Binding="{Binding SeedGroup}" Width="60" />
+            <DataGridTextColumn Header="Issues" Binding="{Binding Issues}" Width="45" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </DockPanel>
+
+      <GridSplitter Grid.Column="1" Grid.RowSpan="3" Width="6" HorizontalAlignment="Stretch" />
+
+      <TabControl Grid.Column="2" x:Name="Tabs">
+        <!-- The selected train: details, then its trip grid -->
+        <TabItem Header="Train" x:Name="TrainTab" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorTrips}">
+          <Grid>
+            <TextBlock Text="Choose a train in the list, or make one with New." Style="{StaticResource Hint}" Margin="12"
+                       Visibility="{Binding Train, Converter={StaticResource NotNull}, ConverterParameter=invert}" />
+            <DockPanel DataContext="{Binding Train}" Visibility="{Binding Converter={StaticResource NotNull}}" Margin="4">
+              <WrapPanel x:Name="DetailsPanel" DockPanel.Dock="Top" ToolTip="{Binding IssueTip}">
+                <Label Content="_Headcode" Target="{Binding ElementName=HeadcodeBox}" />
+                <TextBox x:Name="HeadcodeBox" Style="{StaticResource Detail}" Width="60" Text="{Binding Headcode}"
+                         ToolTip="Renumbering keeps the activities and rules that name this train" />
+                <Label Content="UID" />
+                <TextBox Style="{StaticResource Detail}" Width="70" Text="{Binding Uid}" />
+                <Label Content="Category" />
+                <ComboBox Width="200" Margin="0,2,12,2" IsEditable="True" ItemsSource="{Binding CategoryChoices}"
+                          TextSearch.TextPath="Code" Text="{Binding Category}" DisplayMemberPath="Label" />
+                <Label Content="Entry point" />
+                <TextBox Style="{StaticResource Detail}" Text="{Binding EntryPoint}" />
+                <Label Content="Entry time" />
+                <TextBox Style="{StaticResource Detail}" Width="60" Text="{Binding DepartTime}" ToolTip="The time the train enters, or is seeded" />
+                <Label Content="Seed point" />
+                <TextBox Style="{StaticResource Detail}" Text="{Binding SeedPoint}" />
+                <Label Content="Gap" />
+                <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding SeedingGap}" ToolTip="Seeding gap, metres" />
+                <Label Content="Seed group" />
+                <TextBox Style="{StaticResource Detail}" Width="60" Text="{Binding SeedGroup}" />
+                <Label Content="As required %" />
+                <TextBox Style="{StaticResource Detail}" Width="40" Text="{Binding AsRequiredPercent}" />
+                <Label Content="Max speed" />
+                <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding MaxSpeed}" ToolTip="mph; empty for the category's" />
+                <Label Content="Length" />
+                <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding TrainLength}" ToolTip="metres; empty for the category's" />
+                <CheckBox Content="Freight" VerticalAlignment="Center" Margin="0,2,12,2" IsChecked="{Binding IsFreight}" />
+                <CheckBox Content="Goods lines" VerticalAlignment="Center" Margin="0,2,12,2" IsChecked="{Binding CanUseGoodsLines}" />
+                <Label Content="_Description" Target="{Binding ElementName=DescriptionBox}" />
+                <TextBox x:Name="DescriptionBox" Style="{StaticResource Detail}" Width="260" Text="{Binding Description}"
+                         ToolTip="Free text, or $template to use the header's template" />
+                <TextBlock VerticalAlignment="Center" Margin="0,2,12,2" Style="{StaticResource Hint}"
+                           Text="{Binding DescriptionPreview, StringFormat=Shows as: {0}}" Visibility="{Binding UsesTemplate, Converter={StaticResource BoolToVisibility}}" />
+                <Label Content="Origin" />
+                <TextBox Style="{StaticResource Detail}" Width="120" Text="{Binding OriginName}" />
+                <TextBox Style="{StaticResource Detail}" Width="55" Text="{Binding OriginTime}" ToolTip="Origin time" />
+                <Label Content="Destination" />
+                <TextBox Style="{StaticResource Detail}" Width="120" Text="{Binding DestinationName}" />
+                <TextBox Style="{StaticResource Detail}" Width="55" Text="{Binding DestinationTime}" ToolTip="Destination time" />
+                <Label Content="Operator" />
+                <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding OperatorCode}" />
+                <Label Content="Notes" />
+                <TextBox Style="{StaticResource Detail}" Width="260" Text="{Binding Notes}" />
+              </WrapPanel>
+              <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,4"
+                         Text="Type 1234 for 12:34, 1234H for 12:34½, 12/34 for a pass, +3 for 3 minutes after the time before. Enter moves down; Insert adds a point above, Ctrl+Delete removes points, Ctrl+D fills down. Greyed points were added by Stringline." />
+              <DataGrid x:Name="TripGrid" ItemsSource="{Binding Trips}" SelectionUnit="CellOrRowHeader" SelectionMode="Extended"
+                        CanUserSortColumns="False" HeadersVisibility="All" RowHeaderWidth="12"
+                        PreviewKeyDown="OnTripGridKeyDown" PreparingCellForEdit="OnTripCellPreparing" CellEditEnding="OnTripCellEditEnding"
+                        CurrentCellChanged="OnTripCurrentCellChanged">
+                <DataGrid.RowStyle>
+                  <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding IsAdded}" Value="True">
+                        <Setter Property="Foreground" Value="#9E9E9E" />
+                        <Setter Property="ToolTip" Value="Added by Stringline (a quick fix); edit it to keep it as yours" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </DataGrid.RowStyle>
+                <DataGrid.Columns>
+                  <DataGridTemplateColumn Width="18" CellTemplate="{StaticResource IssueMark}" IsReadOnly="True" />
+                  <DataGridTemplateColumn Header="Location" Width="90" SortMemberPath="Location">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate><TextBlock Text="{Binding Location}" /></DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                      <DataTemplate>
+                        <ComboBox Style="{StaticResource CodeBox}" Text="{Binding Location, UpdateSourceTrigger=Explicit}"
+                                  ItemsSource="{Binding DataContext.Locations, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                  </DataGridTemplateColumn>
+                  <DataGridTextColumn Header="Arr" Binding="{Binding Arrival}" SortMemberPath="Arrival" Width="58" />
+                  <DataGridTextColumn Header="Dep/pass" Binding="{Binding Departure}" SortMemberPath="Departure" Width="64" />
+                  <DataGridTemplateColumn Header="Plat" Width="50" SortMemberPath="Platform">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate><TextBlock Text="{Binding Platform}" /></DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                      <DataTemplate>
+                        <ComboBox Style="{StaticResource CodeBox}" Text="{Binding Platform, UpdateSourceTrigger=Explicit}" ItemsSource="{Binding PlatformChoices}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                  </DataGridTemplateColumn>
+                  <DataGridTemplateColumn Header="Line" Width="50" SortMemberPath="Line">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate><TextBlock Text="{Binding Line}" /></DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                      <DataTemplate>
+                        <ComboBox Style="{StaticResource CodeBox}" Text="{Binding Line, UpdateSourceTrigger=Explicit}" ItemsSource="{Binding LineChoices}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                  </DataGridTemplateColumn>
+                  <DataGridTemplateColumn Header="Path" Width="50" SortMemberPath="Path">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate><TextBlock Text="{Binding Path}" /></DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                      <DataTemplate>
+                        <ComboBox Style="{StaticResource CodeBox}" Text="{Binding Path, UpdateSourceTrigger=Explicit}" ItemsSource="{Binding PathChoices}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                  </DataGridTemplateColumn>
+                  <DataGridTextColumn Header="Eng" Binding="{Binding EngAllowance}" SortMemberPath="EngAllowance" Width="40" />
+                  <DataGridTextColumn Header="Pth" Binding="{Binding PathAllowance}" SortMemberPath="PathAllowance" Width="40" />
+                  <DataGridTextColumn Header="Prf" Binding="{Binding PerfAllowance}" SortMemberPath="PerfAllowance" Width="40" />
+                  <DataGridTextColumn Header="Dwell" Binding="{Binding Dwell}" SortMemberPath="Dwell" Width="45" />
+                  <DataGridTextColumn Header="Req %" Binding="{Binding RequestPercent}" SortMemberPath="RequestPercent" Width="45" />
+                  <DataGridCheckBoxColumn Header="Set down" Binding="{Binding SetDown, UpdateSourceTrigger=PropertyChanged}" SortMemberPath="SetDown" Width="58" />
+                  <DataGridCheckBoxColumn Header="Thru line" Binding="{Binding ThroughLine, UpdateSourceTrigger=PropertyChanged}" SortMemberPath="ThroughLine" Width="58" />
+                  <DataGridTextColumn Header="Stop loc" Binding="{Binding StopLocation}" SortMemberPath="StopLocation" Width="50" />
+                  <DataGridTextColumn Header="New cat" Binding="{Binding NewCategory}" SortMemberPath="NewCategory" Width="60" />
+                  <DataGridTextColumn Header="Activities" Binding="{Binding Activities}" IsReadOnly="True" Width="*" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </DockPanel>
+          </Grid>
+        </TabItem>
+
+        <!-- The header -->
+        <TabItem Header="Header" DataContext="{Binding Header}">
+          <Grid Margin="10">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="130" />
+              <ColumnDefinition Width="*" MaxWidth="640" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Label Content="Sim ID" />
+            <TextBlock Grid.Column="1" Text="{Binding AreaId}" VerticalAlignment="Center" Margin="0,4" />
+            <Label Grid.Row="1" Content="_Name" Target="{Binding ElementName=NameBox}" />
+            <TextBox x:Name="NameBox" Grid.Row="1" Grid.Column="1" Text="{Binding Name}" Margin="0,2" Padding="2"
+                     ToolTip="SimSig's advice: no version in the title" />
+            <Label Grid.Row="2" Content="Version" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Version}" VerticalAlignment="Center" Margin="0,4"
+                       ToolTip="Save raises the build number; Draft ▸ Release version raises the minor or major number" />
+            <Label Grid.Row="3" Content="_Start and finish" Target="{Binding ElementName=StartBox}" />
+            <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,2">
+              <TextBox x:Name="StartBox" Width="70" Padding="2" Text="{Binding StartTime}" />
+              <TextBlock Text="to" Margin="6,0" VerticalAlignment="Center" />
+              <TextBox Width="70" Padding="2" Text="{Binding FinishTime}" />
+            </StackPanel>
+            <Label Grid.Row="4" Content="_Template" Target="{Binding ElementName=TemplateBox}" />
+            <TextBox x:Name="TemplateBox" Grid.Row="4" Grid.Column="1" Text="{Binding Template}" Margin="0,2" Padding="2"
+                     ToolTip="The train description template for trains whose description is $template, e.g. $originTime $originName-$destName $operator ($stock)" />
+            <Label Grid.Row="5" Content="_Description" Target="{Binding ElementName=HeaderDescriptionBox}" VerticalAlignment="Top" Margin="0,4,0,0" />
+            <TextBox x:Name="HeaderDescriptionBox" Grid.Row="5" Grid.RowSpan="2" Grid.Column="1" Text="{Binding Description}" Margin="0,2" Padding="2"
+                     AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" MinHeight="160" VerticalAlignment="Stretch" />
+          </Grid>
+        </TabItem>
+      </TabControl>
+
+      <GridSplitter Grid.Row="1" Grid.Column="2" Height="6" HorizontalAlignment="Stretch" />
+
+      <!-- Issues -->
+      <DockPanel Grid.Row="2" Grid.Column="2" x:Name="IssuesPanel" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorIssues}">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+          <Label Content="Iss_ues" Target="{Binding ElementName=IssueFilterBox}" FontWeight="SemiBold" />
+          <ComboBox DockPanel.Dock="Right" Width="90" ItemsSource="{Binding IssueLevels}" SelectedItem="{Binding IssueLevel}"
+                    ToolTip="All, Warnings and Errors, or Errors only" />
+          <Button DockPanel.Dock="Right" Content="Fix all of this _kind" Command="{Binding ApplyFixesOfKindCommand}" />
+          <Button DockPanel.Dock="Right" Content="_Apply fix" Command="{Binding ApplyFixCommand}" ToolTip="{Binding SelectedIssue.Fix}" />
+          <TextBox x:Name="IssueFilterBox" Margin="4,0,8,0" Padding="2" Text="{Binding IssueFilter, UpdateSourceTrigger=PropertyChanged}"
+                   ToolTip="Filter by message, train, location or check" />
+        </DockPanel>
+        <DataGrid x:Name="IssuesGrid" ItemsSource="{Binding Issues}" SelectedItem="{Binding SelectedIssue}" SelectionMode="Single" IsReadOnly="True"
+                  CanUserSortColumns="True">
+          <DataGrid.Columns>
+            <DataGridTemplateColumn Width="18" SortMemberPath="Severity">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                  <TextBlock Text="●" HorizontalAlignment="Center" Foreground="{Binding Severity, Converter={StaticResource SeverityBrush}}" ToolTip="{Binding Severity}" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTextColumn Header="Train" Binding="{Binding Train}" Width="60" />
+            <DataGridTextColumn Header="At" Binding="{Binding Where}" Width="70" />
+            <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*">
+              <DataGridTextColumn.CellStyle>
+                <Style TargetType="DataGridCell">
+                  <Setter Property="ToolTip" Value="{Binding Hint}" />
+                </Style>
+              </DataGridTextColumn.CellStyle>
+            </DataGridTextColumn>
+            <DataGridTextColumn Header="Quick fix" Binding="{Binding Fix}" Width="180" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </DockPanel>
+    </Grid>
+  </DockPanel>
+</Window>

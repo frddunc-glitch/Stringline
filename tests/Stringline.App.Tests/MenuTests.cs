@@ -96,7 +96,7 @@ public sealed class MenuTests
             try
             {
                 var menus = Menus(window.MainMenu, "Menu").ToList();
-                menus[0].Items.Select(m => (string)m.Header).Should().Equal("_File", "_Session", "_View", "_Corridor", "_Plan", "_Tools", "_Help");
+                menus[0].Items.Select(m => (string)m.Header).Should().Equal("_File", "_Session", "_View", "_Corridor", "_Plan", "T_imetable", "_Tools", "_Help");
 
                 var problems = new List<string>();
                 foreach (var (path, items) in menus)

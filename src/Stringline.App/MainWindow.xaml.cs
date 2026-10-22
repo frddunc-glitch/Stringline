@@ -70,6 +70,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        // A draft being edited with unsaved changes is asked about first (S43); Cancel keeps the app open.
+        if (_shutDown is null && !_viewModel.ConfirmCloseDraft())
+        {
+            e.Cancel = true;
+            return;
+        }
+
         // Stop the session (and any recording) cleanly before closing.
         e.Cancel = true;
         try

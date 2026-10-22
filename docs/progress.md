@@ -2349,6 +2349,38 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - 47. **Terminating trains.** 262 released timetables have trains that stop last with nothing after them (depots, sidings: Basingstoke's 0Y20 at LUDGMOD). Does SimSig's Analyser list these on shipped timetables? They are Info here.
 - 48. **Errors in released timetables.** About 30 shipped files still get Errors (missing associated trains, next workings used twice, Cardiff's 5N35 naming the same next working twice). If one is to hand, does SimSig's Analyser report the same?
 
+## 2026-10-22 — S43: Editor workspace, trains and trip grid (#20)
+
+### Done
+- **Fred's choices** (asked during the session): a new file's suggested name takes its **date from the original's name** (a full date, else its year, else today's); greyed rows are the **points Stringline inserted** (a quick fix's chain), until the user edits them; **one draft at a time**; a draft left open by a crash is **offered back at the next start**.
+- **Undo history that survives a restart** (`Stringline.Timetable.Editing`): `TimetableEdit.ApplyRecorded` applies an edit one primitive at a time and records each step and its undo's step as `EditRecord`s, naming elements by `ElementPath` (each level's name and index among siblings of that name). Records are JSON, and replay on the same timetable read back from disk; a version written into the header leaves the paths where they were.
+- **`Stringline.Editing.Drafts`** (`08-…md` §7.1): `TimetableEditor`, the draft's single writer on its owner's thread (apply, undo, redo, a history of 500 steps, incremental checks, full checks, save with a version bump, unsaved changes by the undo step last saved at, greyed points); `DraftSnapshot`; `DraftStore` (the drafts folder: `.wtt` and `.draft.json`, written atomically, the history dropped if the `.wtt`'s hash no longer matches, the draft left open found again); `TimetableNames` (SimSig's naming convention); `DraftDocuments` (a blank timetable for a sim with another's categories, new and copied trains).
+- **App:** the **Timetable** menu between Plan and Tools (New draft ▸ from the loaded timetable, from a file, blank for this sim; Open draft…; Save, Save as…, Release version…, Close draft; Check timetable, which with no draft lists the loaded timetable's issues); the **editor window** (`EditorWindow`, `TimetableEditorViewModel`, `DraftTrainViewModel`, `DraftHeaderViewModel`, `DraftRows`) with its Draft and Edit menus, the trains list, the Train tab (details and trip grid), the Header tab, the Issues panel and a status bar; the sim's knowledge built in the background on open; autosave 2 s after the last edit; the save, close and exit prompts of `08-…md` §6; the restore offer at start; `AppPaths.Drafts` and `TimetableBackups`.
+- **Guide:** a new page, *The timetable editor* (`docs/user-guide/timetable-editor.md`, in the contents under "Writing timetables"), with F1 topics for the window, the trains list, the trip grid and the Issues panel. No pictures yet (S48 takes them). `PRIVACY.md` (and the guide's copy) lists the drafts and the timetable backups.
+- **Docs:** `08-…md` §7.1, the plan's "Built in S43", `02-…md` (the layer, the drafts folder), `CLAUDE.md`.
+- **Tests:** Timetable +8 (`EditRecordTests`: paths, replaying field, insert, move, remove, attribute and composite edits on the reopened timetable, Waterloo's renumber and shift, self-closing elements, a version bump, JSON, a record that does not fit, a failed composite); Editing +13 (`TimetableEditorTests`: snapshots through edit, undo and redo, redo cleared and a refused edit, saving and versions, autosave and restore with history and the unsaved mark, a mismatched history, the draft left open, greyed points, a blank timetable with new and copied trains, file names (4), Waterloo's incremental check against a full one); App +7 (`TimetableEditorTests` 6: a Waterloo draft typed `1234H`, refused text, an inserted and named point, fill down, undo, the session's timetable, plan and file untouched, a save as a new file at 1.0.3, close and reopen; the replace-or-new question with cancel, unconfirmed and confirmed replace, the backup, later saves and a release; close and exit prompts with keep and discard; a crash's autosave offered back and undone; issues going to the train and point and a quick fix undone; a blank draft with a new train; `EditorWindowTests`: the window with no binding errors, its menus' keys and commands, a text cell and a code cell's drop-down edited through the grid); `MenuTests` updated for the new menu.
+- Totals: 2 044 (Core 319, Architecture 20, Gateway 211, Timetable 223, Network 199, Planning 339, Persistence 16, Graph 302, Optimiser 25, Editing 80, Tools 93, App 217). Green on Windows (Debug), except two tests that failed in the full parallel run and passed alone, both timing under load: `ReplannerFixtureTests` (the optimiser on `waterloo-failure.sslog`) and the corpus's `Every_sim_in_the_corpus_builds_in_a_few_seconds`. The solution and the portable solution build with `-warnaserror`. Linux not run.
+
+### Decisions
+- **The editor runs on the UI thread, not a queue:** the grid reads the document's elements, and an edit with Waterloo's import and check takes about 130 ms, so a background writer would only add copying. `DraftSnapshot` still carries the import and issues, which never change, for S44's board.
+- **History by element path, recorded as the edit is applied:** each primitive's step is taken in the tree as it is before it, and its undo's step in the tree after it, which is exactly the tree that undo will meet. In the session, undo uses the edits' objects, so elements keep their identity (selection, issues).
+- **A committed cell is one edit,** not the end of the row: the DataGrid would otherwise hold a cell's value until the row is committed.
+- **Typed notation owns the wait mark,** which has no column; set down, the through line and the request have their own columns, so a plain time leaves them.
+- **Closing never loses a draft unless asked:** "Keep as a draft" is the middle answer, and Windows ending the session leaves the draft open so it is offered back.
+
+### Next
+- S44 (the draft on the graph), on `DraftSnapshot`, with the grid's selection shared.
+- 👤 **S40's gate** is still open (round-tripped Waterloo and a payware timetable through SimSig's Analyser); the editor now makes such files directly (Timetable ▸ New draft ▸ From a file…, then Save).
+
+### Known issues
+- After a restart, undo and redo work from the records, so an element re-inserted by undo is a new object; nothing else holds it then.
+- A typing slip in a code cell's drop-down can complete to the first code that starts with what was typed (WPF's text search); Esc leaves the cell as it was.
+- The editor window does not remember its place yet.
+- `ReplannerFixtureTests` (optimiser on `waterloo-failure.sslog`) and the corpus build-time test can fail when the whole suite runs in parallel on a loaded PC; both pass alone. Untouched by S43.
+
+### Questions for Fred
+- 49. **Request stops.** Typing `12r34` makes the point a request stop at 50 % if it had no chance set. Is 50 % SimSig's own default, or should it be another figure?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

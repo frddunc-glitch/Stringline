@@ -8,7 +8,8 @@ namespace Stringline.App.Services;
 /// <param name="Logs">Rolling logs, <c>%LOCALAPPDATA%\Stringline\logs</c>.</param>
 /// <param name="Recordings">Recordings made with the Record button, <c>Documents\Stringline\recordings</c>.</param>
 /// <param name="Sessions">Saved sessions (S16), <c>Documents\Stringline\sessions</c>.</param>
-internal sealed record AppPaths(string Settings, string Profiles, string Logs, string Recordings, string Exports, string Sessions)
+/// <param name="Drafts">Timetable drafts being edited, autosaved (S43), <c>Documents\Stringline\drafts</c>.</param>
+internal sealed record AppPaths(string Settings, string Profiles, string Logs, string Recordings, string Exports, string Sessions, string Drafts)
 {
     public static AppPaths Default
     {
@@ -23,12 +24,16 @@ internal sealed record AppPaths(string Settings, string Profiles, string Logs, s
                 Path.Combine(local, "logs"),
                 Path.Combine(documents, "recordings"),
                 Path.Combine(documents, "exports"),
-                Path.Combine(documents, "sessions"));
+                Path.Combine(documents, "sessions"),
+                Path.Combine(documents, "drafts"));
         }
     }
 
     /// <summary>Where the bundled user guide is written as HTML (S28): <c>%LOCALAPPDATA%\Stringline\help</c>, beside the logs.</summary>
     public string Help => Path.Combine(Path.GetDirectoryName(Logs) ?? Logs, "help");
+
+    /// <summary>Where the timetable editor copies a file before replacing it (S40, S43): <c>%LOCALAPPDATA%\Stringline\timetable-backups</c>.</summary>
+    public string TimetableBackups => Path.Combine(Path.GetDirectoryName(Logs) ?? Logs, "timetable-backups");
 
     /// <summary>These paths with the folders the user chose in the settings (S18), where they chose any.</summary>
     public AppPaths WithFolders(AppSettings settings)
@@ -51,5 +56,6 @@ internal sealed record AppPaths(string Settings, string Profiles, string Logs, s
         Path.Combine(root, "logs"),
         Path.Combine(root, "recordings"),
         Path.Combine(root, "exports"),
-        Path.Combine(root, "sessions"));
+        Path.Combine(root, "sessions"),
+        Path.Combine(root, "drafts"));
 }

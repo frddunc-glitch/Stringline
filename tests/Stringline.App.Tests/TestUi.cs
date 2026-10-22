@@ -226,6 +226,11 @@ internal sealed class ScriptedDialogs : IDialogService
     public List<GraphBoardViewModel> BoardsShown { get; } = [];
 
     public void ShowBoard(GraphBoardViewModel board) => BoardsShown.Add(board);
+
+    /// <summary>Every timetable editor shown (S43), in order (a draft shown again is listed again).</summary>
+    public List<TimetableEditorViewModel> EditorsShown { get; } = [];
+
+    public void ShowEditor(TimetableEditorViewModel draft) => EditorsShown.Add(draft);
 }
 
 /// <summary>A main view model wired as the app wires it, with files under a temporary folder.</summary>

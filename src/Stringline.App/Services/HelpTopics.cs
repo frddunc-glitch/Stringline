@@ -44,7 +44,17 @@ internal static class HelpTopics
     /// <summary>The privacy policy (S30, #14), a copy of <c>PRIVACY.md</c>; Help ▸ Privacy, About and the Connect dialog link to it.</summary>
     public const string Privacy = "privacy.md";
 
+    /// <summary>The timetable editor (S43, #20).</summary>
+    public const string TimetableEditor = "timetable-editor.md";
+
+    public const string TimetableEditorTrains = "timetable-editor.md#the-trains-list";
+
+    public const string TimetableEditorTrips = "timetable-editor.md#the-train-and-its-timing-points";
+
+    public const string TimetableEditorIssues = "timetable-editor.md#the-issues-panel";
+
     /// <summary>Every topic, for the test that each page and heading is there.</summary>
     public static IReadOnlyList<string> All { get; } =
-        [Contents, Graph, TrainList, Boards, TrainDetail, Conflicts, Regulation, Delays, History, Replay, Connect, Options, ProfileEditor, Disruptions, SignalPlaces, LearningOptions, Privacy];
+        [Contents, Graph, TrainList, Boards, TrainDetail, Conflicts, Regulation, Delays, History, Replay, Connect, Options, ProfileEditor, Disruptions, SignalPlaces, LearningOptions, Privacy,
+         TimetableEditor, TimetableEditorTrains, TimetableEditorTrips, TimetableEditorIssues];
 }

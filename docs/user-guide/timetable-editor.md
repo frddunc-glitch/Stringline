@@ -1,0 +1,64 @@
+# The timetable editor
+
+Stringline can change a SimSig timetable, or write a new one, in a window of its own: the **timetable editor**. You work on a **draft**, a copy of the timetable that is autosaved as you go, and save it as a timetable file when you are ready. SimSig is still the judge of whether the timetable works: load the saved file in SimSig and run its **Timetable Analyser** (F4 ▸ Tools 1) before you play it.
+
+The editor never changes the timetable a session is running. A draft is always its own copy, read again from the file, so you can edit while you play.
+
+## Making a draft
+
+Everything is on the **Timetable** menu:
+
+- **New draft ▸ From the loaded timetable** copies the timetable the session uses.
+- **New draft ▸ From a file…** copies any `.wtt`.
+- **New draft ▸ Blank for this sim** starts an empty timetable for the sim loaded or connected, with the loaded timetable's train categories.
+- **Open draft…** opens a draft you worked on before, with its undo history.
+
+One draft is open at a time. Opening another asks about the first one's unsaved changes.
+
+## The trains list
+
+The list on the left has every train in the draft. Click a column's heading to sort by it. The filter box finds trains by headcode, UID, entry time or place, category or seed group, and **With issues** shows only trains with Errors or Warnings. The dot at the start of a row is the colour of the train's worst issue: red for an Error, orange for a Warning, grey-blue for a note. Hover over it to read them.
+
+**New…** adds a train after the selected one, **Copy…** copies it with a new headcode (and no UID, as UIDs must be unique), and **Delete…** deletes the selected trains. Ctrl-click and Shift-click select several.
+
+## The train and its timing points
+
+The **Train** tab shows the selected train's details at the top. Change a box and press Enter, or move on, to make the change. A new headcode renumbers the train and the activities and rules that name it. A description of `$template` shows what SimSig will show, from the header's template.
+
+Below is the **trip grid**, one row for each timing point:
+
+- **Location**, with completion from the TIPLOCs the sim's other timetables use.
+- **Arr** and **Dep/pass**, in SimSig's notation: type `1234` or `12:34`, `1234H` for 12:34½, `12/34` for a pass, `12d34` set down only, `12t34` may stop on the through line, `12w34` waits for its booked time, `12r34` a request stop, and `+3` for 3 minutes after the time before. Times after midnight go on past 23:59 (`24:10`).
+- **Plat**, **Line** and **Path**, with the codes other timetables use at that location, most used first.
+- The engineering, pathing and performance allowances in minutes (`1H` is 1½), the dwell in seconds, the request stop's chance, set down, the through line, the stop location and a new category.
+- **Activities**, such as `N: 2B44` for a next working.
+
+Enter moves down a row. **Insert** adds a point above the current one, **Ctrl+Delete** removes the selected points, and **Ctrl+D** fills the current column down: the first selected row's value goes into the others, or, with one row selected, the value above comes into it. **Ctrl+Z** and **Ctrl+Y** undo and redo, as many steps as you like, and **Ctrl+S** saves.
+
+Points shown grey were added by Stringline, by a quick fix. Edit one to keep it as yours.
+
+## The header
+
+The **Header** tab has the timetable's name, description, start and finish times and the train description template. The version is not typed: saving raises it.
+
+## The Issues panel
+
+Under the train is every issue the checks found, Warnings and Errors at first (choose **All** for the notes too). The checks are the ones SimSig's Analyser makes that can be made without the sim, in its words, and checks against what the sim's other timetables, your saved sessions and its profile show, such as a platform no timetable uses. Those can only say what has not been seen, so they are Warnings or notes, never Errors. The status bar says how much they were checked against.
+
+Click an issue to go to its train and point. **Apply fix** makes an issue's quick fix (for example, inserting the timing points other timetables book between two locations), and **Fix all of this kind** makes every one of that kind as one step. Undo takes a fix back like any edit. **Timetable ▸ Check timetable** (F7 in the editor) checks everything again.
+
+## Saving and versions
+
+Stringline follows SimSig's advice on file names and versions:
+
+- **Save** (Ctrl+S) raises the build number (1.0.2 to 1.0.3). The first time you save a draft made from a timetable, Stringline asks whether to save it as a new file beside the original (the default, named like `Waterloo 2010 Stringline.wtt`, with the date from the original's name) or to replace the original, which it asks you to confirm.
+- **Save as…** saves to a file you choose.
+- **Release version…** raises the minor or major number and sets the build back to 0 (1.0.3 to 1.1.0, or 2.0.0).
+- Before a file is replaced, a copy of it goes to `%LOCALAPPDATA%\Stringline\timetable-backups`, where SimSig's Loader does not list it. The last 20 of each timetable are kept.
+- If the checks found Errors, the save lists them and asks before saving. Only a timetable SimSig could not read at all (no sim ID) cannot be saved.
+
+## Drafts and autosave
+
+A draft is saved to `Documents\Stringline\drafts` a moment after each change, with its undo history, so a crash loses nothing. If Stringline stopped with a draft open, it offers it back at the next start.
+
+**Close draft**, or closing the editor's window or Stringline, asks about changes not saved to a timetable file: save them, keep the draft to open again later, or discard the draft.

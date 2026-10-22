@@ -762,6 +762,8 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _engine.SnapshotPublished -= OnSnapshotPublished;
+        // Still open (Windows ending the session, or a test): kept, and offered back at the next start.
+        Draft?.AutosaveNow(open: true);
         await StopSessionAsync();
         CloseStore(ended: false); // left running: offered for resuming at the next start
         _recorder.Stop();

@@ -113,6 +113,9 @@ public partial class App : Application
 
             await viewModel.OfferResumeAsync();
         }
+
+        // A draft left open by a crash or Windows shutting down (S43).
+        viewModel.OfferRestoreDraft();
     }
 
     /// <summary>

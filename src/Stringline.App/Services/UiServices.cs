@@ -55,6 +55,9 @@ internal interface IDialogService
 
     /// <summary>Opens a board window (S21) for the board, without waiting; it closes when the board asks it to.</summary>
     void ShowBoard(ViewModels.GraphBoardViewModel board);
+
+    /// <summary>Shows the timetable editor's window for the draft (S43), or brings it to the front; it closes when the draft does.</summary>
+    void ShowEditor(ViewModels.TimetableEditorViewModel draft);
 }
 
 /// <summary>The real dialogs, owned by the main window.</summary>
@@ -151,6 +154,22 @@ internal sealed class WpfDialogService : IDialogService
 
     public void ShowBoard(ViewModels.GraphBoardViewModel board) =>
         new Views.BoardWindow(board) { Owner = Application.Current?.MainWindow is { IsLoaded: true } main ? main : null }.Show();
+
+    public void ShowEditor(ViewModels.TimetableEditorViewModel draft)
+    {
+        if (Application.Current?.Windows.OfType<Views.EditorWindow>().FirstOrDefault(w => w.DataContext == draft) is { } open)
+        {
+            if (open.WindowState == WindowState.Minimized)
+            {
+                open.WindowState = WindowState.Normal;
+            }
+
+            open.Activate();
+            return;
+        }
+
+        new Views.EditorWindow(draft) { Owner = Application.Current?.MainWindow is { IsLoaded: true } main ? main : null }.Show();
+    }
 
     public string? OpenInShell(string path)
     {

@@ -27,11 +27,13 @@ Nothing else is sent:
 | Settings | `%APPDATA%\Stringline\settings.json` | The gateway's host and port, your SimSig user name, whether to remember the password, and the password itself only if you ticked **Remember** (see below). Also your options, the timetables you last used, the folders you chose and the window layout. |
 | Sim profiles | `%APPDATA%\Stringline\profiles` | Each sim's corridors, location names, distances, headways and colours, and what Stringline has learned about the sim from its timetables and recordings (`.simdata.json`). Nothing about you. |
 | Logs | `%LOCALAPPDATA%\Stringline\logs` | What the app did, one file a day, kept for 14 days unless you change it (Tools ▸ Options ▸ Logging and housekeeping). Each connection's line names the host, the port and your SimSig user name. Logs never hold your password. |
+| Timetable backups | `%LOCALAPPDATA%\Stringline\timetable-backups` | A copy of each timetable file the timetable editor replaced, made just before it was replaced; the last 20 of each timetable are kept. |
 | The user guide | `%LOCALAPPDATA%\Stringline\help` | The guide as web pages, written the first time you open help. |
 | Unpacked parts of the app | `%TEMP%\.net\Stringline` | Libraries Windows unpacks from `Stringline.exe` the first time it runs. |
 | Saved sessions | `Documents\Stringline\sessions` | The sim's messages, your plan changes, and the gateway's host and port. |
 | Recordings | `Documents\Stringline\recordings` | The gateway's messages as they arrived, and its host, port and topics. Never your login. |
 | Exports | `Documents\Stringline\exports`, or where you save them | The pictures, PDFs and CSV files you export. |
+| Timetable drafts | `Documents\Stringline\drafts` | The timetables you are editing, autosaved, with their undo history and the paths of the files they came from and are saved to. Timetables you save go where you save them, usually SimSig's Timetables folder. |
 
 The folders for sessions, recordings and exports can be moved in Tools ▸ Options ▸ Folders. The installer adds Stringline to the Start menu and to Windows' list of apps. Stringline itself writes nothing to the registry.
 
@@ -46,7 +48,7 @@ The folders for sessions, recordings and exports can be moved in Tools ▸ Optio
 ## How to remove everything
 
 - **Uninstall** Stringline in Windows' **Settings ▸ Apps**. The uninstaller always removes your saved password. It then asks whether to remove your settings, profiles, logs and the unpacked files too. The answer is **No** unless you choose Yes, so that installing again picks up where you left off. A silent uninstall keeps them, unless it is given `/REMOVEUSERDATA`.
-- **Your own files** in `Documents\Stringline` (sessions, recordings and exports) are never removed. Delete that folder yourself if you want them gone.
+- **Your own files** in `Documents\Stringline` (sessions, recordings, exports and timetable drafts) are never removed. Delete that folder yourself if you want them gone.
 - **The portable version** has no uninstaller. Close Stringline and delete its folder. Then delete `%APPDATA%\Stringline`, `%LOCALAPPDATA%\Stringline`, `%TEMP%\.net\Stringline` and `Documents\Stringline`, or whichever of them you want gone.
 
 To open one of those folders, type its name (for example `%APPDATA%\Stringline`) in File Explorer's address bar.
@@ -57,4 +59,4 @@ Ask on the project's [issue tracker](https://github.com/frddunc-glitch/Stringlin
 
 ## Changes to this policy
 
-This policy is kept with Stringline's source, as `PRIVACY.md`, and every change to it is in the project's history. Last changed on 20 October 2026.
+This policy is kept with Stringline's source, as `PRIVACY.md`, and every change to it is in the project's history. Last changed on 22 October 2026.
