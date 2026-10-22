@@ -88,12 +88,16 @@ public sealed record TimeStats(int Samples, int LeastSeconds, int UsualSeconds)
 /// <param name="Entries">Trains entering here.</param>
 /// <param name="Seeds">Trains seeded here.</param>
 /// <param name="Reports">Reports of trains here in recordings and sessions.</param>
+/// <param name="Ends">Trains whose last timing point is a stop here (they terminate, form another or join).</param>
+/// <param name="Exits">Trains whose last timing point is a pass here (they leave the area).</param>
+/// <param name="Through">Calls here between a train's first and last timing points.</param>
 /// <param name="Platforms">The platform codes booked here, with how often.</param>
 /// <param name="Lines">The line codes booked out of here, with how often.</param>
 /// <param name="Paths">The path codes booked into here, with how often.</param>
 /// <param name="ReportedPlatforms">The platforms (or lines at a junction) trains reported here, with how often.</param>
 /// <param name="Dwells">Booked dwells at stops, by band.</param>
 /// <param name="Corridors">The profile's corridors the location is on, by ID.</param>
+/// <param name="EntryPower">The power types (electrification letters) of trains entering here, with how often.</param>
 public sealed record LocationKnowledge(
     Tiploc Tiploc,
     LocationRoles Roles,
@@ -110,7 +114,11 @@ public sealed record LocationKnowledge(
     IReadOnlyDictionary<string, int>? Paths = null,
     IReadOnlyDictionary<string, int>? ReportedPlatforms = null,
     IReadOnlyDictionary<RunBand, TimeStats>? Dwells = null,
-    IReadOnlyList<string>? Corridors = null)
+    IReadOnlyList<string>? Corridors = null,
+    int Ends = 0,
+    int Exits = 0,
+    int Through = 0,
+    IReadOnlyDictionary<string, int>? EntryPower = null)
 {
     public bool Is(LocationRoles role) => (Roles & role) == role;
 
@@ -174,7 +182,7 @@ public sealed record SignalKnowledge(
 public sealed class SimKnowledge
 {
     /// <summary>The cache format this build writes; a cache in any other is rebuilt.</summary>
-    public const int CurrentFormat = 1;
+    public const int CurrentFormat = 2;
 
     private Dictionary<Tiploc, LocationKnowledge>? _locations;
     private Dictionary<(Tiploc, Tiploc), LinkKnowledge>? _links;

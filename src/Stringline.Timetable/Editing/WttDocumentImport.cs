@@ -34,6 +34,14 @@ public sealed class WttDocumentImport
 
     public WttImportResult Result { get; }
 
+    public WttDocument Document => _document;
+
+    /// <summary>The document's <see cref="WttDocument.Revision"/> the import was made at.</summary>
+    public long Revision => _revision;
+
+    /// <summary>Whether the document is unchanged since the import.</summary>
+    public bool IsCurrent => _document.Revision == _revision;
+
     public WorkingTimetable Timetable => Result.Timetable;
 
     /// <summary>The imported train for this element, or null if the importer skipped it (no headcode or no usable points).</summary>

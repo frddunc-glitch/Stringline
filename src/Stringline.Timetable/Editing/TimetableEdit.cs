@@ -30,6 +30,12 @@ public abstract class TimetableEdit
 
     private protected abstract TimetableEdit ApplyCore(WttDocument document);
 
+    /// <summary>
+    /// The elements the edit changes, adds to or takes from (a removed node's parent too), so incremental checks can
+    /// find the trains it touches.
+    /// </summary>
+    public abstract IEnumerable<XElement> Targets { get; }
+
     /// <summary>Sets the first child named <paramref name="field"/> to <paramref name="text"/> (made in SimSig's order if missing); null removes it.</summary>
     public static TimetableEdit SetField(XElement owner, string field, string? text, string? description = null) =>
         new SetFieldEdit(owner, field, text, description ?? $"Set {owner.Name.LocalName} {field}");
@@ -285,6 +291,8 @@ public sealed class SetFieldEdit : TimetableEdit
 
     public string? Text { get; }
 
+    public override IEnumerable<XElement> Targets => [Owner];
+
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
         CheckIn(document, Owner);
@@ -314,6 +322,8 @@ public sealed class SetFieldEdit : TimetableEdit
 /// <summary>Sets a leaf element's text; null makes it self-closing (<c>&lt;DwellTimes/&gt;</c>), as some files have it.</summary>
 internal sealed class SetLeafEdit(XElement leaf, string? text, string description) : TimetableEdit(description)
 {
+    public override IEnumerable<XElement> Targets => [leaf];
+
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
         CheckIn(document, leaf);
@@ -339,6 +349,8 @@ internal sealed class SetLeafEdit(XElement leaf, string? text, string descriptio
 /// <summary>Replaces an element's attributes, in order.</summary>
 internal sealed class AttributesEdit(XElement element, IReadOnlyList<(XName Name, string Value)> attributes, string description) : TimetableEdit(description)
 {
+    public override IEnumerable<XElement> Targets => [element];
+
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
         CheckIn(document, element);
@@ -367,6 +379,8 @@ public sealed class InsertNodeEdit : TimetableEdit
     /// <summary>The place among the parent's child elements, or null for SimSig's order.</summary>
     public int? Index { get; }
 
+    public override IEnumerable<XElement> Targets => [Parent, Node];
+
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
         CheckIn(document, Parent);
@@ -390,14 +404,19 @@ public sealed class InsertNodeEdit : TimetableEdit
 
 public sealed class RemoveNodeEdit : TimetableEdit
 {
+    private readonly XElement? _parent;
+
     internal RemoveNodeEdit(XElement node, string description)
         : base(description)
     {
         ArgumentNullException.ThrowIfNull(node);
         Node = node;
+        _parent = node.Parent;
     }
 
     public XElement Node { get; }
+
+    public override IEnumerable<XElement> Targets => _parent is null ? [Node] : [_parent, Node];
 
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
@@ -424,6 +443,8 @@ public sealed class MoveNodeEdit : TimetableEdit
 
     public int Index { get; }
 
+    public override IEnumerable<XElement> Targets => [Node];
+
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {
         CheckIn(document, Node);
@@ -444,6 +465,8 @@ public sealed class CompositeEdit : TimetableEdit
     }
 
     public IReadOnlyList<TimetableEdit> Edits { get; }
+
+    public override IEnumerable<XElement> Targets => Edits.SelectMany(e => e.Targets);
 
     private protected override TimetableEdit ApplyCore(WttDocument document)
     {

@@ -2283,6 +2283,72 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 ### Questions for Fred
 - 45. **Entry signals.** A train first reported more than 2 min after play began is taken to have entered at that signal (as the live state takes it). On Waterloo this gives one entry point per entry signal. Is there a sim where trains appear mid-area (not at an entry), which this would mistake for an entry?
 
+## 2026-10-22 — S42: Checks before SimSig (#20)
+
+### Done
+- **Fred's choices** (asked during the session): the three Analyser checks that need SimSig's core data (*wrong traction power*, *not a sensible ending point*, *exits and re-enters*) are **approximated from sim knowledge** as Info; *terminates with no onward working* fires when the last point is a **stop with no next working, join or "berths here"**; the corpus baseline builds each sim's knowledge from **all its timetables, the checked one included**.
+- **SimSig's wording:** the wiki's *Timetable Tools 1* page lists the Analyser's 32 messages; every offline one is a check here with that message ("Next train 2N54 already used", "Reverses at B but has "passing time" ticked"…) and the page's advice as its hint.
+- **`TimetableValidator`** (`Stringline.Editing.Validation`, `08-…md` §5.1): `ValidationIssue(Severity, Code, Train?, PointIndex?, Message, Hint, QuickFix?)` with the train's and the closest element; `IssueCatalogue` (49 checks: the document's, the Analyser's times, links, endings, lengths, traction, seeding and trips; 14 against sim knowledge; 4 on rules). `ValidationResult` keeps each train's issues by its element, so `Revalidate` checks again only the trains an edit touches (`TimetableEdit.Targets`, new) and those linked to them, before or after.
+- **Alternative workings:** `Presence` (the starts a train can be in, and the decision choices it needs, `[any]`/`[not]` included; rules as choices on whether Y runs) keeps seed-group copies, day-of-week copies and rule alternatives from clashing.
+- **Quick fixes** (`TimetableEdit`s): insert the booked chain for "no known path" (passes timed by the usual run times, to the half minute), set the most used line, stop where a train reverses on a pass, clear a seeded train's first arrival, move a next working last.
+- **Model:** `Train.Electrification` (its own, else its category's); `LocationKnowledge.Ends`, `Exits`, `Through` and `EntryPower` (cache format 2, so caches rebuild); `WttDocumentImport.Document`, `Revision`, `IsCurrent`.
+- **CLI:** `stringline wtt-check t.wtt [--knowledge-folder f] [--log x] [--profile p|--no-profile] [--include-self] [--no-knowledge] [--severity …] [--train 1A23] [--summary]`; the checked file is left out of the knowledge (as a draft is) unless `--include-self`; exit 1 with Errors.
+- **Corpus baseline** (285 timetables, 190 079 trains, 42 s with the imports; the biggest, Three Bridges ASC 2019, 0.2 s). Issues and files, after tuning:
+
+| Check | Severity | Issues | Files |
+|---|---|---:|---:|
+| associated-not-defined | Error | 99 | 28 |
+| next-already-used | Error | 111 | 28 |
+| associated-different-location | Error | 47 | 17 |
+| next-not-final | Error | 53 | 14 |
+| divided-portion-already-used | Error | 48 | 10 |
+| seed-signal-shared | Error | 23 | 10 |
+| joining-train-lost | Error | 5 | 4 |
+| departure-before-previous | Error | 33 | 2 (Moss Vale) |
+| reverses-with-pass-time | Error | 2 | 2 |
+| arrival-before-previous | Error | 13 | 1 (Moss Vale) |
+| no-trips | Error | 3 | 1 |
+| associated-different-platform | Warning | 373 | 40 |
+| never-used | Warning | 99 | 40 |
+| no-traction-power | Warning | 252 | 25 |
+| rule-location-not-called | Warning | 38 | 17 |
+| shorter-than-portion / remainder-too-short | Warning | 26 / 26 | 16 / 13 |
+| duplicate-category | Warning | 38 | 11 |
+| never-runs | Warning | 56 | 11 |
+| rule-cycle | Warning | 7 | 6 |
+| terminates-no-onward | Info | 11 373 | 262 |
+| length-differs-from-next | Info | 2 342 | 173 |
+| rule-unresolved | Info | 1 729 | 86 |
+| seed-arrival-time | Info | 1 057 | 189 |
+| out-of-order | Info | 704 | 56 |
+
+  The sim-knowledge checks give nothing with the file included in its own knowledge, as expected. Before tuning, *next already used* was 1 317 in 145 files, *no trips* 1 450 in 178, *seed signal shared* 203 in 66 and *terminates* 18 402 in 266: seed-group and day-of-week copies, seeded copies with one location, and trains that call at their last location and leave.
+- **Docs:** `08-…md` §5.1 and §6, the plan's "Built in S42", `04-…md` (`Electrification`, entry decisions), `02-…md`, `CLAUDE.md`, `docs/developer.md`. The guide's privacy page is copied from `PRIVACY.md` again (S41 changed only the original, so `PrivacyTests` failed). No UI change, so no other guide change.
+- **Tests:** Editing +35 (`AnalyserCheckTests` 17: each check firing and its near miss, quick fixes applied and checked again, alternatives by day, seed group and rule, lengths through joins and divides, the catalogue; `KnowledgeCheckTests` 8: codes and locations never seen, the chain fix and its times, ambiguous line and its fix, runs, stops, activities, entry, seed and traction, endings, exits and order, other sims' knowledge; `RuleCheckTests` 3; `IncrementalValidationTests` 5: incremental equals full through link edits and on Waterloo, Waterloo and Llangollen with no Errors or Warnings, edit targets; the corpus baseline; `SimKnowledgeBuilderTests` +1); Timetable +1 (power types); Tools +3 (`WttCheckCommandTests`).
+- Totals: 2 016 (Core 319, Architecture 20, Gateway 211, Timetable 215, Network 199, Planning 339, Persistence 16, Graph 302, Optimiser 25, Editing 67, Tools 93, App 210). Green on Windows (Debug); the solution and the portable solution build with `-warnaserror`. Linux not run.
+
+### Decisions
+- **Released timetables are the judge of false alarms**, as the plan says: a check is tuned until what it still says on them looks like a real fault, and demoted where it cannot tell (seed arrival, terminating trains).
+- **A train's identity in an issue is its element**, as in the editor; IDs and headcodes are refreshed when reused issues outlive a renumber elsewhere.
+- **A rule is a decision:** "X not if Y" and "X … after Y" put X on opposite sides of "does Y run", which is what keeps rule alternatives apart.
+- **Only a missing sim ID blocks a save** (a change to `08-…md` §6): released timetables with a category defined twice load in SimSig.
+- **The checked file is left out of its own knowledge on the CLI**, as a draft is in the editor; the baseline includes it, as Fred chose.
+
+### Next
+- S43 (editor workspace, trains and trip grid), with the Issues panel over `ValidationResult` and `Revalidate` after each edit.
+- 👤 **S40's gate** is still open (round-tripped Waterloo and a payware timetable through SimSig's Analyser). Running `wtt-check` on the same files and comparing with the Analyser's list would also show which of S42's checks SimSig agrees with.
+
+### Known issues
+- The checks cannot see SimSig's core data: "never seen" is evidence, and with few timetables for a sim the knowledge checks say little (a sim with one timetable gets none when that timetable is the draft).
+- An entering train is taken to be in a seed group's game only if it enters after the group's start; a train already on its way at that time but not seeded is not modelled.
+- Decision choices are compared by name; forms other than `[any]` and `[not]` (such as `[all]`) are read as a plain list.
+- *Next train already used* still fires 111 times in 28 released files (at most 9 in one, Carlisle 79-80); some may be alternatives this does not model.
+
+### Questions for Fred
+- 46. **Arrival at the seed location.** The research note says a seeded train has no arrival at its seed start location, but 189 of 285 released timetables give one (Aston's 2N52 at BLKST). Is the rule only for a train seeded at the platform itself? It is Info until we know.
+- 47. **Terminating trains.** 262 released timetables have trains that stop last with nothing after them (depots, sidings: Basingstoke's 0Y20 at LUDGMOD). Does SimSig's Analyser list these on shipped timetables? They are Info here.
+- 48. **Errors in released timetables.** About 30 shipped files still get Errors (missing associated trains, next workings used twice, Cardiff's 5N35 naming the same next working twice). If one is to hand, does SimSig's Analyser report the same?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

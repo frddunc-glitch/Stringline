@@ -570,6 +570,8 @@ Fred raised #20 on 2026-10-20: SimSig's editor and outside tools handle timetabl
   - incremental and full checks agree;
   - Waterloo and Llangollen have no Errors.
 
+- *Built in S42:* Fred chose (asked during the session) to **approximate** the three Analyser checks that need SimSig's core data (wrong traction power, not a sensible ending point, exits and re-enters) from sim knowledge as Info; **"terminates with no onward working"** when the last point is a stop with no next working, join or "berths here"; and the corpus baseline with each sim's knowledge built from **all its timetables, the checked one included**. The baseline showed released timetables write workings several times (per seed group, per day by decision choices, or as rule alternatives), so trains that can never be in one game do not clash, and that a train departing its last point later than it arrived leaves the area. Several checks were demoted (`08-…md` §5.1); only a missing sim ID blocks a save. Waterloo and Llangollen have no Errors or Warnings.
+
 ### S43 — Editor workspace, trains and trip grid 🪟 (view-model portable)
 - **`TimetableEditor`** (`Stringline.Editing`): the single writer for one draft. It applies edits, keeps undo and redo, and publishes `DraftSnapshot`s (document, `WorkingTimetable`, issues). Drafts autosave to `Documents\Stringline\drafts` (`.wtt` plus `.draft.json` holding the source path and undo history).
 - **Timetable menu** (`08-…md` §7): New draft (from the loaded timetable, from a file, or blank for the sim; "from the working plan" comes in S47), Open draft, Save, Save As, Release version, Close draft and Check timetable. Add it to S25's menu test (unique access keys, every command bound).

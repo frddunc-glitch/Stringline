@@ -56,6 +56,9 @@ public sealed record Train
 
     public bool IsFreight { get; init; }
 
+    /// <summary>The power types the train can use, one letter each as SimSig writes them (<c>D</c> diesel, <c>O</c> overhead, <c>3</c> third rail…), falling back to its category's.</summary>
+    public string? Electrification { get; init; }
+
     /// <summary>Runs only as required (SimSig may or may not run it).</summary>
     public bool AsRequired { get; init; }
 

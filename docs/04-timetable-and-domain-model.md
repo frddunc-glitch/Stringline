@@ -24,7 +24,9 @@ A `.wtt` is a **zip** of `TimetableHeader.xml` (header only) and `SavedTimetable
 | `ID` | Headcode. May carry a `-1`/`-2` suffix that is part of the headcode (`2O03` and `2O03-1` are different trains) |
 | `UID` | Newer files only. **Not unique**: alternative paths of one service share it (195 of 284 files) |
 | `Description` | Free text, or `$template` = the header's `TrainDescriptionTemplate` filled from `OriginTime`, `OriginName`, `DestinationName`, `DestinationTime`, `OperatorCode` and the category description (`$originTime $originName-$destName $operator ($stock)`) |
-| `Category` | Category ID; train-level `MaxSpeed`, `TrainLength`, `IsFreight` and dwell elements override it |
+| `Category` | Category ID; train-level `MaxSpeed`, `TrainLength`, `IsFreight`, `Electrification` and dwell elements override it |
+| `Electrification` | The power types, one letter each (`D` diesel, `O` overhead, `3` third rail, `4`, `V`, `T`…; `OD` is either). Kept as `Train.Electrification`, else the category's (S42). 252 corpus trains have none |
+| `EntryDecision`, `EntryChoice` | The train runs only when the decision (e.g. `DOTW`) has that choice: `WED`, `[any] MON \| TUE`, `[not] MON \| TUE`. Activities carry `Decision`/`Choice` the same way. Not imported; S42's checks read them from the document to tell alternative workings apart |
 | `EntryPoint`, `DepartTime` | Enters from off-area at that point, at that time. `DepartTime` is often absent (SimSig works it out) |
 | `SeedPoint` (+ `Started`) | In the sim at the start, at that signal/berth. `Started` is `-1` on every seeded train in a fresh WTT (kept as `Train.Started`) |
 | `SeedGroup` | The seed group (by ID) a seeded train is seeded in. None: seeded when the sim starts at the timetable's start. Kept as `Train.SeedGroup` (seeded trains only); a group the header does not define is an Info note, and the train is taken as seeded at any start |
@@ -85,7 +87,7 @@ record TimetableHeader(AreaId, SimSigVersion, Name, Description, TimetableVersio
 record TrainCategory(Id, Description, IsFreight, MaxSpeedMph?, LengthMetres?, AccelBrakeIndex?, SpeedClass?, Electrification?, DwellTimes Dwell);
 record Train { TrainId Id; Headcode Headcode; string? Uid; string Description; string? CategoryId;
                TrainStart Start; Tiploc? EntryPoint; SimTime? EntryTime; Tiploc? SeedPoint; string? SeedGroup; bool Started;
-               int? MaxSpeedMph; int? LengthMetres; bool IsFreight; bool AsRequired; origin/destination names and times; OperatorCode; Notes;
+               int? MaxSpeedMph; int? LengthMetres; bool IsFreight; string? Electrification; bool AsRequired; origin/destination names and times; OperatorCode; Notes;
                DwellTimes Dwell; IReadOnlyList<TimingPoint> Points; TrainId? FormedFrom;
                /* derived */ Origin, Destination, FirstTime, LastTime, NextWorking, BookedStart /* entry time, else FirstTime */ }
 record SeedGroup(string Id, SimTime StartTime, string Title);   // WorkingTimetable.SeedGroups (init), FindSeedGroup(id)

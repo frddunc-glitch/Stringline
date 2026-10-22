@@ -253,6 +253,15 @@ public sealed class WttReaderTests
         train.LengthMetres.Should().Be(120);
         train.IsFreight.Should().BeTrue();
         train.Dwell.Should().Be(new DwellTimes(RedSignalMoveOff: 12, StationForward: 30, Join: 240));
+        train.Electrification.Should().Be("3");
+    }
+
+    [Fact]
+    public void A_trains_own_power_types_win_over_its_categorys()
+    {
+        var train = Single(Wtt.Read(Wtt.Document(Wtt.Train("1A01", Wtt.Trip("AAA", dep: 100), "<Electrification>OD</Electrification>"))));
+
+        train.Electrification.Should().Be("OD");
     }
 
     [Fact]

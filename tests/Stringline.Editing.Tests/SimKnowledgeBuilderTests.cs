@@ -91,6 +91,20 @@ public sealed class SimKnowledgeBuilderTests
     }
 
     [Fact]
+    public void A_location_counts_ends_exits_calls_between_and_the_power_types_entering()
+    {
+        var k = Build(
+            Train("1A01", start: TrainStart.EntryPoint, entry: "09:59", points: [Call("A", null, "10:00"), Pass("B", "10:05"), Call("C", "10:10", null)]) with { Electrification = "OD" },
+            Train("1A02", start: TrainStart.EntryPoint, entry: "10:59", points: [Call("A", null, "11:00"), Pass("B", "11:05")]) with { Electrification = "D" },
+            Train("1A03", points: [Call("C", null, "12:00"), Pass("B", "12:05"), Call("A", "12:10", "12:12")]));
+
+        (k.Location(C)!.Ends, k.Location(C)!.Exits, k.Location(C)!.Through).Should().Be((1, 0, 0));
+        (k.Location(B)!.Ends, k.Location(B)!.Exits, k.Location(B)!.Through).Should().Be((0, 1, 2));
+        (k.Location(A)!.Ends, k.Location(A)!.Exits).Should().Be((1, 0), "a last stop is an end, whatever its times");
+        k.Location(new Tiploc("EIN"))!.EntryPower.Should().Equal(new Dictionary<string, int> { ["D"] = 2, ["O"] = 1 });
+    }
+
+    [Fact]
     public void Dwells_are_learned_at_intermediate_stops_without_activities()
     {
         var k = Build(
@@ -233,7 +247,7 @@ public sealed class SimKnowledgeBuilderTests
         SimKnowledgeJson.Serialize(back).Should().Be(json);
         back.Sources[0].SameAs(k.Sources[0]).Should().BeTrue();
         back.RunTime(A, B, new RunBand(SpeedBand.UpTo100, false)).Should().Be(new TimeStats(1, 300, 300));
-        SimKnowledgeJson.TryDeserialize(json.Replace("\"format\": 1", "\"format\": 99", StringComparison.Ordinal)).Should().BeNull("another format is rebuilt");
+        SimKnowledgeJson.TryDeserialize(json.Replace($"\"format\": {SimKnowledge.CurrentFormat}", "\"format\": 99", StringComparison.Ordinal)).Should().BeNull("another format is rebuilt");
         SimKnowledgeJson.TryDeserialize("{ not json").Should().BeNull();
     }
 }

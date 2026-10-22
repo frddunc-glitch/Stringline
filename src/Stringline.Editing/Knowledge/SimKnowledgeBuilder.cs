@@ -214,7 +214,13 @@ public sealed class SimKnowledgeBuilder
         var band = RunBand.Of(train);
         if (train.Start == TrainStart.EntryPoint && train.EntryPoint is { } entry)
         {
-            Location(entry).Entries++;
+            var at = Location(entry);
+            at.Entries++;
+            foreach (var power in (train.Electrification ?? string.Empty).Trim())
+            {
+                Count(at.EntryPower, power.ToString());
+            }
+
             (_entryPointsByHeadcode.TryGetValue(train.Headcode, out var set) ? set : _entryPointsByHeadcode[train.Headcode] = new HashSet<string>(StringComparer.Ordinal)).Add(entry.Code);
         }
         else if (train.Start == TrainStart.Seeded && train.SeedPoint is { } seed)
@@ -233,6 +239,19 @@ public sealed class SimKnowledgeBuilder
             Count(at.Platforms, point.Platform);
             Count(at.Lines, point.Line);
             Count(at.Paths, point.Path);
+            if (i == points.Count - 1 && point.IsPass)
+            {
+                at.Exits++;
+            }
+            else if (i == points.Count - 1)
+            {
+                at.Ends++;
+            }
+            else if (i > 0)
+            {
+                at.Through++;
+            }
+
             if (!point.IsPass && point.Activities.Count == 0 && i > 0 && i < points.Count - 1
                 && point is { Arrive: { } arrive, Depart: { } depart } && depart >= arrive
                 && points[i - 1].Location != point.Location && points[i + 1].Location != point.Location)
@@ -358,6 +377,14 @@ public sealed class SimKnowledgeBuilder
 
         public int Reports { get; set; }
 
+        public int Ends { get; set; }
+
+        public int Exits { get; set; }
+
+        public int Through { get; set; }
+
+        public Dictionary<string, int> EntryPower { get; } = new(StringComparer.Ordinal);
+
         public Dictionary<string, int> Platforms { get; } = new(StringComparer.Ordinal);
 
         public Dictionary<string, int> Lines { get; } = new(StringComparer.Ordinal);
@@ -381,7 +408,7 @@ public sealed class SimKnowledgeBuilder
             return new LocationKnowledge(
                 tiploc, roles, Name, Calls, Stops, Activities, Reversals, Entries, Seeds, Reports,
                 Sorted(Platforms), Sorted(Lines), Sorted(Paths), Sorted(ReportedPlatforms), Stats(_dwells),
-                corridors is null ? null : [.. corridors]);
+                corridors is null ? null : [.. corridors], Ends, Exits, Through, Sorted(EntryPower));
         }
     }
 

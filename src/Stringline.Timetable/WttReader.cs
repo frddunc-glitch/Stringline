@@ -479,6 +479,7 @@ public sealed partial class WttReader
                 MaxSpeedMph = ParseInt(Text(e, "MaxSpeed"), "MaxSpeed", name),
                 LengthMetres = ParseInt(Text(e, "TrainLength"), "TrainLength", name),
                 IsFreight = ParseBool(Text(e, "IsFreight"), "IsFreight", name) ?? false,
+                Electrification = Text(e, "Electrification"),
                 AsRequired = ParseBool(Text(e, "AsRequired"), "AsRequired", name) ?? false,
                 OriginName = Text(e, "OriginName"),
                 DestinationName = Text(e, "DestinationName"),
@@ -636,6 +637,7 @@ public sealed partial class WttReader
                     MaxSpeedMph = train.MaxSpeedMph ?? category.MaxSpeedMph,
                     LengthMetres = train.LengthMetres ?? category.LengthMetres,
                     IsFreight = train.IsFreight || category.IsFreight,
+                    Electrification = train.Electrification ?? category.Electrification,
                     Dwell = train.Dwell.Or(category.Dwell),
                 };
         }
