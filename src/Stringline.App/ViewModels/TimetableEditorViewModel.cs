@@ -70,6 +70,10 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
         _logger = logger;
         _lastAutosave = time.GetUtcNow();
         Header = new DraftHeaderViewModel(this);
+        Rules = new DraftRulesViewModel(this);
+        SeedGroups = new DraftSeedGroupsViewModel(this, dialogs);
+        Categories = new DraftCategoriesViewModel(this, dialogs);
+        Lists = new DraftListsViewModel(this);
         Snapshot = editor.Current;
         Board = new DraftBoardViewModel(this, dialogs, ui, logger, context.Exports);
         _locations = LocationChoices();
@@ -154,6 +158,63 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
     public partial DraftTrainViewModel? Train { get; private set; }
 
     public DraftHeaderViewModel Header { get; }
+
+    /// <summary>The Rules tab (S45).</summary>
+    public DraftRulesViewModel Rules { get; }
+
+    /// <summary>The Seed groups tab (S45).</summary>
+    public DraftSeedGroupsViewModel SeedGroups { get; }
+
+    /// <summary>The Categories tab (S45).</summary>
+    public DraftCategoriesViewModel Categories { get; }
+
+    /// <summary>The Lists tab (S45): Decisions, Class of Service, scenario options and Driving.</summary>
+    public DraftListsViewModel Lists { get; }
+
+    /// <summary>Every train for the pickers, by headcode then time: "1A23  10:15 WLOO".</summary>
+    public IReadOnlyList<TrainChoice> TrainChoices => _trainChoices ??= MakeTrainChoices();
+
+    private IReadOnlyList<TrainChoice>? _trainChoices;
+
+    /// <summary>
+    /// The train a typed name means: a picker's label, a UID, else a headcode that only one train has. Null if none
+    /// or several do (the caller says so).
+    /// </summary>
+    public TrainNode? FindTrain(string? text)
+    {
+        var typed = text?.Trim() ?? string.Empty;
+        if (typed.Length == 0)
+        {
+            return null;
+        }
+
+        if (TrainChoices.FirstOrDefault(c => c.Label == typed) is { } picked)
+        {
+            return new TrainNode(Document, picked.Element);
+        }
+
+        var trains = Document.Trains.ToList();
+        var byUid = trains.Where(t => string.Equals(t.Uid, typed, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (byUid.Count == 1)
+        {
+            return byUid[0];
+        }
+
+        var byHeadcode = trains.Where(t => string.Equals(t.Headcode, typed, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (byHeadcode.Count > 1)
+        {
+            throw new InvalidOperationException($"{byHeadcode.Count} trains are {typed}: pick one from the list, or type its UID.");
+        }
+
+        return byHeadcode.SingleOrDefault();
+    }
+
+    private List<TrainChoice> MakeTrainChoices() =>
+        [.. Snapshot.Document.Trains
+            .Select(t => (Node: t, Train: Snapshot.Import.TrainOf(t)))
+            .Select(x => new TrainChoice(x.Node.Element, x.Node.Headcode ?? "?",
+                $"{x.Node.Headcode}{(x.Node.Uid is { } uid && uid != x.Node.Headcode ? $" ({uid})" : string.Empty)}  {DraftText.Time(x.Train?.FirstTime)} {x.Train?.Origin}"))
+            .OrderBy(c => c.Headcode, StringComparer.Ordinal).ThenBy(c => c.Label, StringComparer.Ordinal)];
 
     /// <summary>The graph of the draft (S44).</summary>
     public DraftBoardViewModel Board { get; }
@@ -481,6 +542,7 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
         if (value is null)
         {
             Train = null;
+            Rules.Load(Snapshot);
             return;
         }
 
@@ -489,6 +551,8 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
             Train = new DraftTrainViewModel(this, value.Element);
             Train.Load(Snapshot);
         }
+
+        Rules.Load(Snapshot);
     }
 
     private bool Save(VersionBump bump)
@@ -654,8 +718,13 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
             SelectedTrainRow = null;
         }
 
+        _trainChoices = null;
         Train?.Load(snapshot);
         Header.Load(snapshot);
+        Rules.Load(snapshot);
+        SeedGroups.Load(snapshot);
+        Categories.Load(snapshot);
+        Lists.Load(snapshot);
         RefreshIssues();
         if (!IsClosed)
         {

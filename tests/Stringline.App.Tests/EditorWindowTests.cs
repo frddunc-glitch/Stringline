@@ -129,8 +129,14 @@ public sealed class EditorWindowTests
                 new TripNode(draft.Document, row.Element).Platform.Should().Be("7");
                 draft.UndoHeader.Should().Contain("platform 7");
 
-                window.Tabs.SelectedIndex = 1;
-                MainWindowTests.Settle(window);
+                // Every tab (S45's too), with a category and a point's activities showing, binds cleanly.
+                draft.Train.CurrentTrip = draft.Train.Trips[^1];
+                draft.Categories.Selected = draft.Categories.Rows[0];
+                for (var tab = 1; tab < window.Tabs.Items.Count; tab++)
+                {
+                    window.Tabs.SelectedIndex = tab;
+                    MainWindowTests.Settle(window);
+                }
             }
             finally
             {

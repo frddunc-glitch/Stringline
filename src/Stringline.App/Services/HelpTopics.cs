@@ -56,8 +56,20 @@ internal static class HelpTopics
     /// <summary>The draft board (S44).</summary>
     public const string TimetableEditorBoard = "timetable-editor.md#the-draft-on-the-graph";
 
+    /// <summary>The activities panel, Rules, Seed groups, Categories and Lists tabs (S45).</summary>
+    public const string TimetableEditorActivities = "timetable-editor.md#activities";
+
+    public const string TimetableEditorRules = "timetable-editor.md#rules";
+
+    public const string TimetableEditorSeedGroups = "timetable-editor.md#seed-groups";
+
+    public const string TimetableEditorCategories = "timetable-editor.md#categories";
+
+    public const string TimetableEditorLists = "timetable-editor.md#decisions-class-of-service-scenarios-and-driving";
+
     /// <summary>Every topic, for the test that each page and heading is there.</summary>
     public static IReadOnlyList<string> All { get; } =
         [Contents, Graph, TrainList, Boards, TrainDetail, Conflicts, Regulation, Delays, History, Replay, Connect, Options, ProfileEditor, Disruptions, SignalPlaces, LearningOptions, Privacy,
-         TimetableEditor, TimetableEditorTrains, TimetableEditorTrips, TimetableEditorIssues, TimetableEditorBoard];
+         TimetableEditor, TimetableEditorTrains, TimetableEditorTrips, TimetableEditorIssues, TimetableEditorBoard,
+         TimetableEditorActivities, TimetableEditorRules, TimetableEditorSeedGroups, TimetableEditorCategories, TimetableEditorLists];
 }

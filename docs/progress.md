@@ -2477,6 +2477,31 @@ From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the
 ### Questions for Fred
 - 52. **Untimed trains on the graph.** An untimed train matched now draws its actual line in its category colour, but it has no booked or forecast line (it has no times). Would you like a forecast for it from where it is, by the sim's run times, or is the actual line enough?
 
+## 2026-10-22 — S45: Activities, rules, seed groups, categories and the rest (#20)
+
+### Done
+- **Core** (`TimetableParts`, `Stringline.Timetable.Editing`, `08-…md` §7.3): edits for activities (add, change, move, delete; the associated train named by UID where the file uses UIDs, else headcode; candidates at the location by time), rules (add with SimSig's wording, set X or Y, delete), seed groups (add with a SimSig-style GUID, change, delete seeding its trains at the start; the header's `SeedGroupSummary` kept in step; trains in a group, at the start, and shared seed points), categories (add as a copy or with SimSig's usual values, a new ID carried to every train and trip, delete only with the trains moved), speed class bits, the lists (Decisions and choices, Class of Service, Driving) and scenario options. Each is one undoable edit; what SimSig would not take is refused saying why (a next working anywhere but last; a rule without its Z; a category still in use).
+- **Workspace:** an activities panel under the trip grid with "Formed by …" under the train's details; Rules, Seed groups, Categories and Lists tabs. `TimetableEditorViewModel.FindTrain` (headcode, UID or picker label; a headcode several trains share is refused). Help topics for each; the guide's timetable editor page has a section for each.
+- **Tests:** Timetable +7 (`TimetablePartsTests`: activities added by headcode and UID and removed with their list; next working last; rules with their list; seed groups and the summary, deleting one; categories renamed with their trains and deleted only when moved, speed class bits; decisions, choices, fields and scenario options; activity candidates); App +5 (`DraftPartsTests` on Waterloo: activities refused, added and undone to the same tree; rules filtered, added, edited, refused and deleted; a seed group made, used and deleted after asking; a category renamed, ticked, re-dwelled and deleted with its trains moved; decisions, choices and scenario options), and `EditorWindowTests` now visits every tab with no binding errors.
+- Totals: 2 098 (Timetable 234, App 225; others as S44a). Green on Windows (Debug). Both solutions build with `-warnaserror`. Linux not run.
+
+### Decisions
+- **Speed classes are numbered, not named.** I looked for the bit names to label the tick boxes and found none in the file or the documentation I could reach; SimSig's forum shows each sim defines its own (EPS-D, EPS-E…). So the editor shows bits 1–32 rather than invent names (question 53).
+- **A next working's rule matches the checks', not a stricter one:** alternative next workings (chosen by a decision) may follow one another, as S42's `NextNotFinal` allows.
+- **A file's empty header elements stay empty:** Moss Vale writes `<SeedGroupSummary></SeedGroupSummary>` and `<ScenarioOptions></ScenarioOptions>`, Waterloo neither, and the edits keep each file's way.
+- **Caution speeds are edited in place,** not added or removed: a speed's fields have no documented defaults to start a new one from.
+
+### Next
+- S46 (bulk tools and auto-fill, #20).
+- 👤 **Try the new tabs** on a timetable you know: add a join or a next working from the activities panel, a rule, a seed group, and a category copied from another, then save and run SimSig's Analyser on it.
+
+### Known issues
+- The trains offered for an activity come from the draft as last imported, so a train added a moment before shows once the board's next build lands (immediately in practice).
+- A rule's Kind cell can set a kind that needs a Z on a rule without one; the checks then flag it.
+
+### Questions for Fred
+- 53. **Speed class names.** Each sim names its speed classes, and the timetable does not hold the names, so the Categories tab numbers its tick boxes 1–32. Do you know where SimSig keeps a sim's names (the loader, a sim file), so the editor can show them?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

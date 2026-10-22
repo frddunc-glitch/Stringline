@@ -146,6 +146,8 @@ internal sealed partial class DraftTrainViewModel : ObservableObject
             var pointIssues = issues.Where(x => x.Element == trip.Element).ToList();
             Trips[i].Load(i, trip, snapshot.AddedPoints.Contains(trip.Element), pointIssues, _owner.ChoicesAt);
         }
+
+        LoadActivities(snapshot);
     }
 
     /// <summary>Makes a typed cell's edit; false (and the reason in the editor's status) if it is refused.</summary>

@@ -646,6 +646,8 @@ Out of the phase's order, from Fred's issues on the Moss Vale sim. Done 2026-10-
   - deleting a seed group moves its trains to the start group after asking;
   - a round trip of each part on a corpus file that has it (find one with Decisions and with Scenarios).
 
+- *Built in S45 (2026-10-22):* `TimetableParts` for each part and the workspace's activities panel and Rules, Seed groups, Categories and Lists tabs (`08-…md` §7.3). Speed classes are numbered tick boxes: each sim names its own, and the file does not say what. Caution speeds are edited in place but not added or removed (a set's speeds have no documented defaults).
+
 ### S46 — Bulk tools and auto-fill (core portable, UI 🪟)
 Each tool in `08-…md` §8 is one composite `TimetableEdit`, previewed as a list of changes and as ghosts on the draft board before it is applied.
 - **Repeat as pattern:**

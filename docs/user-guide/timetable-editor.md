@@ -37,9 +37,31 @@ Enter moves down a row. **Insert** adds a point above the current one, **Ctrl+De
 
 Points shown grey were added by Stringline, by a quick fix. Edit one to keep it as yours.
 
+### Activities
+
+Under the grid are the **activities** of the point the grid is on: next workings, joins, divides, engine and coach detaches, platform shares and crew changes. Pick the kind and the train it is with, then **Add activity**. The trains offered first are those booked at that location near that time (for a next working or a divide, a train that starts there comes first); you can also type a headcode or UID. A train is named the way the timetable already names trains: by UID in a timetable that uses UIDs, else by headcode. Change an activity's kind, train, crew change time or duration in its row; ▲ and ▼ reorder them, **Delete** removes one and **Go to train** shows the train it is with. A train another train forms says so under its details ("Formed by 1A01 at WOKING (next working)").
+
+A next working must be the last thing a train does, as SimSig needs: it can only go at the train's last location and after its other activities there (alternative next workings, chosen by a decision, may follow one another). An edit that breaks this is refused, and the status bar says why.
+
 ## The header
 
 The **Header** tab has the timetable's name, description, start and finish times and the train description template. The version is not typed: saving raises it.
+
+## Rules
+
+The **Rules** tab lists the timetable's rules (such as "X appears after Y leaves"), with train X, train Y, the location Z for the rules that have one, and the time in minutes (`H` for a half: `0H`, `2`, `25`). Change any of them in the row. To add one, choose the rule, pick or type X and Y, give Z and the minutes, and press **Add rule**; **Delete rule** removes the selected one. Tick **Only rules about the selected train** to see the rules naming the train chosen in the list. A rule the checks have a problem with (a train it names that is not in the timetable, or rules that wait on each other) is marked, with the reason in its Issues column.
+
+## Seed groups
+
+The **Seed groups** tab lists the other times the sim can start at, each with its title, start time, the trains seeded in it and any seed point two of its trains share (SimSig puts one train at a signal). **New seed group…** asks for a title and time; put a train in it by giving it the group's ID on the Train tab. Under the list are the trains seeded at the timetable's own start. **Delete seed group** asks first, naming its trains: they are then seeded at the timetable's start. The header's summary of the groups, which SimSig's loader shows, is kept up to date.
+
+## Categories
+
+The **Categories** tab lists the train types: ID, description, freight, goods lines, maximum speed, length, acceleration and braking, power to weight, electrification, caution speed set, speed classes and how many trains use each. Under the list are the selected category's dwell times and its speed classes as tick boxes. Each sim names its own speed classes, which the timetable does not hold, so they are numbered here. **New category…** copies the selected one (or uses SimSig's usual values) with a new ID. A new ID typed in the ID column goes to every train and point that uses the category. **Delete category…** asks which category its trains move to first.
+
+## Decisions, Class of Service, Scenarios and Driving
+
+The **Lists** tab edits the rest of the timetable as lists: **Decisions** and their choices (ID, description or announcement, weight, chosen), **Class of Service** rules, **Scenario options** (an option and its value) and **Driving**, the caution speed sets and their speeds. What they hold that is not shown is kept as it is.
 
 ## The Issues panel
 

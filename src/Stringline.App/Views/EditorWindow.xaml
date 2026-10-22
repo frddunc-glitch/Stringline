@@ -221,6 +221,43 @@
                 <Label Content="Notes" />
                 <TextBox Style="{StaticResource Detail}" Width="260" Text="{Binding Notes}" />
               </WrapPanel>
+              <TextBlock DockPanel.Dock="Top" Margin="4,2" Text="{Binding FormedBy}" FontStyle="Italic"
+                         Visibility="{Binding FormedBy, Converter={StaticResource NotNull}}" />
+              <!-- Activities of the point the grid is on (S45) -->
+              <DockPanel DockPanel.Dock="Bottom" Height="150" Margin="0,6,0,0" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorActivities}">
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+                  <TextBlock Text="{Binding ActivitiesHeading}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
+                  <ComboBox Width="160" ItemsSource="{Binding ActivityKinds}" SelectedItem="{Binding NewActivityKind}" ToolTip="The kind of activity to add" />
+                  <ComboBox Width="220" Margin="4,0" IsEditable="True" ItemsSource="{Binding ActivityCandidates}" Text="{Binding NewActivityTrain}"
+                            ToolTip="The train it is with: those at this location near this time first, or type a headcode or UID" />
+                  <Button Content="Add acti_vity" Command="{Binding AddActivityCommand}" />
+                  <Button Content="▲" ToolTip="Move up" Command="{Binding MoveActivityUpCommand}" />
+                  <Button Content="▼" ToolTip="Move down" Command="{Binding MoveActivityDownCommand}" />
+                  <Button Content="Delete" Command="{Binding RemoveActivityCommand}" />
+                  <Button Content="_Go to train" Command="{Binding GoToAssociatedCommand}" ToolTip="Show the train the activity is with" />
+                  <TextBlock />
+                </DockPanel>
+                <DataGrid ItemsSource="{Binding Activities}" SelectedItem="{Binding SelectedActivity}" SelectionMode="Single" CanUserSortColumns="False"
+                          CanUserAddRows="False" CanUserDeleteRows="False" AutoGenerateColumns="False">
+                  <DataGrid.Columns>
+                    <DataGridComboBoxColumn Header="Activity" SelectedItemBinding="{Binding KindName, UpdateSourceTrigger=PropertyChanged}" Width="170">
+                      <DataGridComboBoxColumn.ElementStyle>
+                        <Style TargetType="ComboBox">
+                          <Setter Property="ItemsSource" Value="{Binding DataContext.Train.ActivityKinds, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        </Style>
+                      </DataGridComboBoxColumn.ElementStyle>
+                      <DataGridComboBoxColumn.EditingElementStyle>
+                        <Style TargetType="ComboBox">
+                          <Setter Property="ItemsSource" Value="{Binding DataContext.Train.ActivityKinds, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        </Style>
+                      </DataGridComboBoxColumn.EditingElementStyle>
+                    </DataGridComboBoxColumn>
+                    <DataGridTextColumn Header="With" Binding="{Binding With}" Width="90" />
+                    <DataGridTextColumn Header="Crew change at" Binding="{Binding CrewTime}" Width="100" />
+                    <DataGridTextColumn Header="Duration (s)" Binding="{Binding Duration}" Width="90" />
+                  </DataGrid.Columns>
+                </DataGrid>
+              </DockPanel>
               <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,4"
                          Text="Type 1234 for 12:34, 1234H for 12:34½, 12/34 for a pass, +3 for 3 minutes after the time before. Enter moves down; Insert adds a point above, Ctrl+Delete removes points, Ctrl+D fills down. Greyed points were added by Stringline." />
               <DataGrid x:Name="TripGrid" ItemsSource="{Binding Trips}" SelectionUnit="CellOrRowHeader" SelectionMode="Extended"
@@ -335,6 +372,216 @@
             <TextBox x:Name="HeaderDescriptionBox" Grid.Row="5" Grid.RowSpan="2" Grid.Column="1" Text="{Binding Description}" Margin="0,2" Padding="2"
                      AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" MinHeight="160" VerticalAlignment="Stretch" />
           </Grid>
+        </TabItem>
+
+        <!-- Rules (S45) -->
+        <TabItem Header="Rules" DataContext="{Binding Rules}" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorRules}">
+          <DockPanel Margin="4">
+            <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+              <ComboBox Width="250" ItemsSource="{Binding Kinds}" SelectedItem="{Binding NewKind}" ToolTip="The kind of rule" />
+              <Label Content="X" />
+              <ComboBox Width="170" IsEditable="True" ItemsSource="{Binding TrainChoices}" Text="{Binding NewX}" ToolTip="Train X: pick, or type a headcode or UID" />
+              <Label Content="Y" />
+              <ComboBox Width="170" IsEditable="True" ItemsSource="{Binding TrainChoices}" Text="{Binding NewY}" ToolTip="Train Y" />
+              <Label Content="Z" />
+              <TextBox Width="80" Padding="2" Text="{Binding NewLocation}" ToolTip="The location, for the rules that name one" />
+              <Label Content="Minutes" />
+              <TextBox Width="45" Padding="2" Text="{Binding NewMinutes}" ToolTip="Minutes after Y's event; H for a half (0H, 2, 25)" />
+              <Button Content="Add _rule" Margin="6,0,0,0" Command="{Binding AddCommand}" />
+              <Button Content="De_lete rule" Command="{Binding RemoveCommand}" />
+              <CheckBox Content="Only rules about the _selected train" VerticalAlignment="Center" Margin="12,0" IsChecked="{Binding ThisTrainOnly}" />
+            </WrapPanel>
+            <DataGrid ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}" SelectionMode="Single" CanUserAddRows="False" CanUserDeleteRows="False" AutoGenerateColumns="False">
+              <DataGrid.Columns>
+                <DataGridTemplateColumn Width="18" CellTemplate="{StaticResource IssueMark}" IsReadOnly="True" />
+                <DataGridComboBoxColumn Header="Rule" SelectedItemBinding="{Binding Kind, UpdateSourceTrigger=PropertyChanged}" Width="260">
+                  <DataGridComboBoxColumn.ElementStyle>
+                    <Style TargetType="ComboBox">
+                      <Setter Property="ItemsSource" Value="{Binding DataContext.Rules.Kinds, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    </Style>
+                  </DataGridComboBoxColumn.ElementStyle>
+                  <DataGridComboBoxColumn.EditingElementStyle>
+                    <Style TargetType="ComboBox">
+                      <Setter Property="ItemsSource" Value="{Binding DataContext.Rules.Kinds, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    </Style>
+                  </DataGridComboBoxColumn.EditingElementStyle>
+                </DataGridComboBoxColumn>
+                <DataGridTextColumn Header="X" Binding="{Binding X}" Width="80" />
+                <DataGridTextColumn Header="Y" Binding="{Binding Y}" Width="80" />
+                <DataGridTextColumn Header="Z" Binding="{Binding Location}" Width="80" />
+                <DataGridTextColumn Header="Minutes" Binding="{Binding Minutes}" Width="65" />
+                <DataGridTextColumn Header="Issues" Binding="{Binding IssueTip, Mode=OneWay}" IsReadOnly="True" Width="*" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </DockPanel>
+        </TabItem>
+
+        <!-- Seed groups (S45) -->
+        <TabItem Header="Seed groups" DataContext="{Binding SeedGroups}" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorSeedGroups}">
+          <DockPanel Margin="4">
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+              <Button Content="_New seed group…" Command="{Binding AddCommand}" />
+              <Button Content="De_lete seed group" Command="{Binding RemoveCommand}" />
+            </StackPanel>
+            <TextBlock DockPanel.Dock="Bottom" Text="{Binding AtStart}" TextWrapping="Wrap" Margin="0,6,0,0" />
+            <DataGrid ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}" SelectionMode="Single" CanUserAddRows="False" CanUserDeleteRows="False" AutoGenerateColumns="False">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="180" />
+                <DataGridTextColumn Header="Start" Binding="{Binding Start}" Width="60" />
+                <DataGridTextColumn Header="Trains" Binding="{Binding Trains, Mode=OneWay}" IsReadOnly="True" Width="*" />
+                <DataGridTextColumn Header="Sharing a seed point" Binding="{Binding Clashes, Mode=OneWay}" IsReadOnly="True" Width="200" />
+                <DataGridTextColumn Header="ID" Binding="{Binding Id, Mode=OneWay}" IsReadOnly="True" Width="120" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </DockPanel>
+        </TabItem>
+
+        <!-- Categories (S45) -->
+        <TabItem Header="Categories" DataContext="{Binding Categories}" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorCategories}">
+          <DockPanel Margin="4">
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+              <Button Content="_New category…" Command="{Binding AddCommand}" ToolTip="A copy of the selected category, or SimSig's usual values" />
+              <Button Content="De_lete category…" Command="{Binding RemoveCommand}" ToolTip="Its trains move to another category first" />
+            </StackPanel>
+            <Border DockPanel.Dock="Bottom" DataContext="{Binding Selected}" Visibility="{Binding Converter={StaticResource NotNull}}" Margin="0,6,0,0">
+              <StackPanel>
+                <TextBlock Text="Dwell times (seconds)" FontWeight="SemiBold" />
+                <WrapPanel>
+                  <Label Content="Red signal move off" /><TextBox Width="45" Padding="2" Text="{Binding [RedSignalMoveOff]}" />
+                  <Label Content="Station forward" /><TextBox Width="45" Padding="2" Text="{Binding [StationForward]}" />
+                  <Label Content="Station reverse" /><TextBox Width="45" Padding="2" Text="{Binding [StationReverse]}" />
+                  <Label Content="Terminate forward" /><TextBox Width="45" Padding="2" Text="{Binding [TerminateForward]}" />
+                  <Label Content="Terminate reverse" /><TextBox Width="45" Padding="2" Text="{Binding [TerminateReverse]}" />
+                  <Label Content="Join" /><TextBox Width="45" Padding="2" Text="{Binding [Join]}" />
+                  <Label Content="Divide" /><TextBox Width="45" Padding="2" Text="{Binding [Divide]}" />
+                  <Label Content="Crew change" /><TextBox Width="45" Padding="2" Text="{Binding [CrewChange]}" />
+                </WrapPanel>
+                <TextBlock Text="Speed classes (each sim names its own; numbered here)" FontWeight="SemiBold" Margin="0,6,0,0" />
+                <ItemsControl ItemsSource="{Binding Bits}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><UniformGrid Columns="16" /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate><CheckBox Content="{Binding Bit}" IsChecked="{Binding IsSet}" Margin="0,2" /></DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+            <DataGrid ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}" SelectionMode="Single" CanUserAddRows="False" CanUserDeleteRows="False" AutoGenerateColumns="False">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="80" />
+                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" />
+                <DataGridCheckBoxColumn Header="Freight" Binding="{Binding IsFreight, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                <DataGridCheckBoxColumn Header="Goods lines" Binding="{Binding CanUseGoodsLines, UpdateSourceTrigger=PropertyChanged}" Width="75" />
+                <DataGridTextColumn Header="Max speed" Binding="{Binding MaxSpeed}" Width="70" />
+                <DataGridTextColumn Header="Length" Binding="{Binding TrainLength}" Width="55" />
+                <DataGridTextColumn Header="Accel/brake" Binding="{Binding AccelBrake}" Width="75" />
+                <DataGridTextColumn Header="Power/weight" Binding="{Binding PowerToWeight}" Width="85" />
+                <DataGridTextColumn Header="Electrification" Binding="{Binding Electrification}" Width="95" />
+                <DataGridTextColumn Header="Caution set" Binding="{Binding CautionSpeedSet}" Width="80" />
+                <DataGridTextColumn Header="Speed classes" Binding="{Binding SpeedClassText, Mode=OneWay}" IsReadOnly="True" Width="90" />
+                <DataGridTextColumn Header="Trains" Binding="{Binding UsedBy, Mode=OneWay}" IsReadOnly="True" Width="50" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </DockPanel>
+        </TabItem>
+
+        <!-- Decisions, Class of Service, scenario options and Driving (S45) -->
+        <TabItem Header="Lists" DataContext="{Binding Lists}" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorLists}">
+          <TabControl Margin="4">
+            <TabItem Header="Decisions">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="*" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                  <Button Content="New decision" Command="{Binding AddDecisionCommand}" />
+                  <Button Content="Delete decision" Command="{Binding RemoveDecisionCommand}" />
+                </StackPanel>
+                <DataGrid Grid.Row="1" ItemsSource="{Binding Decisions}" SelectedItem="{Binding SelectedDecision}" SelectionMode="Single" CanUserAddRows="False" AutoGenerateColumns="False">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="ID" Binding="{Binding [@ID]}" Width="90" />
+                    <DataGridTextColumn Header="Description" Binding="{Binding [Description]}" Width="*" />
+                    <DataGridTextColumn Header="Chosen" Binding="{Binding [Chosen]}" Width="60" />
+                  </DataGrid.Columns>
+                </DataGrid>
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,6,0,4">
+                  <TextBlock Text="Choices" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+                  <Button Content="New choice" Command="{Binding AddChoiceCommand}" />
+                  <Button Content="Delete choice" Command="{Binding RemoveChoiceCommand}" />
+                </StackPanel>
+                <DataGrid Grid.Row="3" ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" SelectionMode="Single" CanUserAddRows="False" AutoGenerateColumns="False">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="ID" Binding="{Binding [@ID]}" Width="90" />
+                    <DataGridTextColumn Header="Announcement" Binding="{Binding [Announcement]}" Width="*" />
+                    <DataGridTextColumn Header="Weight" Binding="{Binding [Weight]}" Width="60" />
+                    <DataGridTextColumn Header="Chosen" Binding="{Binding [Chosen]}" Width="60" />
+                  </DataGrid.Columns>
+                </DataGrid>
+              </Grid>
+            </TabItem>
+            <TabItem Header="Class of Service">
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+                  <Button Content="New rule" Command="{Binding AddClassOfServiceCommand}" />
+                  <Button Content="Delete rule" Command="{Binding RemoveClassOfServiceCommand}" />
+                </StackPanel>
+                <DataGrid ItemsSource="{Binding ClassOfService}" SelectedItem="{Binding SelectedClassOfService}" SelectionMode="Single" CanUserAddRows="False" AutoGenerateColumns="False">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="Class of service" Binding="{Binding [ClassOfService]}" Width="110" />
+                    <DataGridTextColumn Header="Headcode match" Binding="{Binding [IDmatch]}" Width="*" />
+                    <DataGridTextColumn Header="Freight" Binding="{Binding [Freight]}" Width="60" />
+                    <DataGridTextColumn Header="Speed class match" Binding="{Binding [SpeedClassMatchType]}" Width="120" />
+                    <DataGridTextColumn Header="Speed class" Binding="{Binding [MatchSpeedClass]}" Width="90" />
+                  </DataGrid.Columns>
+                </DataGrid>
+              </DockPanel>
+            </TabItem>
+            <TabItem Header="Scenario options">
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+                  <Button Content="New option" Command="{Binding AddScenarioOptionCommand}" />
+                  <Button Content="Delete option" Command="{Binding RemoveScenarioOptionCommand}" CommandParameter="{Binding SelectedItem, ElementName=ScenarioGrid}" />
+                </StackPanel>
+                <DataGrid x:Name="ScenarioGrid" ItemsSource="{Binding Scenario}" SelectionMode="Single" CanUserAddRows="False" AutoGenerateColumns="False">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="Option" Binding="{Binding Option}" Width="160" />
+                    <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="80" />
+                  </DataGrid.Columns>
+                </DataGrid>
+              </DockPanel>
+            </TabItem>
+            <TabItem Header="Driving">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="*" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="2*" />
+                </Grid.RowDefinitions>
+                <DataGrid ItemsSource="{Binding CautionSets}" SelectedItem="{Binding SelectedCautionSet}" SelectionMode="Single" CanUserAddRows="False" AutoGenerateColumns="False">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="Caution speed set" Binding="{Binding [Name]}" Width="*" />
+                  </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Grid.Row="1" Text="Caution speeds of the selected set" FontWeight="SemiBold" Margin="0,6,0,4" />
+                <DataGrid Grid.Row="2" ItemsSource="{Binding CautionSpeeds}" CanUserAddRows="False" AutoGenerateColumns="False">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="Aspect passed" Binding="{Binding [AspectPassed]}" Width="*" />
+                    <DataGridTextColumn Header="From line speed" Binding="{Binding [FromLineSpeed]}" Width="*" />
+                    <DataGridTextColumn Header="To line speed" Binding="{Binding [ToLineSpeed]}" Width="*" />
+                    <DataGridTextColumn Header="Reduce now" Binding="{Binding [ReduceNowValue]}" Width="*" />
+                    <DataGridTextColumn Header="Approach next" Binding="{Binding [ApproachNextValue]}" Width="*" />
+                    <DataGridTextColumn Header="Next distance" Binding="{Binding [ApproachNextDistance]}" Width="*" />
+                    <DataGridTextColumn Header="Now type" Binding="{Binding [NowValueType]}" Width="*" />
+                    <DataGridTextColumn Header="Next type" Binding="{Binding [NextValueType]}" Width="*" />
+                  </DataGrid.Columns>
+                </DataGrid>
+              </Grid>
+            </TabItem>
+          </TabControl>
         </TabItem>
       </TabControl>
 
