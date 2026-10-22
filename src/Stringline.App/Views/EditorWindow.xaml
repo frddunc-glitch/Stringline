@@ -105,6 +105,21 @@
           <MenuItem Header="_Clear recording" Command="{Binding Board.ClearRecordingCommand}" />
         </MenuItem>
       </MenuItem>
+      <MenuItem Header="_Bulk" ToolTip="Tools for the trains selected in the list: each shows what it would change before it does it, and is one undo">
+        <MenuItem Header="_Shift times…" Command="{Binding ShiftTimesCommand}" />
+        <MenuItem Header="_Renumber…" Command="{Binding RenumberTrainsCommand}" />
+        <MenuItem Header="Change _category…" Command="{Binding ChangeCategoryCommand}" />
+        <MenuItem Header="Platform, line or pat_h at a location…" Command="{Binding SetCodeAtLocationCommand}" />
+        <MenuItem Header="_Allowances…" Command="{Binding SetAllowancesCommand}" />
+        <MenuItem Header="_Find and replace…" Command="{Binding FindReplaceCommand}" />
+        <Separator />
+        <MenuItem Header="Repeat as _pattern…" Command="{Binding RepeatPatternCommand}" />
+        <MenuItem Header="Pair _next workings…" Command="{Binding PairNextWorkingsCommand}" />
+        <Separator />
+        <MenuItem Header="Auto-fill _timings" Command="{Binding AutoFillCommand}" ToolTip="Time the untimed points from the sim's run times for each train's speed" />
+        <MenuItem Header="Set _lines" Command="{Binding SetLinesCommand}" ToolTip="Give points with no line the line other timetables use there" />
+        <MenuItem Header="_Insert timing points" Command="{Binding InsertTimingPointsCommand}" ToolTip="Add the points other timetables book where SimSig may find no path" />
+      </MenuItem>
     </Menu>
 
     <StatusBar DockPanel.Dock="Bottom">

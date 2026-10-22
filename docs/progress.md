@@ -2502,6 +2502,27 @@ From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the
 ### Questions for Fred
 - 53. **Speed class names.** Each sim names its speed classes, and the timetable does not hold the names, so the Categories tab numbers its tick boxes 1–32. Do you know where SimSig keeps a sim's names (the loader, a sim file), so the editor can show them?
 
+## 2026-10-22 — S46: Bulk tools and auto-fill (#20)
+
+### Done
+- **Core** (`BulkTools`, `Stringline.Editing.Bulk`, `08-…md` §8.1): shift (whole or half minutes; 00:00 left alone, as SimSig's Adjust times), renumber by a counting headcode rule (links follow), category, platform/line/path at a location, allowances, find and replace, repeat as pattern (headcodes and numeric UIDs count on; links left off the copies), pairing next workings at a terminus by the least turnaround, auto-fill timings from the sim's run times for the train's band (with the shortfall when the given times are too tight), and set line. Each gives one composite edit, the changes listed and what it could not do.
+- **Workspace:** the editor's **Bulk** menu, for the selected trains (else the current one). Each tool asks, then lists its changes while the trains it changes or adds are drawn as ghosts on the draft board (`ShowPreview`, from a run on a clone of the draft), and applies on Apply as one undo step. **Insert timing points** applies S42's "no known path" fixes for the selected trains together.
+- **Docs:** `08-…md` §8.1, the plan, the guide's "Bulk tools".
+- **Tests:** Editing +12 (`BulkToolsTests`: shift all and from a location with entry and crew change, odd seconds refused; headcodes counting on and running out; renumber, category, codes, allowances and find and replace keeping links; repeat as pattern; pairing by turnaround; auto-fill shares, timing on and shortfall; auto-fill on Waterloo within 2 min of the booked times; set line and a tie), App +1 (a shift cancelled at the preview changes nothing and clears the ghosts, applied is one undo; a pattern adds its copies; a tool with no trains says so).
+- Totals: 2 111 (Editing 94, App 226). Green on Windows (Debug); both solutions build with `-warnaserror`. Linux not run.
+
+### Decisions
+- **The preview runs on a copy of the draft,** with the selected trains mapped by position: running it on the draft and undoing would change the document's revision under the board's import and make its next drag stale.
+- **Repeat as pattern leaves links off its copies:** a copied next working would name the same train as the original's. Pairing is its own tool, as the design doc has it.
+- **Auto-fill shares a gap the way the sim runs it,** not evenly: in proportion to each link's least run for the train's band, so a long fast stretch gets most of the time.
+
+### Next
+- S47 (spreadsheet round trip and plan → draft, #20).
+- 👤 **Try Bulk ▸ Repeat as pattern and Pair next workings** on an hourly service of a sim you play, and **Auto-fill timings** on a train with only its first and last times.
+
+### Known issues
+- Pairing looks only at trains that end and start at the terminus named; a train that reverses there mid-journey is not offered.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

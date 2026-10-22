@@ -63,6 +63,20 @@ The **Categories** tab lists the train types: ID, description, freight, goods li
 
 The **Lists** tab edits the rest of the timetable as lists: **Decisions** and their choices (ID, description or announcement, weight, chosen), **Class of Service** rules, **Scenario options** (an option and its value) and **Driving**, the caution speed sets and their speeds. What they hold that is not shown is kept as it is.
 
+## Bulk tools
+
+The **Bulk** menu works on the trains selected in the list (Ctrl+click and Shift+click to pick several, Ctrl+A for all), or the current train. Each tool asks what to do, then lists what it would change, with the changed and new trains drawn faintly on the draft board, and does it only when you press **Apply**. A tool's whole change is one step for Undo.
+
+- **Shift times…** moves the trains' times by whole or half minutes (`+5`, `-2H`), the whole train or from a location on, as SimSig's Adjust times does: a time of 00:00 is left alone.
+- **Renumber…** gives the trains headcodes counting on from one you give (`2A01`, then `2A03`… counting by 2). Activities and rules that name them follow.
+- **Change category…**, **Platform, line or path at a location…** and **Allowances…** set those for every selected train (a blank code or 0 minutes clears it).
+- **Find and replace…** replaces a whole value in headcodes, UIDs, descriptions or the trips' locations and codes.
+- **Repeat as pattern…** copies one train every so many minutes up to a last start, its headcode counting on (and its UID, if that ends in a number). Its next working and other links are not copied:
+- **Pair next workings…** joins trains that end at a terminus to trains that start there, each to the first that leaves at least the turnaround you give after it arrives.
+- **Auto-fill timings** times the points a train has no time for, from the run times the sim's other timetables book for trains of its speed: points between two times share the run as the sim does, and points after the last time are timed on, with the usual dwell where there is a platform. If the times you gave leave less than the sim's quickest run, it says how much short.
+- **Set lines** gives points with no line the line other timetables use most there (where two are used as often, it leaves the point for you).
+- **Insert timing points** adds, for the selected trains, the points other timetables book between two points SimSig may find no path between (the Issues panel's quick fix, for all of them at once).
+
 ## The Issues panel
 
 Under the train is every issue the checks found, Warnings and Errors at first (choose **All** for the notes too). The checks are the ones SimSig's Analyser makes that can be made without the sim, in its words, and checks against what the sim's other timetables, your saved sessions and its profile show, such as a platform no timetable uses. Those can only say what has not been seen, so they are Warnings or notes, never Errors. The status bar says how much they were checked against.

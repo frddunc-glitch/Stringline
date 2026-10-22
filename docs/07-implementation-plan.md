@@ -668,6 +668,8 @@ Each tool in `08-…md` §8 is one composite `TimetableEdit`, previewed as a lis
   - undo of each tool;
   - App tests of the preview and apply.
 
+- *Built in S46 (2026-10-22):* `BulkTools` and the editor's Bulk menu, each tool previewed (listed, and as ghosts from a run on a copy of the draft) and applied as one edit (`08-…md` §8.1).
+
 ### S47 — Spreadsheet round trip and plan → draft (core portable, UI 🪟)
 - **CSV** (`08-…md` §9):
   - one row per timing point, in a documented column set;

@@ -66,6 +66,7 @@ internal sealed partial class DraftBoardViewModel : ObservableObject, IGraphEdit
     private int _targetSequence = -1;
     private IReadOnlyList<LiveTrain> _actuals = [];
     private IReadOnlyList<GraphPath>? _dragGhost;
+    private IReadOnlyList<GraphPath>? _previewGhost;
     private int? _ghostUntil;
     private PlanDrag? _drag;
     private GraphGrip? _dragGrip;
@@ -476,13 +477,25 @@ internal sealed partial class DraftBoardViewModel : ObservableObject, IGraphEdit
 
     private void UpdateGhosts()
     {
-        if (_dragGhost is null || Board.Corridor is null)
+        if ((_dragGhost is null && _previewGhost is null) || Board.Corridor is null)
         {
             Board.Ghosts = null;
             return;
         }
 
-        Board.Ghosts = _dragGhost;
+        Board.Ghosts = [.. _dragGhost ?? [], .. _previewGhost ?? []];
+    }
+
+    /// <summary>
+    /// Draws trains as ghosts on the board (S46: a bulk tool's result before it is applied, <c>08-…md</c> §8); null clears
+    /// them.
+    /// </summary>
+    public void ShowPreview(IReadOnlyList<TrainPlan>? trains)
+    {
+        _previewGhost = trains is null || Board.Corridor is not { } tab || _setup is not { } setup
+            ? null
+            : [.. trains.SelectMany(t => GraphSceneBuilder.PlanPaths(tab.Corridor, t, setup.Profile.StyleFor(t.CategoryId).Colour, "preview"))];
+        UpdateGhosts();
     }
 
     public int NudgeSeconds => PlanDragRules.Draft.NudgeSeconds;

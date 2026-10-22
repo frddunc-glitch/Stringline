@@ -232,4 +232,51 @@ public sealed class DraftPartsTests : IDisposable
             lists.Scenario.Should().BeEmpty();
         });
     }
+
+    [Fact]
+    public async Task Bulk_tools_preview_their_changes_as_ghosts_then_apply_as_one_edit_or_nothing()
+    {
+        await using var app = App();
+        var draft = await Draft(app);
+        await app.Ui.WaitUntil(() => draft.Board.IsReady, "the draft board");
+        await app.Ui.Run(() =>
+        {
+            var before = Tree(draft.Document);
+            var picked = draft.Trains.Where(r => new TrainNode(draft.Document, r.Element).Headcode is "1A11" or "1A12").ToList();
+            draft.SelectedTrainRow = picked[0];
+            draft.SelectedTrainRows = picked;
+            var departs = picked.Select(r => new TrainNode(draft.Document, r.Element).Trips.First().DepPassTime).ToList();
+
+            // Shift +2H, cancelled at the preview: nothing changes, and the ghosts go.
+            app.Dialogs.Prompts.Enqueue(p => { p.Fields[0].Value = "+2H"; return true; });
+            app.Dialogs.Choices.Enqueue(1);
+            draft.ShiftTimesCommand.Execute(null);
+            app.Dialogs.Asked[^1].Should().Contain("1A11: +2½ min").And.Contain("drawn on the board");
+            Tree(draft.Document).Should().Be(before);
+            draft.Board.Board.Ghosts.Should().BeNull();
+
+            // Applied: one edit, one undo.
+            app.Dialogs.Prompts.Enqueue(p => { p.Fields[0].Value = "+2H"; return true; });
+            app.Dialogs.Choices.Enqueue(0);
+            draft.ShiftTimesCommand.Execute(null);
+            picked.Select(r => new TrainNode(draft.Document, r.Element).Trips.First().DepPassTime).Should().Equal(departs.Select(d => d + 150));
+            draft.UndoHeader.Should().Contain("Shift 2 trains");
+            draft.UndoCommand.Execute(null);
+            Tree(draft.Document).Should().Be(before);
+
+            // Repeat one train as a pattern: the copies are added after it.
+            draft.SelectedTrainRows = [picked[0]];
+            var count = draft.Document.Trains.Count();
+            app.Dialogs.Prompts.Enqueue(p => { p.Fields[0].Value = "60"; p.Fields[1].Value = DraftText.Time(new TrainNode(draft.Document, picked[0].Element).Trips.First().DepPassTime! + 7200); p.Fields[2].Value = "0"; return true; });
+            app.Dialogs.Choices.Enqueue(0);
+            draft.RepeatPatternCommand.Execute(null);
+            draft.Document.Trains.Count().Should().Be(count + 2);
+
+            // A tool with nothing to do says so.
+            draft.SelectedTrainRows = [];
+            draft.SelectedTrainRow = null;
+            draft.AutoFillCommand.Execute(null);
+            draft.Error.Should().NotBeNull();
+        });
+    }
 }
