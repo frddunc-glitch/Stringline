@@ -53,8 +53,11 @@ internal static class HelpTopics
 
     public const string TimetableEditorIssues = "timetable-editor.md#the-issues-panel";
 
+    /// <summary>The draft board (S44).</summary>
+    public const string TimetableEditorBoard = "timetable-editor.md#the-draft-on-the-graph";
+
     /// <summary>Every topic, for the test that each page and heading is there.</summary>
     public static IReadOnlyList<string> All { get; } =
         [Contents, Graph, TrainList, Boards, TrainDetail, Conflicts, Regulation, Delays, History, Replay, Connect, Options, ProfileEditor, Disruptions, SignalPlaces, LearningOptions, Privacy,
-         TimetableEditor, TimetableEditorTrains, TimetableEditorTrips, TimetableEditorIssues];
+         TimetableEditor, TimetableEditorTrains, TimetableEditorTrips, TimetableEditorIssues, TimetableEditorBoard];
 }

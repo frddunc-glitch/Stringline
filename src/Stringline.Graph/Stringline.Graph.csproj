@@ -8,6 +8,8 @@
     <ProjectReference Include="..\Stringline.Core\Stringline.Core.csproj" />
     <ProjectReference Include="..\Stringline.Network\Stringline.Network.csproj" />
     <ProjectReference Include="..\Stringline.Planning\Stringline.Planning.csproj" />
+    <!-- A draft board's drags become timetable edits (S44). -->
+    <ProjectReference Include="..\Stringline.Timetable\Stringline.Timetable.csproj" />
   </ItemGroup>
 
   <ItemGroup>

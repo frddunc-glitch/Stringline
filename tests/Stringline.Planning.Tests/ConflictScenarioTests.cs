@@ -38,6 +38,31 @@ public sealed class ConflictScenarioTests
         ForecastNetwork.Build([Line("main", headway, single: false, "A", "B", "C")], timetable);
 
     [Fact]
+    public void Against_a_reference_timetable_a_pair_is_allowed_only_as_close_as_the_reference_books_it()
+    {
+        // A draft (S44) books 1F03 a minute behind 1F01, where the timetable it was made from booked it ten minutes behind.
+        var draft = Of(
+            Train("1F01", points: [Pass("A", "08:00"), Pass("B", "08:04"), Pass("C", "08:08")]),
+            Train("1F03", points: [Pass("A", "08:01"), Pass("B", "08:05"), Pass("C", "08:09")]));
+        var original = Of(
+            Train("1F01", points: [Pass("A", "08:00"), Pass("B", "08:04"), Pass("C", "08:08")]),
+            Train("1F03", points: [Pass("A", "08:10"), Pass("B", "08:14"), Pass("C", "08:18")]));
+        var rerouted = Of(
+            Train("1F01", points: [Pass("A", "08:00"), Pass("B", "08:04"), Pass("C", "08:08")]),
+            Train("1F03", points: [Pass("A", "08:01"), Pass("C", "08:09")]));
+        var plan = WorkingPlan.FromTimetable(draft);
+        var network = LoopNetwork(draft);
+        var forecast = Run(plan, null, network, interaction: true);
+        ConflictSet Against(WorkingTimetable? booked) => ConflictDetector.Detect(new ConflictRequest(plan, forecast) { Network = network, Booked = booked });
+
+        Against(null).Count.Should().Be(0, "a timetable's own bookings are accepted");
+        var c = Against(original).All.Should().ContainSingle().Subject;
+        (c.Kind, c.A, c.B).Should().Be((ConflictKind.Headway, new TrainId("1F03"), (TrainId?)Fast));
+        Against(rerouted).Count.Should().Be(1, "a booking on another route does not cap the train");
+        Against(draft).Count.Should().Be(0);
+    }
+
+    [Fact]
     public void Trains_on_time_have_no_conflicts()
     {
         var timetable = LoopTimetable();

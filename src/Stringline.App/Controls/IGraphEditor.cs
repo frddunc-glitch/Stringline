@@ -31,6 +31,9 @@ internal interface IGraphEditor
     /// <summary>A click on a grip: the arrow keys nudge it.</summary>
     void SelectGrip(GraphGrip grip);
 
+    /// <summary>How far an arrow key nudges a picked grip (Shift: a minute): 15 s, or half a minute on a draft board (S44).</summary>
+    int NudgeSeconds => PlanDrag.SnapSeconds;
+
     /// <summary>An arrow key: nudge the picked grip by this many seconds. False if no grip is picked.</summary>
     bool Nudge(int seconds);
 

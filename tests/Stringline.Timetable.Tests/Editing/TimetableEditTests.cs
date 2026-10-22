@@ -192,6 +192,8 @@ public sealed class TimetableEditTests
         node.Headcode.Should().Be("1W51");
         import.TrainOf(node).Should().BeSameAs(w51);
         import.TripOf(w51, 0).Location.Should().Be(w51.Points[0].Location.ToString());
+        import.PointOf(w51, import.TripOf(w51, 2).Element).Should().Be(2, "a trip finds its point again (S44)");
+        import.PointOf(w51, new System.Xml.Linq.XElement("Trip")).Should().BeNull();
         var (point, activity) = w51.Points.SelectMany(p => p.Activities.Select((a, i) => (p, i))).First();
         import.ActivityOf(w51, point.Index, activity).Code.Should().Be(point.Activities[activity].Code);
         import.RuleOf(0).Code.Should().Be(import.Timetable.Rules[0].Code);

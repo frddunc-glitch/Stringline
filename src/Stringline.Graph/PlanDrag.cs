@@ -42,7 +42,8 @@ public sealed record PlanDragPreview(IPlanCommand? Command, TrainPlan Train, int
 /// 15 s (1 s fine). A drag never plans the train before the now line or its latest report (Fred, S12), and a retime
 /// earlier stops where the run into the first point moved would be faster than the minimum. Each move gives a
 /// <see cref="PlanDragPreview"/> made by applying the command to the snapshot's plan off the engine, so the ghost shows
-/// exactly what the edit gives. The same rules nudge a grip from the keyboard (<see cref="Nudge"/>, S26).
+/// exactly what the edit gives. The same rules nudge a grip from the keyboard (<see cref="Nudge"/>, S26). A draft board
+/// (S44) drags by <see cref="PlanDragRules.Draft"/>: half minutes, its own minimum runs, and Shift past them.
 /// </summary>
 public sealed class PlanDrag
 {
@@ -58,10 +59,13 @@ public sealed class PlanDrag
     private readonly int _minDelta;
     private readonly string? _minReason;
     private readonly string? _minShort;
+    private readonly int _runDelta;
+    private readonly string? _runReason;
     private readonly SimTime _original;
     private readonly SimTime? _minDepart;
+    private readonly PlanDragRules _rules;
 
-    private PlanDrag(PlanSnapshot snapshot, TrainPlan plan, PlanDragKind kind, int index, double pressTime, SimTime original, int minDelta, (string? Reason, string? Short) limit, SimTime? minDepart)
+    private PlanDrag(PlanSnapshot snapshot, TrainPlan plan, PlanDragKind kind, int index, double pressTime, SimTime original, Limits limits, SimTime? minDepart, PlanDragRules rules)
     {
         _snapshot = snapshot;
         _plan = plan;
@@ -69,9 +73,10 @@ public sealed class PlanDrag
         Index = index;
         _pressTime = pressTime;
         _original = original;
-        _minDelta = minDelta;
-        (_minReason, _minShort) = limit;
+        (_minDelta, _minReason, _minShort) = (limits.Delta, limits.Reason, limits.Short);
+        (_runDelta, _runReason) = (limits.RunDelta, limits.RunReason);
         _minDepart = minDepart;
+        _rules = rules;
         Preview = new PlanDragPreview(null, plan, 0, Idle(), false, []) { Time = original, Label = original.ToString() };
     }
 
@@ -97,7 +102,8 @@ public sealed class PlanDrag
     /// </summary>
     /// <param name="now">The now line; nothing is planned before it.</param>
     /// <param name="fromVertex">Alt is held: retime from the vertex nearest the press.</param>
-    public static PlanDrag? Begin(GraphHit hit, PlanSnapshot snapshot, GraphViewport viewport, ScreenPoint at, SimTime? now, bool fromVertex, out string? refusal)
+    /// <param name="rules">How the drag snaps and stops; null for a session board's (<see cref="PlanDragRules.Session"/>).</param>
+    public static PlanDrag? Begin(GraphHit hit, PlanSnapshot snapshot, GraphViewport viewport, ScreenPoint at, SimTime? now, bool fromVertex, out string? refusal, PlanDragRules? rules = null)
     {
         ArgumentNullException.ThrowIfNull(hit);
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -120,15 +126,15 @@ public sealed class PlanDrag
             (kind, index) = (PlanDragKind.ShiftFrom, vertexIndex);
         }
 
-        return Start(snapshot, id, kind, index, PressTime(viewport, at), now, out refusal);
+        return Start(snapshot, id, kind, index, PressTime(viewport, at), now, out refusal, rules ?? PlanDragRules.Session);
     }
 
     /// <summary>Starts a drag of a grip on the selected train (S26), or returns null with the reason it is locked.</summary>
-    public static PlanDrag? Begin(GraphGrip grip, PlanSnapshot snapshot, GraphViewport viewport, ScreenPoint at, SimTime? now, out string? refusal)
+    public static PlanDrag? Begin(GraphGrip grip, PlanSnapshot snapshot, GraphViewport viewport, ScreenPoint at, SimTime? now, out string? refusal, PlanDragRules? rules = null)
     {
         ArgumentNullException.ThrowIfNull(grip);
         ArgumentNullException.ThrowIfNull(viewport);
-        return Start(snapshot, grip.Train, grip.DragKind, grip.Index, PressTime(viewport, at), now, out refusal);
+        return Start(snapshot, grip.Train, grip.DragKind, grip.Index, PressTime(viewport, at), now, out refusal, rules ?? PlanDragRules.Session);
     }
 
     /// <summary>
@@ -137,10 +143,10 @@ public sealed class PlanDrag
     /// </summary>
     /// <param name="index">The point retimed from (<see cref="PlanDragKind.ShiftFrom"/>) or whose departure moves
     /// (<see cref="PlanDragKind.Dwell"/>); ignored for <see cref="PlanDragKind.Shift"/>, which starts at the next point not reached.</param>
-    public static PlanDrag? Start(PlanSnapshot snapshot, TrainId train, PlanDragKind kind, int index, SimTime? now, out string? refusal) =>
-        Start(snapshot, train, kind, index, 0, now, out refusal);
+    public static PlanDrag? Start(PlanSnapshot snapshot, TrainId train, PlanDragKind kind, int index, SimTime? now, out string? refusal, PlanDragRules? rules = null) =>
+        Start(snapshot, train, kind, index, 0, now, out refusal, rules ?? PlanDragRules.Session);
 
-    private static PlanDrag? Start(PlanSnapshot snapshot, TrainId id, PlanDragKind kind, int index, double pressTime, SimTime? now, out string? refusal)
+    private static PlanDrag? Start(PlanSnapshot snapshot, TrainId id, PlanDragKind kind, int index, double pressTime, SimTime? now, out string? refusal, PlanDragRules rules)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         refusal = null;
@@ -164,7 +170,7 @@ public sealed class PlanDrag
             return null;
         }
 
-        if (forecast?.Status == TrainForecastStatus.NotRunning)
+        if (forecast?.Status == TrainForecastStatus.NotRunning && !rules.EditsTimetable)
         {
             refusal = $"{name} is not running ({forecast.NotRunning}); choose Run anyway to retime it.";
             return null;
@@ -236,7 +242,7 @@ public sealed class PlanDrag
                 (minDepart, reason) = (n, ($"nothing can be planned before now ({n})", "now"));
             }
 
-            return new PlanDrag(snapshot, plan, PlanDragKind.Dwell, index, pressTime, depart, int.MinValue, reason, minDepart);
+            return new PlanDrag(snapshot, plan, PlanDragKind.Dwell, index, pressTime, depart, new Limits(int.MinValue, reason.Item1, reason.Item2), minDepart, rules);
         }
 
         var from = next;
@@ -298,40 +304,45 @@ public sealed class PlanDrag
             }
         }
 
+        var limits = new Limits(minDelta, minReason.Item1, minReason.Item2);
         if (before >= 0 && plan.Points[before].LastTime is { } leave &&
-            snapshot.Plan.MinRuns.Along(plan.Points, before, first, leave, snapshot.Plan.Disruptions) is { } minRun)
+            (rules.MinRun is { } source ? source(plan, before, first) : snapshot.Plan.MinRuns.Along(plan.Points, before, first, leave, snapshot.Plan.Disruptions)) is { } minRun)
         {
             var run = firstTime - leave;
-            var runDelta = Math.Min(0, minRun - run);
-            if (runDelta > minDelta)
+            limits = limits with
             {
-                minDelta = runDelta;
-                minReason = (string.Create(CultureInfo.InvariantCulture,
-                    $"{name} needs at least {PlanText.Duration(minRun)} from {plan.Points[before].Location} to {plan.Points[first].Location}"), "minimum run");
-            }
+                RunDelta = Math.Min(0, minRun - run),
+                RunReason = string.Create(CultureInfo.InvariantCulture,
+                    $"{name} needs at least {PlanText.Duration(minRun)} from {plan.Points[before].Location} to {plan.Points[first].Location}"),
+            };
         }
 
-        return new PlanDrag(snapshot, plan, kind, from, pressTime, firstTime, minDelta, minReason, null);
+        return new PlanDrag(snapshot, plan, kind, from, pressTime, firstTime, limits, null, rules);
     }
 
     /// <summary>The drag has moved to <paramref name="at"/> (in the current viewport, which may have panned since it began).</summary>
-    /// <param name="fine">Snap to 1 s rather than 15 s (Shift held).</param>
+    /// <param name="fine">
+    /// Shift is held: snap to 1 s rather than 15 s on a session board; on a draft board, go past the minimum run
+    /// (<see cref="PlanDragRules.FinePassesMinRun"/>).
+    /// </param>
     public PlanDragPreview Update(GraphViewport viewport, ScreenPoint at, bool fine)
     {
         ArgumentNullException.ThrowIfNull(viewport);
-        return Move(PressTime(viewport, at) - _pressTime, fine ? 1 : SnapSeconds);
+        return Move(PressTime(viewport, at) - _pressTime, fine ? _rules.FineSnapSeconds : _rules.SnapSeconds, fine && _rules.FinePassesMinRun);
     }
 
     /// <summary>
     /// Moves the point by <paramref name="seconds"/> from where it started (S26: a nudge from the arrow keys), held at the
-    /// same limits as a drag, which are rounded to the 15 s grid.
+    /// same limits as a drag, which are rounded to the snapping grid (15 s; half a minute on a draft board).
     /// </summary>
-    public PlanDragPreview Nudge(int seconds) => Move(seconds, SnapSeconds);
+    public PlanDragPreview Nudge(int seconds) => Move(seconds, _rules.SnapSeconds, passMinRun: false);
 
-    private PlanDragPreview Move(double raw, int step)
+    private PlanDragPreview Move(double raw, int step, bool passMinRun)
     {
         var delta = (int)Math.Round(raw / step, MidpointRounding.AwayFromZero) * step;
         var limited = false;
+        var underMinRun = false;
+        var (limitReason, limitShort) = (_minReason, _minShort);
         IPlanCommand? command;
         if (Kind == PlanDragKind.Dwell)
         {
@@ -348,12 +359,17 @@ public sealed class PlanDrag
         }
         else
         {
-            if (delta < _minDelta)
+            // The minimum run holds the drag unless Shift lets it past (a draft board); now and the latest report always do.
+            var run = passMinRun ? int.MinValue : _runDelta;
+            var (min, reason, shortReason) = run > _minDelta ? (run, _runReason, "minimum run") : (_minDelta, _minReason, _minShort);
+            if (delta < min)
             {
-                delta = CeilingTo(_minDelta, step);
+                delta = CeilingTo(min, step);
                 limited = true;
+                (limitReason, limitShort) = (reason, shortReason);
             }
 
+            underMinRun = passMinRun && delta < _runDelta;
             command = delta == 0 ? null : new ShiftTrain(Train, Index, delta);
         }
 
@@ -384,16 +400,24 @@ public sealed class PlanDrag
             }
         }
 
-        if (limited && _minReason is { } reason)
+        if (limited && limitReason is { } stopped)
         {
-            status += $" — stopped: {reason}.";
+            status += $" — stopped: {stopped}.";
+        }
+        else if (underMinRun && _runReason is { } under)
+        {
+            status += $" — faster than known: {under}.";
         }
 
         var time = _original + delta;
         var label = delta == 0 ? time.ToString() : $"{time} ({PlanText.WithSign(delta)})";
-        if (limited && _minShort is { } limit)
+        if (limited && limitShort is { } limit)
         {
             label += $" · stopped: {limit}";
+        }
+        else if (underMinRun)
+        {
+            label += " · under minimum run";
         }
 
         Preview = new PlanDragPreview(command, train, delta, status, limited, warnings) { Time = time, Label = label };
@@ -420,6 +444,14 @@ public sealed class PlanDrag
 
         var q = Math.DivRem(seconds, step, out var r);
         return (r > 0 ? q + 1 : q) * step;
+    }
+
+    /// <summary>Where a drag stops: now or the latest report (<see cref="Delta"/>), and the minimum run (<see cref="RunDelta"/>).</summary>
+    private readonly record struct Limits(int Delta, string? Reason, string? Short)
+    {
+        public int RunDelta { get; init; } = int.MinValue;
+
+        public string? RunReason { get; init; }
     }
 
     private static SimTime? Later(SimTime? a, SimTime? b) => a is null ? b : b is null ? a : SimTime.Max(a.Value, b.Value);

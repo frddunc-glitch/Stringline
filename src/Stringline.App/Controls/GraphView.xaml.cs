@@ -330,7 +330,7 @@ public partial class GraphView : UserControl
 
     /// <summary>
     /// Esc during a drag edit drops it (and does not clear the selection). The arrow keys along the time axis nudge the
-    /// picked grip by 15 s, or a minute with Shift (S26).
+    /// picked grip by 15 s (half a minute on a draft board, S44), or a minute with Shift (S26).
     /// </summary>
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
@@ -355,7 +355,7 @@ public partial class GraphView : UserControl
             (Key.Left, false) or (Key.Up, true) => -1,
             _ => 0,
         };
-        var step = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 60 : PlanDrag.SnapSeconds;
+        var step = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 60 : editor.NudgeSeconds;
         if (sign != 0 && editor.Nudge(sign * step))
         {
             e.Handled = true;

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Stringline.Core;
 using Stringline.Network.Profiles;
 using Stringline.Planning;
@@ -116,7 +117,8 @@ public sealed class GraphGrips
     /// The grips for the selected train in <paramref name="scene"/>, or null if no train is selected or none of its
     /// WTT or plan line is on this corridor.
     /// </summary>
-    public static GraphGrips? For(GraphScene scene, PlanSnapshot snapshot, GraphSelection? selection)
+    /// <param name="rules">The board's drag rules (a draft board's, S44); null for a session board's.</param>
+    public static GraphGrips? For(GraphScene scene, PlanSnapshot snapshot, GraphSelection? selection, PlanDragRules? rules = null)
     {
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -148,7 +150,7 @@ public sealed class GraphGrips
         {
             var location = plan.Points[index].Location;
             var grip = new GraphGrip(kind, id, plan.Headcode, index, location, NameOf(location), at);
-            return PlanDrag.Start(snapshot, id, grip.DragKind, index, null, out var refusal) is null
+            return PlanDrag.Start(snapshot, id, grip.DragKind, index, null, out var refusal, rules) is null
                 ? grip with { LockReason = refusal ?? "It cannot be moved." }
                 : grip;
         }
@@ -179,7 +181,7 @@ public sealed class GraphGrips
         }
 
         // The body: the sloping stretches of the run still to go, from the first point a body drag moves.
-        var drag = PlanDrag.Start(snapshot, id, PlanDragKind.Shift, -1, null, out var bodyRefusal);
+        var drag = PlanDrag.Start(snapshot, id, PlanDragKind.Shift, -1, null, out var bodyRefusal, rules);
         var from = drag?.Index ?? 0;
         var segments = new List<(GraphVertex, GraphVertex)>();
         foreach (var path in paths)
@@ -270,7 +272,8 @@ public sealed class GraphGrips
     /// The tooltip over a grip: what it is, its time, and what dragging it does and the keys that nudge it, or why it is
     /// locked. The same in both orientations, but for the arrow keys named.
     /// </summary>
-    public static HoverInfo Describe(GraphGrip grip, bool vertical)
+    /// <param name="nudgeSeconds">How far an arrow key nudges it (30 s on a draft board, S44).</param>
+    public static HoverInfo Describe(GraphGrip grip, bool vertical, int nudgeSeconds = PlanDrag.SnapSeconds)
     {
         ArgumentNullException.ThrowIfNull(grip);
         var lines = new List<HoverLine>
@@ -294,7 +297,7 @@ public sealed class GraphGrips
         else
         {
             lines.Add(new HoverLine("Drag", grip.Action["Drag to ".Length..]));
-            lines.Add(new HoverLine("Keys", vertical ? "Click it, then ↑/↓ 15 s (Shift: 1 min)" : "Click it, then ←/→ 15 s (Shift: 1 min)"));
+            lines.Add(new HoverLine("Keys", string.Create(CultureInfo.InvariantCulture, $"Click it, then {(vertical ? "↑/↓" : "←/→")} {nudgeSeconds} s (Shift: 1 min)")));
         }
 
         var heading = grip.Kind == GraphGripKind.Body ? $"{grip.Headcode}: rest of the run" : $"{grip.Headcode} at {grip.LocationName}";

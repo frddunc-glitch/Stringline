@@ -20,6 +20,9 @@ namespace Stringline.App.ViewModels;
 internal sealed record DraftContext(string SimName, string TimetableFolder, string? BackupFolder = null)
 {
     public Func<DateOnly> Today { get; init; } = () => DateOnly.FromDateTime(DateTime.Now);
+
+    /// <summary>Where the draft board's exports go, and the Plot dialog's choices (S44): the main window's.</summary>
+    public DraftExports? Exports { get; init; }
 }
 
 /// <summary>Which issues the Issues panel lists.</summary>
@@ -36,7 +39,8 @@ internal enum IssueLevel
 /// writer; every snapshot it publishes refreshes the panels, and the draft is autosaved shortly after (with its undo
 /// history) to the drafts folder. Saving follows <c>08-…md</c> §6: the first save of a draft of a SimSig timetable
 /// asks whether to replace it (a new file named by the convention is the default), Errors are listed before saving,
-/// and closing with unsaved changes asks first.
+/// and closing with unsaved changes asks first. The draft board (<see cref="Board"/>, S44) draws the draft and shares
+/// the selection with the trains list and trip grid.
 /// </summary>
 internal sealed partial class TimetableEditorViewModel : ObservableObject
 {
@@ -67,6 +71,7 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
         _lastAutosave = time.GetUtcNow();
         Header = new DraftHeaderViewModel(this);
         Snapshot = editor.Current;
+        Board = new DraftBoardViewModel(this, dialogs, ui, logger, context.Exports);
         _locations = LocationChoices();
         editor.SnapshotPublished += (_, snapshot) => OnSnapshot(snapshot);
         OnSnapshot(editor.Current);
@@ -149,6 +154,9 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
     public partial DraftTrainViewModel? Train { get; private set; }
 
     public DraftHeaderViewModel Header { get; }
+
+    /// <summary>The graph of the draft (S44).</summary>
+    public DraftBoardViewModel Board { get; }
 
     public BulkCollection<DraftIssueRow> Issues { get; } = [];
 
@@ -394,7 +402,16 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
             return;
         }
 
-        if (!_rows.TryGetValue(element, out var row))
+        GoTo(element, issue.Element);
+    }
+
+    /// <summary>
+    /// Selects a train in the list (clearing the filters if it is hidden) and, if given, the row of one of its trips,
+    /// and brings them into view: an issue opened, or a train or point picked on the draft board (S44).
+    /// </summary>
+    public void GoTo(XElement train, XElement? trip)
+    {
+        if (!_rows.TryGetValue(train, out var row))
         {
             return;
         }
@@ -405,9 +422,9 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
         }
 
         SelectedTrainRow = row;
-        if (Train is { } train)
+        if (Train is { } selected && trip is not null)
         {
-            train.CurrentTrip = train.Trips.FirstOrDefault(t => t.Element == issue.Element) ?? train.CurrentTrip;
+            selected.CurrentTrip = selected.Trips.FirstOrDefault(t => t.Element == trip) ?? selected.CurrentTrip;
         }
 
         GoToRequested?.Invoke(this, EventArgs.Empty);

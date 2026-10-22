@@ -47,6 +47,29 @@ Under the train is every issue the checks found, Warnings and Errors at first (c
 
 Click an issue to go to its train and point. **Apply fix** makes an issue's quick fix (for example, inserting the timing points other timetables book between two locations), and **Fix all of this kind** makes every one of that kind as one step. Undo takes a fix back like any edit. **Timetable ▸ Check timetable** (F7 in the editor) checks everything again.
 
+## The draft on the graph
+
+Under the trip grid is the **draft board**, a train graph of the draft. Pick its corridor above it. The corridors are the sim's profile's. If the sim has no profile yet, they are made from the draft for the board only, and the line under the board says so.
+
+The board shows the draft as booked, with no live trains and no now line. Booked conflicts are ringed in red, as a session shows them: headways, platforms, single lines, and runs faster than any the original timetable books. Stringline checks the draft against the timetable it was made from. Trains you have not changed may stay as close as that timetable books them, as SimSig's released timetables do. Trains you retime or add are held to the headways and platform margins. The line under the board counts the conflicts and names the trains no corridor draws.
+
+The board and the grid share their selection. Click a train on the board and the trains list and trip grid go to it, at the point you clicked. Pick a train or a row in the grid and the board picks the train and that point's grip.
+
+Drag the grips to retime the draft, as on a session's graph:
+
+- a **square** at a timing point retimes the train from there on;
+- the **bar** at the end of a stop changes the departure, so the dwell;
+- the **round handle** on the line moves the whole run, entry time too.
+
+Times move in half minutes, as SimSig books them. A drag stops where the run would be faster than the sim is known to run it. Stringline takes the least run time it has seen for a train of that speed and kind, in the sim's other timetables and your play, else the least the original timetable books. Hold **Shift** to drag past it, and the line under the board warns you. Click a grip and the arrow keys nudge it, 30 s at a time (Shift: a minute). Each drag or nudge is one edit, so **Ctrl+Z** takes it back.
+
+**View ▸ Draft ghosts** draws, faintly:
+
+- **Original timetable**: where the trains you changed or deleted ran in the timetable the draft was made from (on at first);
+- **Recording…**: where a recording's or saved session's trains really ran, matched against the draft. No session is needed. **Clear recording** takes them off.
+
+**Draft ▸ Export graph** saves the board as a PNG or PDF, or a plot of several pages, titled "Draft – *name* *version*".
+
 ## Saving and versions
 
 Stringline follows SimSig's advice on file names and versions:

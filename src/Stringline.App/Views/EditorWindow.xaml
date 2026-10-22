@@ -2,13 +2,15 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:Stringline.App.Views"
+        xmlns:controls="clr-namespace:Stringline.App.Controls"
         xmlns:services="clr-namespace:Stringline.App.Services"
         views:Help.Topic="{x:Static services:HelpTopics.TimetableEditor}"
         Title="{Binding Title}" Icon="pack://application:,,,/Stringline;component/Assets/stringline.ico"
-        Width="1280" Height="800" MinWidth="760" MinHeight="480"
+        Width="1360" Height="940" MinWidth="760" MinHeight="560"
         UseLayoutRounding="True" WindowStartupLocation="CenterOwner">
   <!-- The timetable editor workspace (S43, 08-…md §7): trains, the selected train's details and trip grid, the header,
-       and the issues. A window of its own, like a board window (S21), so it can sit on a second monitor. -->
+       the draft board (S44) and the issues. A window of its own, like a board window (S21), so it can sit on a second
+       monitor. -->
   <Window.Resources>
     <views:NotNullToVisibilityConverter x:Key="NotNull" />
     <views:IssueSeverityBrushConverter x:Key="SeverityBrush" />
@@ -73,6 +75,12 @@
         <Separator />
         <MenuItem Header="C_heck timetable" InputGestureText="F7" Command="{Binding CheckAllCommand}" />
         <Separator />
+        <MenuItem Header="E_xport graph">
+          <MenuItem Header="_PNG image…" Command="{Binding Board.ExportPngCommand}" ToolTip="The draft board as shown" />
+          <MenuItem Header="P_DF (A3)…" Command="{Binding Board.ExportPdfCommand}" ToolTip="The draft board as shown, on A3 landscape" />
+          <MenuItem Header="Pl_ot (multi-page PDF)…" Command="{Binding Board.ExportPlotCommand}" ToolTip="A corridor of the draft over a stretch of time" />
+        </MenuItem>
+        <Separator />
         <MenuItem Header="_Close draft" Command="{Binding CloseDraftCommand}" />
       </MenuItem>
       <MenuItem Header="_Edit">
@@ -87,6 +95,15 @@
         <MenuItem Header="Insert point _below" Command="{Binding Train.InsertPointAfterCommand}" />
         <MenuItem Header="Re_move points" InputGestureText="Ctrl+Delete" Command="{x:Static views:EditorWindow.DeletePointsCommand}" />
         <MenuItem Header="_Fill down" InputGestureText="Ctrl+D" Command="{x:Static views:EditorWindow.FillDownCommand}" />
+      </MenuItem>
+      <MenuItem Header="_View">
+        <MenuItem Header="Draft _ghosts">
+          <MenuItem Header="_Original timetable" Command="{Binding Board.ToggleOriginalCommand}" IsChecked="{Binding Board.ShowOriginal, Mode=OneWay}"
+                    ToolTip="The original timetable's lines of the trains the draft changed, faint under the draft's" />
+          <MenuItem Header="_Recording…" Command="{Binding Board.LoadRecordingCommand}"
+                    ToolTip="Where a recording's (or saved session's) trains really ran, faint, matched against the draft" />
+          <MenuItem Header="_Clear recording" Command="{Binding Board.ClearRecordingCommand}" />
+        </MenuItem>
       </MenuItem>
     </Menu>
 
@@ -116,13 +133,15 @@
         <ColumnDefinition Width="*" MinWidth="320" />
       </Grid.ColumnDefinitions>
       <Grid.RowDefinitions>
-        <RowDefinition Height="*" MinHeight="200" />
+        <RowDefinition Height="*" MinHeight="180" />
         <RowDefinition Height="6" />
-        <RowDefinition Height="200" MinHeight="80" />
+        <RowDefinition Height="*" MinHeight="140" />
+        <RowDefinition Height="6" />
+        <RowDefinition Height="160" MinHeight="80" />
       </Grid.RowDefinitions>
 
       <!-- Trains -->
-      <DockPanel Grid.RowSpan="3" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorTrains}">
+      <DockPanel Grid.RowSpan="5" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorTrains}">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
           <Label Content="_Trains" Target="{Binding ElementName=TrainFilterBox}" FontWeight="SemiBold" />
           <CheckBox DockPanel.Dock="Right" Content="With _issues" VerticalAlignment="Center" IsChecked="{Binding IssuesOnly}"
@@ -150,7 +169,7 @@
         </DataGrid>
       </DockPanel>
 
-      <GridSplitter Grid.Column="1" Grid.RowSpan="3" Width="6" HorizontalAlignment="Stretch" />
+      <GridSplitter Grid.Column="1" Grid.RowSpan="5" Width="6" HorizontalAlignment="Stretch" />
 
       <TabControl Grid.Column="2" x:Name="Tabs">
         <!-- The selected train: details, then its trip grid -->
@@ -321,8 +340,22 @@
 
       <GridSplitter Grid.Row="1" Grid.Column="2" Height="6" HorizontalAlignment="Stretch" />
 
+      <!-- The draft board (S44): the draft's graph, its selection the grid's -->
+      <DockPanel Grid.Row="2" Grid.Column="2" x:Name="BoardPanel" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorBoard}">
+        <Border DockPanel.Dock="Bottom" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="4,2">
+          <StackPanel>
+            <TextBlock Text="{Binding Board.Status}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Board.Status}" />
+            <TextBlock Text="{Binding Board.EditStatus}" Style="{StaticResource Hint}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding Board.EditStatus}" Visibility="{Binding Board.EditStatus, Converter={StaticResource NotNull}}" />
+          </StackPanel>
+        </Border>
+        <controls:BoardView x:Name="DraftBoard" DataContext="{Binding Board.Board}" />
+      </DockPanel>
+
+      <GridSplitter Grid.Row="3" Grid.Column="2" Height="6" HorizontalAlignment="Stretch" />
+
       <!-- Issues -->
-      <DockPanel Grid.Row="2" Grid.Column="2" x:Name="IssuesPanel" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorIssues}">
+      <DockPanel Grid.Row="4" Grid.Column="2" x:Name="IssuesPanel" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorIssues}">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
           <Label Content="Iss_ues" Target="{Binding ElementName=IssueFilterBox}" FontWeight="SemiBold" />
           <ComboBox DockPanel.Dock="Right" Width="90" ItemsSource="{Binding IssueLevels}" SelectedItem="{Binding IssueLevel}"

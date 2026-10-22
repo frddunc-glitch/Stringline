@@ -31,6 +31,15 @@ static void Quick()
         Time("100 hover tests (linear)", 10, () => bench.LinearHitTest());
     }
 
+    using (var draft = new DraftBoardBenchmarks())
+    {
+        draft.Setup();
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Draft board (S44), {draft.Trains} trains / 6 h, {draft.Ghosts} ghosts, {draft.Conflicts} booked conflicts, 1920×1080:"));
+        Time("pan frame", 100, draft.PanFrame);
+        Time("zoom frame", 20, draft.ZoomFrame);
+        Time("build after an edit", 5, () => draft.Build());
+    }
+
     var forecast = new ForecastBenchmarks();
     forecast.Setup();
     Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Forecast, Waterloo ({forecast.Trains} trains, {forecast.Points} points):"));

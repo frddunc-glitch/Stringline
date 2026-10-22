@@ -248,6 +248,38 @@ public sealed class SimKnowledge
     /// </summary>
     public (RunBand Band, TimeStats Times)? NearestRunTime(Tiploc from, Tiploc to, RunBand band) => Nearest(Link(from, to)?.RunTimes, band);
 
+    /// <summary>
+    /// The least run known along a train's locations, first to last (S44, a drag on the draft board stops there): the
+    /// sum of each link's least run for the nearest band (<see cref="NearestRunTime"/>), else, if a link is unknown, the
+    /// direct link's from first to last. Null if neither is known.
+    /// </summary>
+    public int? LeastRun(IReadOnlyList<Tiploc> along, RunBand band)
+    {
+        ArgumentNullException.ThrowIfNull(along);
+        if (along.Count < 2)
+        {
+            return null;
+        }
+
+        var total = 0;
+        for (var k = 1; k < along.Count; k++)
+        {
+            if (along[k - 1] == along[k])
+            {
+                continue;
+            }
+
+            if (NearestRunTime(along[k - 1], along[k], band) is not { } step)
+            {
+                return NearestRunTime(along[0], along[^1], band)?.Times.LeastSeconds;
+            }
+
+            total += step.Times.LeastSeconds;
+        }
+
+        return total;
+    }
+
     /// <summary>The booked dwell at a location for trains of this band, if any.</summary>
     public TimeStats? Dwell(Tiploc location, RunBand band) => Location(location)?.Dwells?.GetValueOrDefault(band);
 

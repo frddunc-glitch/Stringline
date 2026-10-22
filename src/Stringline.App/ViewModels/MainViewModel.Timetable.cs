@@ -2,11 +2,14 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using Stringline.App.Services;
 using Stringline.Core;
 using Stringline.Editing.Drafts;
 using Stringline.Editing.Knowledge;
 using Stringline.Editing.Validation;
+using Stringline.Network.Profiles;
 using Stringline.Persistence;
+using Stringline.Planning;
 using Stringline.Timetable;
 using Stringline.Timetable.Editing;
 
@@ -222,7 +225,22 @@ internal sealed partial class MainViewModel
         var context = new DraftContext(
             DraftSimName(area),
             _settings.TimetableFolder is { Length: > 0 } folder ? folder : WttCatalogue.DefaultFolder,
-            _paths.TimetableBackups);
+            _paths.TimetableBackups)
+        {
+            Exports = new DraftExports(
+                () => _settings.LastExportFolder is { Length: > 0 } last && Directory.Exists(last) ? last : _paths.Exports,
+                path =>
+                {
+                    _settings = _settings with { LastExportFolder = Path.GetDirectoryName(path) };
+                    _settingsStore.Save(_settings);
+                },
+                () => _settings.Plot,
+                plot =>
+                {
+                    _settings = _settings with { Plot = plot };
+                    _settingsStore.Save(_settings);
+                }),
+        };
         var draft = new TimetableEditorViewModel(editor, draftPath, context, _dialogs, _ui, _time, _loggerFactory.CreateLogger<TimetableEditorViewModel>());
         draft.CloseRequested += (_, _) =>
         {
@@ -236,6 +254,82 @@ internal sealed partial class MainViewModel
         draft.Status = status;
         _dialogs.ShowEditor(draft);
         LearnForDraft(draft);
+        SetUpDraftBoard(draft);
+    }
+
+    /// <summary>
+    /// The draft board's profile, network and original timetable (S44), made in the background: the loaded profile if it
+    /// is the draft's sim, else the sim's saved profile, else corridors generated from the draft and not saved (Fred).
+    /// The original is the draft's source file, else the draft as it opened.
+    /// </summary>
+    private void SetUpDraftBoard(TimetableEditorViewModel draft)
+    {
+        var area = draft.Document.Header.AreaId;
+        var opened = draft.Snapshot.Timetable;
+        var source = draft.Editor.SourcePath;
+        var loaded = Profile is { } p && area is { Length: > 0 } && string.Equals(p.AreaId, area, StringComparison.OrdinalIgnoreCase) ? p : null;
+        var profiles = _loader.Profiles;
+        var (minSamples, forecast, conflicts) = (_settings.LearnMinSamples, _settings.Planning.ToForecastOptions(ForecastKnockOn), _settings.Planning.ToConflictOptions());
+        var (signals, vertical) = (SignalDisplay, IsVertical);
+        _ = Task.Run(() =>
+        {
+            var original = opened;
+            if (source is not null && File.Exists(source))
+            {
+                try
+                {
+                    original = WttDocument.Load(source).ToWorkingTimetable();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WttFormatException)
+                {
+                    LogDraftFailed(ex, source);
+                }
+            }
+
+            string? note = null;
+            var profile = loaded;
+            if (profile is null && area is { Length: > 0 })
+            {
+                try
+                {
+                    profile = profiles.Load(area)?.Refresh(original);
+                }
+                catch (ProfileFormatException ex)
+                {
+                    LogDraftFailed(ex, profiles.PathFor(area));
+                }
+            }
+
+            if (profile is null)
+            {
+                profile = StringlineProfile.Create(opened.Trains.Count > 0 ? opened : original) with { AreaId = area ?? TimetableLoader.UnnamedSim };
+                note = "No profile for this sim: the corridors are generated from the draft and not saved";
+            }
+
+            return new DraftBoardSetup(profile, ForecastNetwork.For(profile, original, minSamples), original, forecast, conflicts)
+            {
+                Note = note,
+                Signals = signals,
+                Vertical = vertical,
+            };
+        }).ContinueWith(
+            task => _ui.Post(() =>
+            {
+                if (draft.IsClosed)
+                {
+                    return;
+                }
+
+                if (task.IsCompletedSuccessfully)
+                {
+                    draft.Board.SetUp(task.Result);
+                }
+                else
+                {
+                    LogDraftBoardFailed(task.Exception?.GetBaseException(), area ?? "(none)");
+                }
+            }),
+            TaskScheduler.Default);
     }
 
     /// <summary>Builds (or reads from its cache) the sim's knowledge for the draft's checks, in the background.</summary>
@@ -304,4 +398,7 @@ internal sealed partial class MainViewModel
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not learn the sim {Area} for the draft's checks")]
     private partial void LogKnowledgeFailed(Exception? ex, string area);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not set up the draft board for the sim {Area}")]
+    private partial void LogDraftBoardFailed(Exception? ex, string area);
 }

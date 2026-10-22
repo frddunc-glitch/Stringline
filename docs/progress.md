@@ -2412,6 +2412,40 @@ Fred found the auto corridors on Edinburgh overlapping, confusing and not useful
 ### Questions for Fred
 - 50. **How far should a branch follow the main line?** Edinburgh's Berwick corridor still runs through Waverley to Newbridge Junction (enough of its trains do), and four corridors share Waverley–Haymarket West Junction. Is that how you want a hub sim drawn, or should a branch stop at the first big station it reaches?
 
+## 2026-10-22 — S44: The draft on the graph (#20)
+
+### Done
+- **Fred's choices** (asked during the session): the draft board is a **pane in the editor window**; a drag stops at the **sim's least known run** for the train's band (its other timetables and play), else the **original timetable's** least booked run, and Shift goes past it; a sim with **no profile** gets corridors **generated from the draft** for the board only; nudges are **30 s** (Shift: a minute).
+- **Graph** (`08-…md` §7.2): `DraftBoard` (the draft as a `PlanSnapshot` with no live data, forecast and conflicts; one corridor's scene with the booking as the plan layer, ghosts of the original as the WTT layer and a recording's actuals at 35 % alpha; changed trains; trains no corridor draws); `PlanDragRules` (snap, nudge, Shift past the minimum run, a minimum-run source, booked times rather than a running plan); `IDragTarget<TEdit>` with `SessionDragTarget` (plan commands) and `DraftDragTarget` (one `TimetableEdit`, half minutes, the entry time with the first point); `GraphGrips.For` and `Describe` take the rules and nudge step. Graph now references Timetable (for the edits).
+- **Planning:** `ConflictRequest.Booked`, a reference timetable for "as close as the WTT books them" and the booked-run cap (`06-…md` §3).
+- **Timetable:** `WttDocumentImport.PointOf` (a trip's timing point). **Editing:** `SimKnowledge.LeastRun`, `DraftMinRuns`.
+- **App:** `DraftBoardViewModel` (the board's builds, selection shared with the list and grid, grips, drags and nudges as draft edits, ghosts, exports), the board pane in `EditorWindow` with its status line, View ▸ Draft ghosts (Original timetable, Recording…, Clear recording) and Draft ▸ Export graph (PNG, PDF, Plot…); `MainViewModel.SetUpDraftBoard` (profile, network, original, settings, in the background); `TimetableEditorViewModel.GoTo` and `Board`; `PlotPrompt` (the Plot dialog, now shared); `IGraphEditor.NudgeSeconds`. Help topic `TimetableEditorBoard`.
+- **Benchmark:** `DraftBoardBenchmarks` (in `--quick`): a 500-train draft with 50 trains retimed draws a pan frame in about 17 ms, a zoom frame in about 65 ms, and builds after an edit in about 75 ms (off the UI thread).
+- **Guide:** "The draft on the graph" on the timetable editor page (F1 on the board). No pictures yet (S48).
+- **Docs:** `08-…md` §7.2, `06-…md` §3, `05-…md` §3, `02-…md`, the plan's "Built in S44", `CLAUDE.md`.
+- **Tests:** Graph +10 (`DraftBoardTests`: the booking only under the draft's title; a train retimed a minute behind another is a headway conflict against the original but not against itself; a run faster than the original books is unrealistic; ghosts of changed and deleted trains and a recording's actuals; trains off every corridor; a session drag is a plan command; a draft drag on Waterloo is one edit in half minutes, refused once stale, undone to the same tree; a whole-run drag moves the entry time and a dwell drag the departure; the minimum run holds a drag and Shift passes it with a warning; a not-running train can be moved on a draft); Planning +1 (`ConflictScenarioTests`: a reference timetable's spacing, a re-routed train not capped); Editing +2 (`DraftMinRunsTests`); Timetable (`PointOf` in the import test); App +2 (`DraftBoardTests`: Waterloo's board drawn, the selection shared both ways and with the row's grip, a grip dragged a minute retimes the grid, leaves the original's ghost and undoes; the right-click menu; a recording's actuals as ghosts and cleared; PNG and PDF exports).
+- Totals: 2 066 (Core 319, Architecture 20, Gateway 211, Timetable 223, Network 205, Planning 341, Persistence 16, Graph 312, Optimiser 25, Editing 82, Tools 93, App 219). Green on Windows (Debug), all in one parallel run. The solution and the portable solution build with `-warnaserror`. Linux not run.
+
+### Decisions
+- **A draft is checked against the timetable it came from.** S14's rule that no pair need be further apart than the WTT books them would make a draft never conflict with itself, so `ConflictRequest.Booked` takes the original: the trains left alone are accepted as booked (as released timetables are), and retimed, added or re-routed trains are held to the headways, margins and minimum runs. A train with no booking in the original (new, renumbered without a UID, or in a blank draft, whose original is empty) is not capped at all, so it is checked strictly against every other train.
+- **The draft is the plan layer.** The booked layer on a session board is faint (it sits under the plan and actuals); on a draft board the draft is what is being made, so it is drawn at the plan's strength, and the original's lines take the WTT layer's faint place, as a re-planned train's WTT does in a session. Recording actuals are faded so the draft stays on top.
+- **Edits are made from the preview's train.** A drag's edit sets each moved point to where the preview runs it, so the edit is exactly the ghost; a dwell drag keeps the plan's rule (later points move only where the minimum run makes them).
+- **The drag target is the draft as it is now** (a plan with no forecast, made on the UI thread in a millisecond or two), while the scene and grips are the last board built; so nudges in a row apply to the latest draft without waiting for the board.
+
+### Next
+- S45 (activities, rules, seed groups, categories and the rest).
+- 👤 **Try the board on a sim you play:** drag a few trains on a draft, and say whether the booked conflicts against the original look right and whether the least-run clamp is in the right place.
+- 👤 **S40's gate** is still open (round-tripped Waterloo and a payware timetable through SimSig's Analyser).
+
+### Known issues
+- A retimed train is still allowed as close to another as the original booked that pair, where the original booked it closer than the headway (a pair Waterloo books 1:30 apart stays allowed at 1:30 wherever the draft moves them).
+- The board's zoom frames on a 500-train draft with ~700 conflicts take about 65 ms (the rings and highlights are drawn every frame); pan frames are within budget.
+- The board does not remember its corridor or view between drafts.
+- Trains renumbered without a UID lose their ghost (their `TrainId` changes), and show as a new train with the original deleted.
+
+### Questions for Fred
+- 51. **Original or sim-wide spacing?** The draft board accepts a pair of trains as close as the original timetable booked them, even after one is retimed. Should a retimed train instead be held to the section's headway against everyone? That is stricter, but trains the original books tighter than Stringline's headway estimate would then show conflicts as soon as one of them is touched.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

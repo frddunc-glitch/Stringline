@@ -66,6 +66,23 @@ public sealed class WttDocumentImport
         return new TripNode(_document, trips[source.Trips[pointIndex]]);
     }
 
+    /// <summary>The timing point (its <see cref="TimingPoint.Index"/>) a train's <c>Trip</c> became, or null if the importer left it out.</summary>
+    public int? PointOf(Train train, XElement trip)
+    {
+        ArgumentNullException.ThrowIfNull(trip);
+        var source = _sources.Trains[IndexOf(train)];
+        var place = trip.Parent == NodeOf(train).TripsElement ? trip.ElementsBeforeSelf().Count() : -1;
+        for (var k = 0; k < source.Trips.Count; k++)
+        {
+            if (source.Trips[k] == place)
+            {
+                return k;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>The <c>Activity</c> of a timing point's activity (its place in <see cref="TimingPoint.Activities"/>).</summary>
     public ActivityNode ActivityOf(Train train, int pointIndex, int activityIndex)
     {

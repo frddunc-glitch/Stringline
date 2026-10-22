@@ -12,8 +12,8 @@ Stringline.sln
 │  ├─ Stringline.Planning/      net10.0   Working plan + commands, forecaster, conflicts, suggestions, re-planning (IReplanner, rules)
 │  ├─ Stringline.Optimiser/     net10.0   CP-SAT re-planner (Google OR-Tools, native solver for Windows, Linux and macOS)
 │  ├─ Stringline.Persistence/   net10.0   SQLite session store (Microsoft.Data.Sqlite)
-│  ├─ Stringline.Editing/       net10.0   Timetable editor core: sim knowledge (S41); checks before SimSig (S42); the draft's single writer, autosave and names (Drafts, S43); bulk tools, CSV (S44–S48, planned; 08-…md)
-│  ├─ Stringline.Graph/         net10.0   Graph scene model + Skia renderer (SkiaSharp), hit testing — no WPF
+│  ├─ Stringline.Editing/       net10.0   Timetable editor core: sim knowledge (S41); checks before SimSig (S42); the draft's single writer, autosave and names (Drafts, S43); a drag's minimum run (S44); bulk tools, CSV (S46–S48, planned; 08-…md)
+│  ├─ Stringline.Graph/         net10.0   Graph scene model + Skia renderer (SkiaSharp), hit testing, the draft board and drag targets (S44; it uses Timetable's edits) — no WPF
 │  ├─ Stringline.App/           net10.0-windows10.0.19041.0  WPF shell, MVVM, SKElement host, dialogs (SkiaSharp.Views.WPF 4 needs the versioned TFM)
 │  └─ Stringline.Tools/         net10.0   CLI: record, replay-server, wtt-dump, render-png, report, replan…
 ├─ tests/

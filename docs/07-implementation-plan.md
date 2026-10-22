@@ -613,6 +613,7 @@ Fred raised #20 on 2026-10-20: SimSig's editor and outside tools handle timetabl
   - the drag target giving edits on a draft and commands on a session;
   - App tests: drag a draft path, see the grid's times change, undo;
   - the benchmark with a 500-train draft still under 33 ms a frame.
+- *Built in S44:* Fred chose (asked during the session) the board as a **pane in the editor window**, a drag clamped to the **sim's least known run** for the train's band, else the **original timetable's**, corridors **generated from the draft** when the sim has no profile, and **30 s nudges**. A draft checked against its own bookings never conflicts (the detector allows a pair as close as the timetable books it), so booked conflicts are found against the **timetable the draft was made from** (`ConflictRequest.Booked`). The draft draws as the plan layer, the original's changed trains as the faint WTT layer under it. Pan frames of a 500-train draft take about 17 ms. See `08-…md` §7.2.
 
 ### S45 — Activities, rules, seed groups, categories and the rest 🪟 (edits portable)
 - **Activities**, per trip:

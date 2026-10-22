@@ -17,6 +17,14 @@ public sealed record ConflictRequest(WorkingPlan Plan, Forecast Forecast)
     public ForecastNetwork Network { get; init; } = ForecastNetwork.Empty;
 
     public ConflictOptions Options { get; init; } = new();
+
+    /// <summary>
+    /// The timetable whose bookings say how close a pair may be (no closer than it books them) and cap a run's minimum;
+    /// null for the plan's own. A draft (S44) is checked against the timetable it was made from, so the pairs it leaves
+    /// as they were are accepted as booked, and the trains it retimes or adds are held to the headways and minimum runs.
+    /// A train whose points no longer match its booking there (another route) is not capped.
+    /// </summary>
+    public WorkingTimetable? Booked { get; init; }
 }
 
 /// <summary>Settings for the <see cref="ConflictDetector"/>.</summary>
@@ -108,12 +116,15 @@ public static class ConflictDetector
     // ---- Timelines ----
 
     /// <summary>One train's times along its plan, from the forecast.</summary>
-    private sealed class Timeline(TrainPlan plan, Train? wtt, TrainForecast forecast, int order)
+    private sealed class Timeline(TrainPlan plan, Train? wtt, Train? booked, TrainForecast forecast, int order)
     {
         public TrainPlan Plan { get; } = plan;
 
-        /// <summary>The WTT train, for a WTT train (not a clone): its bookings and activities.</summary>
+        /// <summary>The WTT train, for a WTT train (not a clone): its activities.</summary>
         public Train? Wtt { get; } = wtt;
+
+        /// <summary>The train as booked in the reference timetable (<see cref="ConflictRequest.Booked"/>), which caps spacing and runs.</summary>
+        public Train? Booked { get; } = booked;
 
         public TrainForecast Forecast { get; } = forecast;
 
@@ -145,7 +156,10 @@ public static class ConflictDetector
             }
 
             var wtt = train.Origin == PlanOrigin.Wtt ? plan.Timetable.Find(train.Source) : null;
-            var timeline = new Timeline(train, wtt, forecast, list.Count);
+            var booked = wtt is null || request.Booked is not { } reference ? wtt
+                : reference.Find(train.Source) is { } other && SameRoute(other, wtt) ? other
+                : null;
+            var timeline = new Timeline(train, wtt, booked, forecast, list.Count);
             var previous = -1;
             for (var k = 0; k < forecast.Points.Count; k++)
             {
@@ -169,9 +183,13 @@ public static class ConflictDetector
         return list;
     }
 
+    /// <summary>The same timing locations in the same order: a reference booking that still fits the train point by point.</summary>
+    private static bool SameRoute(Train a, Train b) =>
+        a.Points.Count == b.Points.Count && a.Points.Zip(b.Points).All(p => p.First.Location == p.Second.Location);
+
     /// <summary>The WTT's booked departure and arrival for a run, if the train is a WTT train booked at both ends.</summary>
     private static (int Depart, int Arrive)? Booked(Timeline t, int from, int to) =>
-        t.Wtt is { } wtt && to < wtt.Points.Count && wtt.Points[from].LastTime is { } d && wtt.Points[to].FirstTime is { } a && a >= d
+        t.Booked is { } wtt && to < wtt.Points.Count && wtt.Points[from].LastTime is { } d && wtt.Points[to].FirstTime is { } a && a >= d
             ? (d.Seconds, a.Seconds)
             : null;
 
@@ -334,7 +352,7 @@ public static class ConflictDetector
                 }
 
                 int? bookedStart = null, bookedEnd = null;
-                if (t.Wtt is { } wtt && k < wtt.Points.Count && wtt.Points[k] is { FirstTime: { } bs, LastTime: { } be } booked &&
+                if (t.Booked is { } wtt && k < wtt.Points.Count && wtt.Points[k] is { FirstTime: { } bs, LastTime: { } be } booked &&
                     string.Equals(booked.Platform?.Trim(), point.Platform.Trim(), StringComparison.OrdinalIgnoreCase))
                 {
                     (bookedStart, bookedEnd) = (Math.Min(bs.Seconds, formed?.BookedArrive ?? int.MaxValue), be.Seconds);
@@ -426,7 +444,7 @@ public static class ConflictDetector
         {
             if (parent.Points[k].Location == location && parent.Forecast.Points[k].FirstTime is { } arrive)
             {
-                var booked = parent.Wtt is { } wtt && k < wtt.Points.Count ? wtt.Points[k].FirstTime?.Seconds : null;
+                var booked = parent.Booked is { } wtt && k < wtt.Points.Count ? wtt.Points[k].FirstTime?.Seconds : null;
                 return (arrive.Seconds, booked, parent.Forecast.Points[k].Basis is ForecastBasis.Actual or ForecastBasis.Arrived);
             }
         }
@@ -489,7 +507,7 @@ public static class ConflictDetector
                     t.Forecast.Points[previous].Basis != ForecastBasis.Actual)
                 {
                     var planned = arrive - depart;
-                    int? ceiling = Booked(t, previous, k) is { } b ? b.Arrive - b.Depart - t.Wtt!.Points[previous].AllowanceSeconds : null;
+                    int? ceiling = Booked(t, previous, k) is { } b ? b.Arrive - b.Depart - t.Booked!.Points[previous].AllowanceSeconds : null;
                     if (plan.MinRuns.Along(points, previous, k, depart, plan.Disruptions, ceiling: ceiling) is { } min && min > planned)
                     {
                         var where = points[previous].Location;
