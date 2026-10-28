@@ -81,6 +81,11 @@
           <MenuItem Header="Pl_ot (multi-page PDF)…" Command="{Binding Board.ExportPlotCommand}" ToolTip="A corridor of the draft over a stretch of time" />
         </MenuItem>
         <Separator />
+        <MenuItem Header="Test in Si_mSig…" Command="{Binding ShowTestStepsCommand}" ToolTip="How to test the draft in SimSig and read the run back" />
+        <MenuItem Header="Test re_port from a recording…" Command="{Binding TestReportCommand}"
+                  ToolTip="A recording of the timetable running in SimSig, read against the draft: what went wrong shows in the Issues panel" />
+        <MenuItem Header="Cl_ear test report" Command="{Binding ClearTestReportCommand}" />
+        <Separator />
         <MenuItem Header="Export _trains (CSV)…" Command="{Binding ExportCsvCommand}" ToolTip="Every train as a spreadsheet, one row per timing point" />
         <MenuItem Header="_Import trains (CSV)…" Command="{Binding ImportCsvCommand}" ToolTip="Merge a spreadsheet back in: changed trains by UID, else headcode and first time; new ones added" />
         <Separator />
@@ -242,7 +247,7 @@
               <TextBlock DockPanel.Dock="Top" Margin="4,2" Text="{Binding FormedBy}" FontStyle="Italic"
                          Visibility="{Binding FormedBy, Converter={StaticResource NotNull}}" />
               <!-- Activities of the point the grid is on (S45) -->
-              <DockPanel DockPanel.Dock="Bottom" Height="150" Margin="0,6,0,0" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorActivities}">
+              <DockPanel DockPanel.Dock="Bottom" Height="110" Margin="0,6,0,0" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorActivities}">
                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
                   <TextBlock Text="{Binding ActivitiesHeading}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
                   <ComboBox Width="160" ItemsSource="{Binding ActivityKinds}" SelectedItem="{Binding NewActivityKind}" ToolTip="The kind of activity to add" />

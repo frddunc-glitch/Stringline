@@ -118,6 +118,12 @@ public static class IssueCodes
     public const string RuleUnknown = "rule-unknown";
     public const string RuleCycle = "rule-cycle";
     public const string RuleLocationNotCalled = "rule-location-not-called";
+
+    // A test run in SimSig (S48): from a recording of the timetable played
+    public const string TestNeverAppeared = "test-never-appeared";
+    public const string TestUnmatched = "test-unmatched";
+    public const string TestSlowSection = "test-slow-section";
+    public const string TestPlatformClash = "test-platform-clash";
 }
 
 /// <summary>Each check's severity, title and hint (the Analyser's advice, from the SimSig wiki's Timetable Tools 1 page, where it has the check).</summary>
@@ -181,6 +187,10 @@ public static class IssueCatalogue
         [IssueCodes.RuleUnresolved] = new(IssueSeverity.Info, "Rule names no single train", "Name a train that is in the timetable once (by UID where the file uses them)."),
         [IssueCodes.RuleUnknown] = new(IssueSeverity.Warning, "Unknown rule", "Choose one of SimSig's rules."),
         [IssueCodes.RuleCycle] = new(IssueSeverity.Warning, "Rules wait for each other", "These rules wait for each other in a loop, so the trains may never go; remove one."),
+        [IssueCodes.TestNeverAppeared] = new(IssueSeverity.Warning, "Never appeared in the test", "SimSig did not bring the train on in the test run: check its entry point, seeding, rules and as-required setting, and that the sim was started early enough."),
+        [IssueCodes.TestUnmatched] = new(IssueSeverity.Warning, "Ran but did not match", "A train ran in the test that Stringline could not match to the timetable: often a path, link or headcode SimSig would not take as booked."),
+        [IssueCodes.TestSlowSection] = new(IssueSeverity.Warning, "Always slower than booked", "Every train timed over this section in the test ran it slower than booked; the quick fix moves the train's later times by the time it took."),
+        [IssueCodes.TestPlatformClash] = new(IssueSeverity.Warning, "Platform shared in the test", "Two trains stood in one platform at once in the test run; move one to another platform or time."),
         [IssueCodes.RuleLocationNotCalled] = new(IssueSeverity.Warning, "Rule location not called at", "The rule's train does not call at the rule's location; change the location or the train."),
     };
 

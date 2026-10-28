@@ -496,9 +496,9 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(HasFix))]
     private void ApplyFix()
     {
-        if (SelectedIssue?.Issue.QuickFix is { } fix)
+        if (SelectedIssue?.Issue is { QuickFix: { } fix } issue && TryApply(fix.Edit, EditOrigin.Stringline))
         {
-            TryApply(fix.Edit, EditOrigin.Stringline);
+            ForgetTestIssues([issue]);
         }
     }
 
@@ -513,10 +513,10 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
             return;
         }
 
-        var fixes = Snapshot.Validation.Issues.Where(i => i.Code == selected.Code && i.QuickFix is not null).Select(i => i.QuickFix!).ToList();
-        if (fixes.Count > 0)
+        var issues = Snapshot.Validation.Issues.Concat(TestIssues).Where(i => i.Code == selected.Code && i.QuickFix is not null).ToList();
+        if (issues.Count > 0 && TryApply(TimetableEdit.Composite($"{selected.Fix} ({issues.Count}×)", issues.Select(i => i.QuickFix!.Edit)), EditOrigin.Stringline))
         {
-            TryApply(TimetableEdit.Composite($"{selected.Fix} ({fixes.Count}×)", fixes.Select(f => f.Edit)), EditOrigin.Stringline);
+            ForgetTestIssues(issues);
         }
     }
 
@@ -748,7 +748,7 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
         };
         var filter = IssueFilter.Trim();
         var selected = SelectedIssue?.Issue;
-        var rows = Snapshot.Validation.Issues
+        var rows = Snapshot.Validation.Issues.Concat(TestIssues)
             .Where(i => i.Severity >= least)
             .Select(i => new DraftIssueRow(i, Where(i)))
             .Where(r => filter.Length == 0 || r.Message.Contains(filter, StringComparison.OrdinalIgnoreCase) || r.Train.Contains(filter, StringComparison.OrdinalIgnoreCase)

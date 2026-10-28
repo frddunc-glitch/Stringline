@@ -67,9 +67,12 @@ internal static class HelpTopics
 
     public const string TimetableEditorLists = "timetable-editor.md#decisions-class-of-service-scenarios-and-driving";
 
+    /// <summary>Testing a draft in SimSig and its test report (S48).</summary>
+    public const string TimetableEditorTesting = "timetable-editor.md#testing-in-simsig";
+
     /// <summary>Every topic, for the test that each page and heading is there.</summary>
     public static IReadOnlyList<string> All { get; } =
         [Contents, Graph, TrainList, Boards, TrainDetail, Conflicts, Regulation, Delays, History, Replay, Connect, Options, ProfileEditor, Disruptions, SignalPlaces, LearningOptions, Privacy,
          TimetableEditor, TimetableEditorTrains, TimetableEditorTrips, TimetableEditorIssues, TimetableEditorBoard,
-         TimetableEditorActivities, TimetableEditorRules, TimetableEditorSeedGroups, TimetableEditorCategories, TimetableEditorLists];
+         TimetableEditorActivities, TimetableEditorRules, TimetableEditorSeedGroups, TimetableEditorCategories, TimetableEditorLists, TimetableEditorTesting];
 }

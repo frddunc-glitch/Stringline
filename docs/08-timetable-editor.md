@@ -225,6 +225,13 @@ So:
 - **`PlanToDraft`** (`Stringline.Editing.Drafts`): the plan's modified trains on a fresh read of the timetable (same `TrainId`s): point fields (pass, times, platform, line) as edits; terminate short removes the later trips, reporting next workings no longer formed; cancelled removed or kept; a clone is a copy of its source with the plan's points, a new UID (the headcode, made unique) where the file uses UIDs, and no activities naming other trains. Disruptions, notes and signal holds are listed. The main window's Timetable ▸ New draft ▸ From the working plan asks about cancellations, applies it as the draft's first edit and lists the rest. `.xlsx` was left out (CSV opens in any spreadsheet).
 - **Editor:** Draft ▸ Export trains (CSV)… and Import trains (CSV)… (the import's changes shown before it is applied, as one edit).
 
+### 9.2 Built in S48
+- **Test in SimSig:** the steps (`TimetableEditorViewModel.TestSteps`), on Draft ▸ Test in SimSig… and Timetable ▸ Test in SimSig….
+- **`TimetableTestReport`** (`Stringline.Editing.Testing`): a recording replayed against the draft's import (`LiveState`), as `ValidationIssue`s with four new codes (`test-never-appeared`, `test-unmatched`, `test-slow-section`, `test-platform-clash`). Never appeared: still not started in a forecast at the recording's end (so SimSig's start rules leave out trains it would not run), at least 15 min after the booked start plus any reported entry delay, inside the recording's span; **as-required trains are left out**, and a formed train counts only once its former was seen where it forms it **and has left** (Waterloo's 4× recording ends with 1S08 still in platform 14, so 2R09 is not missing). Slow sections: consecutive booked points with actual times, reported when at least 2 runs all ran 30 s or more slower than booked; each train's quick fix is `BulkTools.Shift` from the far point by the median delay rounded up to the half minute. Platform clashes: arrive–depart stands with a platform overlapping at one location. CLI `stringline report --test --wtt t.wtt --log x.sslog [out.csv]` (exit 1 when it finds anything).
+- **In the editor:** Draft ▸ Test report from a recording… (a `.sslog` or replay session) adds the issues to the Issues panel beside the checks', until fixed (Apply fix, Fix all of this kind) or Draft ▸ Clear test report.
+- **Waterloo's recordings:** none of the four reports a train that never appeared or an unmatched working. The 4-hour recording reports NINELMJ–VAUX for all 26 trains timed over it, 45 s to 1 min 47 slower than booked (question 54).
+- **Guide:** "Testing in SimSig" and a picture of the editor (`GuideScreenshotTests.The_timetable_editor`, made by `build/guide-shots.ps1`).
+
 ## 10. Where the code goes
 
 | Part | Project |

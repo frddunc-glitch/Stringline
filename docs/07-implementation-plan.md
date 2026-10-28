@@ -709,6 +709,8 @@ Each tool in `08-…md` §8 is one composite `TimetableEdit`, previewed as a lis
 - 👤 **Before closing:** Fred writes or changes a few trains on a sim he plays, round trips it through SimSig's Analyser and a run, and raises issues for what is missing.
 - Close #20 with `Fixes #20`.
 
+- *Built in S48 (2026-10-28):* the steps, `TimetableTestReport` with the editor's Test report from a recording… and `report --test`, the guide's "Testing in SimSig" and its editor picture (`08-…md` §9.2). **#20 stays open** for Fred's round trip of a few changed trains through SimSig's Analyser and a run.
+
 ## Phase 5 — Optional extensions
 - **S19** Opt-in assist: route-request / TD-interpose for the selected regulation step, with explicit confirmation and per-session enable.
   - *Built in S19:* Fred chose to ask for the route and remember it per move in the profile, to interpose the picked train's description into a chosen berth, a Session menu switch that is off at each new session, and live connections only (`replay-server` counts; file replays never send). The warning names multiplayer, as S29 asked. See `05-…md` §14.

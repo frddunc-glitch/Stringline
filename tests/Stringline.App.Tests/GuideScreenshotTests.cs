@@ -55,6 +55,34 @@ public sealed class GuideScreenshotTests
         }
     }
 
+    /// <summary>The timetable editor (S48): a draft of Waterloo with a train chosen, its trip grid and the draft board.</summary>
+    [Fact]
+    public async Task The_timetable_editor()
+    {
+        await using var app = new TestApp(s => s with { TimetableFolder = Path.Combine(Path.GetTempPath(), "no-such-folder-" + Guid.NewGuid()) }, wpf: true);
+        var vm = app.ViewModel;
+        await app.Ui.Run(() => vm.OpenNewDraft(Fixtures.Path("waterloo 2010.WTT")));
+        var draft = await app.Ui.Run(() => vm.Draft!);
+        await app.Ui.WaitUntil(() => draft.Board.IsReady, "the draft board");
+        await app.Ui.Run(() =>
+        {
+            var window = new Views.EditorWindow(draft) { ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000, Width = 1600, Height = 1000 };
+            window.Show();
+            try
+            {
+                draft.SelectedTrainRow = draft.Trains.First(r => r.Headcode == "1W51");
+                draft.Train!.CurrentTrip = draft.Train.Trips[0];
+                MainWindowTests.Settle(window);
+                window.TripGrid.Items.Count.Should().BeGreaterThan(2);
+                Save((FrameworkElement)window.Content, "guide-timetable-editor.png");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
     /// <summary>Selects the WTT train in view with the most timing points either side of now, all on screen.</summary>
     private static bool SelectRunningTrain(MainViewModel vm)
     {

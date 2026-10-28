@@ -21,7 +21,7 @@ internal static class ReportCommand
 {
     public static Command Create()
     {
-        var output = new Argument<FileInfo>("output") { Description = "The CSV file to write." };
+        var output = new Argument<FileInfo?>("output") { Description = "The CSV file to write (optional with --test: the issues are printed).", Arity = ArgumentArity.ZeroOrOne };
         var log = new Option<FileInfo?>("--log") { Description = "A recording (.sslog) to report on." };
         var session = new Option<FileInfo?>("--session") { Description = "A saved session (.stringline) to report on, with its plan edits." };
         var wtt = new Option<FileInfo?>("--wtt") { Description = "The SimSig timetable (.wtt). Default for --session: the one it used." };
@@ -31,19 +31,21 @@ internal static class ReportCommand
         var byTrain = new Option<bool>("--by-train") { Description = "One row per train (worst and final delay) instead of one per train and timing point." };
         var noKnockOn = new Option<bool>("--no-knock-on") { Description = "Forecast each train on its own, without knock-on delay from the others." };
         var verbose = new Option<bool>("--verbose") { Description = "Debug logging." };
+        var test = new Option<bool>("--test") { Description = "The timetable test report (S48): trains that never appeared, unmatched workings, sections always run slower than booked and shared platforms, from a recording of the timetable in SimSig." };
 
-        var command = new Command("report", "Write the delay table (booked, planned, actual or forecast times and delays) as CSV.")
+        var command = new Command("report", "Write the delay table (booked, planned, actual or forecast times and delays) as CSV, or with --test the timetable test report.")
         {
-            output, log, session, wtt, profile, at, all, byTrain, noKnockOn, verbose,
+            output, log, session, wtt, profile, at, all, byTrain, noKnockOn, verbose, test,
         };
 
         command.SetAction((parse, cancellationToken) => RunAsync(
-            new Settings(parse.GetValue(output)!, parse.GetValue(log), parse.GetValue(session), parse.GetValue(wtt), parse.GetValue(profile), parse.GetValue(at))
+            new Settings(parse.GetValue(output), parse.GetValue(log), parse.GetValue(session), parse.GetValue(wtt), parse.GetValue(profile), parse.GetValue(at))
             {
                 All = parse.GetValue(all),
                 ByTrain = parse.GetValue(byTrain),
                 NoKnockOn = parse.GetValue(noKnockOn),
                 Verbose = parse.GetValue(verbose),
+                Test = parse.GetValue(test),
             },
             parse.InvocationConfiguration.Output,
             parse.InvocationConfiguration.Error,
@@ -51,7 +53,7 @@ internal static class ReportCommand
         return command;
     }
 
-    internal sealed record Settings(FileInfo Output, FileInfo? Log, FileInfo? Session, FileInfo? Wtt, FileInfo? Profile, string? At)
+    internal sealed record Settings(FileInfo? Output, FileInfo? Log, FileInfo? Session, FileInfo? Wtt, FileInfo? Profile, string? At)
     {
         public bool All { get; init; }
 
@@ -60,6 +62,9 @@ internal static class ReportCommand
         public bool NoKnockOn { get; init; }
 
         public bool Verbose { get; init; }
+
+        /// <summary>The timetable test report instead of the delay table (S48).</summary>
+        public bool Test { get; init; }
     }
 
     /// <returns>0 on success, 2 on bad arguments or a file that cannot be read or written.</returns>
@@ -68,6 +73,17 @@ internal static class ReportCommand
         if ((settings.Log is null) == (settings.Session is null))
         {
             await error.WriteLineAsync("Give either --log or --session.").ConfigureAwait(false);
+            return 2;
+        }
+
+        if (settings.Test)
+        {
+            return await TestReport.RunAsync(settings, output, error, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (settings.Output is null)
+        {
+            await error.WriteLineAsync("Give the CSV file to write.").ConfigureAwait(false);
             return 2;
         }
 

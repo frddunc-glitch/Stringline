@@ -338,4 +338,31 @@ public sealed class DraftPartsTests : IDisposable
             draft.UndoHeader.Should().Contain("Import");
         });
     }
+
+    [Fact]
+    public async Task A_test_run_read_back_puts_its_findings_in_the_issues_panel_and_a_fix_clears_its_issue()
+    {
+        await using var app = App();
+        var draft = await Draft(app);
+        app.Dialogs.Files.Enqueue(Fixtures.Path("waterloo-4h.sslog"));
+
+        await app.Ui.RunAsync(() => draft.TestReportCommand.ExecuteAsync(null));
+
+        await app.Ui.Run(() =>
+        {
+            draft.TestIssues.Should().Contain(i => i.Code == Editing.Validation.IssueCodes.TestSlowSection);
+            draft.IssueLevel = IssueLevel.All;
+            var row = draft.Issues.First(r => r.Code == Editing.Validation.IssueCodes.TestSlowSection);
+            var count = draft.TestIssues.Count;
+            draft.SelectedIssue = row;
+            draft.ApplyFixCommand.Execute(null);
+            draft.Error.Should().BeNull();
+            draft.TestIssues.Should().HaveCount(count - 1, "the fixed one goes");
+            draft.UndoHeader.Should().Contain("by +1 min from VAUX");
+
+            draft.ClearTestReportCommand.Execute(null);
+            draft.TestIssues.Should().BeEmpty();
+            draft.Issues.Should().NotContain(r => r.Code.StartsWith("test-", StringComparison.Ordinal));
+        });
+    }
 }

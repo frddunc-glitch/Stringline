@@ -231,6 +231,8 @@
                     ToolTip="Raise the minor or major version number (the build goes back to 0) and save" />
           <MenuItem Header="_Close draft" Command="{Binding CloseDraftCommand}" />
           <Separator />
+          <MenuItem Header="_Test in SimSig…" Command="{Binding ShowTimetableTestStepsCommand}"
+                    ToolTip="How to test a draft in SimSig, and read the run back as a test report in the editor" />
           <MenuItem Header="C_heck timetable" Command="{Binding CheckTimetableCommand}"
                     ToolTip="The checks SimSig's Timetable Analyser makes, and checks against the sim's other timetables and play: on the draft, or on the loaded timetable" />
         </MenuItem>

@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     - graph.png and graph-by-delay.png: `stringline render-png` on Waterloo's 4x recording.
-    - The app's windows (main-window, grips, connect, replay, options, profile-editor): the App tests in
+    - The app's windows (main-window, grips, connect, replay, options, profile-editor, timetable-editor): the App tests in
       GuideScreenshotTests, run with STRINGLINE_WINDOW_SHOTS set to a scratch folder (Windows only, as they show WPF windows).
 
     Run it after a change to the app's look, then check the pictures and commit them.

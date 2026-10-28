@@ -111,7 +111,7 @@ public static class BulkTools
             changes.Add($"{train.Headcode}: {Minutes(seconds)}{(from is null ? string.Empty : $" from {from}")}");
         }
 
-        return Result($"Shift {trains.Count} train{Plural(trains.Count)} by {Minutes(seconds)}", edits, changes, problems);
+        return Result($"Shift {trains.Count} train{Plural(trains.Count)} by {Minutes(seconds)}{(from is null ? string.Empty : $" from {from}")}", edits, changes, problems);
     }
 
     // ---- Renumber ----

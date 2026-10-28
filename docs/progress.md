@@ -2545,6 +2545,33 @@ From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the
 ### Known issues
 - A sheet cannot add or change activities, rules or seeding (only the train's category, entry and points).
 
+## 2026-10-28 — S48: Testing in SimSig, the guide (#20)
+
+### Done
+- **Test in SimSig…** (Draft and Timetable menus): the steps, from saving the draft to reading the run back.
+- **Timetable test report** (`TimetableTestReport`, `Stringline.Editing.Testing`, `08-…md` §9.2): a recording of the timetable in SimSig replayed against the draft, as issues in four new checks: trains that never appeared, workings that did not match, sections every train ran slower than booked (each train's quick fix moves its times from the far end on, by the median delay to the half minute) and platforms two trains stood in at once. Draft ▸ Test report from a recording… adds them to the Issues panel until fixed or cleared; `stringline report --test --wtt t.wtt --log x.sslog [out.csv]`.
+- **Guide:** "Testing in SimSig", and a picture of the editor (`GuideScreenshotTests.The_timetable_editor`; `build/guide-shots.ps1` makes it). The activities panel is 110 px high now, so the trip grid keeps room (it had two rows in the picture at 150).
+- **Docs:** `08-…md` §9.2, the plan, `CLAUDE.md`.
+- **Tests:** Editing +3 (`TimetableTestReportTests`: Waterloo 1× and 4× against their own timetable report no train that never appeared and no unmatched working; a synthetic run with a section booked too short, a train that never came, an unmatched working and a shared platform, and the quick fix), App +2 (a 4-hour Waterloo run read back into the Issues panel, a fix removing its issue, cleared; the editor's guide picture).
+- Totals: 2 122 (Editing 101, App 230). Green on Windows (Debug); both solutions build with `-warnaserror`. Linux not run.
+
+### Decisions
+- **"Never appeared" is careful:** as-required trains are left out (SimSig runs them only some of the time; Waterloo's 6N67 is 50 %), an entry delay SimSig reported is allowed for, and a formed train counts only once its former was seen where it forms it and has left. In Waterloo's 4× recording 1S08 is still in platform 14 at the end, so 2R09 had not started; that is a held train, not a missing one.
+- **A slow section needs every run slower,** by at least 30 s, over at least two runs: one late train is not the timetable's fault.
+- **The report's issues sit beside the checks', not in them,** so a recheck (F7) does not drop them; they go when fixed or cleared.
+- **#20 is not closed:** the plan leaves that for Fred's round trip of a few changed trains through SimSig's Analyser and a run.
+
+### Next
+- 👤 **Close #20 when satisfied:** change a few trains on a sim you play, save, run SimSig's Analyser and a run with Stringline recording, then Draft ▸ Test report from a recording…; raise issues for what is missing.
+- 👤 **S40's gate** is still open (a round-tripped Waterloo and a payware timetable through the Analyser).
+
+### Known issues
+- The report finds conflicts only as shared platforms; headway conflicts that happened are not looked for.
+- Test issues refer to the draft as it was when the report was read; after big edits (a train deleted), read the recording again.
+
+### Questions for Fred
+- 54. **Nine Elms Junction to Vauxhall.** In the 4-hour Waterloo recording, all 26 trains timed between NINELMJ and VAUX took 45 s to 1 min 47 longer than booked. Is the 2010 timetable really booked that tight there, or does SimSig report the pass at Nine Elms Junction somewhere that makes the run look longer?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

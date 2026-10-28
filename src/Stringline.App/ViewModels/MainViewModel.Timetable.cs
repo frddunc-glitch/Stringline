@@ -101,6 +101,10 @@ internal sealed partial class MainViewModel
         _dialogs.ShowList("New draft from the working plan", $"{result.Changes.Count} train{(result.Changes.Count == 1 ? "" : "s")} changed from the timetable. The checks have run: see the Issues panel.", lines);
     }
 
+    /// <summary>Timetable ▸ Test in SimSig… (S48): the steps.</summary>
+    [RelayCommand]
+    private void ShowTimetableTestSteps() => _dialogs.ShowList("Test in SimSig", "To test a draft in SimSig:", TimetableEditorViewModel.TestSteps);
+
     [RelayCommand]
     private void NewDraftFromFile()
     {

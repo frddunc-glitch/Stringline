@@ -4,6 +4,8 @@ Stringline can change a SimSig timetable, or write a new one, in a window of its
 
 The editor never changes the timetable a session is running. A draft is always its own copy, read again from the file, so you can edit while you play.
 
+![The timetable editor: the trains list, a train's details and trip grid with its activities, and the draft on the graph](images/timetable-editor.png)
+
 ## Making a draft
 
 Everything is on the **Timetable** menu:
@@ -85,6 +87,19 @@ The **Bulk** menu works on the trains selected in the list (Ctrl+click and Shift
 **Draft ▸ Import trains (CSV)…** reads a sheet back and merges it into the draft: a train is found by its UID, else by its headcode and first time, else it is added. A train whose locations are unchanged has its points' fields set; one whose locations changed has its points replaced (the activities of points at the same locations are kept). The sheet may come from any spreadsheet: columns in any order, with names such as *Train* or *TIPLOC*, separated by commas, semicolons or tabs, with times typed as in the trip grid. Rows it cannot read are listed with their line numbers. You see the changes before they are made, and they are one step for Undo.
 
 The same is on the command line: `stringline wtt-csv export t.wtt out.csv` and `stringline wtt-csv import t.wtt in.csv out.wtt`.
+
+## Testing in SimSig
+
+A timetable is only right once SimSig has run it. **Draft ▸ Test in SimSig…** (and **Timetable ▸ Test in SimSig…**) gives the steps: save the draft; in SimSig, load it and run **F4 ▸ Tools 1 ▸ Timetable Analyser**; then start the sim with Stringline connected and recording, and let it run.
+
+**Draft ▸ Test report from a recording…** then reads the recording (or a saved replay session) against the draft, and puts what it found in the Issues panel:
+
+- **Never appeared:** trains SimSig did not bring on, well after they were due (an entry delay SimSig reported is allowed for). As-required trains are left out, as SimSig runs them only some of the time, and so is a train formed by another that has not yet left the place it forms it.
+- **Ran but did not match:** trains that ran but could not be matched to the timetable, often a path, link or headcode SimSig would not take as booked.
+- **Always slower than booked:** sections every train ran slower than booked (at least two runs, all over 30 seconds slower). Its quick fix moves the train's times from the far end of the section on by about what it took; **Fix all of this kind** does it for every train listed.
+- **Platform shared:** two trains standing in one platform at once.
+
+A fixed issue leaves the list; **Draft ▸ Clear test report** clears the rest. On the command line: `stringline report --test --wtt t.wtt --log x.sslog [out.csv]`.
 
 ## The Issues panel
 
