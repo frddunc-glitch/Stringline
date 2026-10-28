@@ -45,7 +45,8 @@ public class LayeringTests
         var allowed = new[] { "Stringline.Core", "Stringline.Timetable", "Stringline.Network", "Stringline.Planning" };
         var editing = XDocument.Load(Path.Combine(FindRepoRoot(), "src", "Stringline.Editing", "Stringline.Editing.csproj"));
 
-        editing.Descendants("ProjectReference").Select(r => Path.GetFileNameWithoutExtension(r.Attribute("Include")!.Value)).Should().BeSubsetOf(allowed);
+        // csproj paths use '\', which Path does not treat as a separator on Linux.
+        editing.Descendants("ProjectReference").Select(r => Path.GetFileNameWithoutExtension(r.Attribute("Include")!.Value.Replace('\\', '/'))).Should().BeSubsetOf(allowed);
         Assembly.Load(new AssemblyName("Stringline.Editing")).GetReferencedAssemblies().Select(a => a.Name).Where(n => n!.StartsWith("Stringline", StringComparison.Ordinal))
             .Should().BeSubsetOf(allowed);
         foreach (var below in allowed.Append("Stringline.Gateway").Append("Stringline.Persistence").Append("Stringline.Graph").Append("Stringline.Optimiser"))
