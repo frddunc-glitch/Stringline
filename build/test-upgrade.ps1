@@ -75,11 +75,16 @@ function RunBounded([string] $exe, [string[]] $arguments, [string] $name, [int] 
     -1
 }
 
-function Show-Stuck([string] $name, [datetime] $since) {
+# What a setup that failed was doing: the end of its log and the app's log since it started.
+function Show-Setup([string] $name, [datetime] $since) {
     $log = Join-Path $out "$name.log"
     if (Test-Path $log) { Write-Host "--- last lines of $name.log"; Get-Content $log -Tail 30 | Out-Host }
     Write-Host '--- the app''s log since then'
     AppLogSince $since | Where-Object { $_ -notmatch 'Forecast of' } | Select-Object -Last 30 | Out-Host
+}
+
+function Show-Stuck([string] $name, [datetime] $since) {
+    Show-Setup $name $since
     Write-Host '--- windows open'
     Get-Process | Where-Object { $_.MainWindowTitle } |
         Format-Table Id, ProcessName, Responding, MainWindowTitle -AutoSize | Out-Host
@@ -195,9 +200,16 @@ try {
 
     Write-Host "Update to $newVersion while it runs"
     $updating = Get-Date
-    Check ((Setup $New 'upgrade' @('/CLOSEAPPLICATIONS')) -eq 0) 'setup succeeds'
+    $upgraded = (Setup $New 'upgrade' @('/CLOSEAPPLICATIONS')) -eq 0
+    Check $upgraded 'setup succeeds'
     Check ($app.WaitForExit(10000)) 'the running app was closed'
     $closing = AppLogSince $updating
+    if (-not $upgraded) { Show-Setup 'upgrade' $updating }
+    elseif (-not ($closing | Select-String 'Stringline stopped')) {
+        # Setup ends an app that saved its session but did not exit (CloseApplications=force in Stringline.iss).
+        Write-Warning "$oldVersion did not exit by itself when asked to close; setup ended it. Its log since then:"
+        $closing | Where-Object { $_ -notmatch 'Forecast of' } | Select-Object -Last 30 | Out-Host
+    }
     if ($closing | Select-String 'Windows is closing the app') {
         Check ([bool]($closing | Select-String 'Session stopped for Windows')) 'the app stopped and saved its session before closing'
     }
@@ -255,8 +267,9 @@ try {
     Check ((Test-Path $documents) -eq $documentsBefore) 'Documents\Stringline is left alone'
 }
 finally {
-    Restore-UserData
+    # First, so a Stringline left running does not hold its log open while the user's logs are put back.
     Get-Process Stringline -ErrorAction SilentlyContinue | Where-Object { $folder -and $_.Path -like "$folder*" } | Stop-Process -Force
+    Restore-UserData
     Pop-Location
 }
 

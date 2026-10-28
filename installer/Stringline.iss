@@ -12,7 +12,8 @@
 ;
 ; Updating: running a newer setup over an installed Stringline upgrades it in place. Setup finds the install by AppId,
 ; keeps its folder and per-user or all-users mode, closes a running Stringline through the Restart Manager (the app
-; saves its session when Windows asks it to close) and replaces the files. A silent update:
+; saves its session when Windows asks it to close; one that then does not exit, as 0.4.0 can, is ended) and replaces
+; the files. A silent update:
 ;   Stringline-x.y.z-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS
 ; Installing an older version over a newer one asks first; a silent one refuses (exit code 1) unless given
 ; /ALLOWDOWNGRADE. build/test-upgrade.ps1 checks all of this. A file a later version no longer ships must be listed
@@ -63,7 +64,9 @@ OutputBaseFilename=Stringline-{#AppVersion}-setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-CloseApplications=yes
+; force: an app that has been asked to close (and saved its session) but has not exited is ended, rather than the
+; update failing. 0.4.0 can stay running after saving its session.
+CloseApplications=force
 ; Close only Stringline itself, not other programs that happen to have a file of ours open.
 CloseApplicationsFilter=Stringline.exe
 #ifdef Sign

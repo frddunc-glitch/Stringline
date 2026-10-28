@@ -1190,7 +1190,17 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - **The V0.1.0 release has no files.** The one Release run was started by hand without a tag, so the zip and setup only went to that run's workflow artifacts, which GitHub deletes after the retention period (90 days by default). Anyone who installed 0.1.0 got it from there.
 - **Not seen on the hosted runner yet.** The script passed on Fred's PC; the first tagged release will show whether the Restart Manager behaves the same on `windows-latest`.
 
-### Questions for Fred
+### 2026-10-28 — Release 0.5.0: updating over a running 0.4.0
+
+### Done
+- The v0.5.0 Release run failed in "Test the update". The 0.5.0 setup asked the running 0.4.0 app to close. The app logged "Session stopped for Windows" but never exited, so setup gave up after 30 s. Every later check failed with it, and the clean-up then failed on the app's log file, which was still open.
+- `installer/Stringline.iss`: `CloseApplications=force`. The app is still asked first and saves its session; one that then doesn't exit is ended, so the update no longer fails.
+- `build/test-upgrade.ps1`: when the update fails, it prints the setup log and the app's log. When setup had to end the app (no "Stringline stopped" in its log), it warns and prints the app's log. The leftover app is stopped before the user's data is put back.
+
+### Known issues
+- Why 0.4.0 stays running after saving its session for Windows is not known yet (0.3.2 exited). The next Release run's warning, if any, prints the app's log at that point.
+
+## Questions for Fred
 - 21. **Release 0.1.1?** It carries the save-on-close fix and the downgrade check. Pushing tag `v0.1.1` builds it, tests the update, and attaches the files. Should V0.1.0 also get its files, with Actions ▸ Release ▸ Run workflow and tag `V0.1.0`? That build would not have this change.
 
 ## Questions for Fred
