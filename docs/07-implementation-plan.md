@@ -692,6 +692,8 @@ Each tool in `08-…md` §8 is one composite `TimetableEdit`, previewed as a lis
   - plan → draft on a saved session (`--session`) with a retime, a platform change, a cancellation and a clone, giving the expected XML and the right S42 issues;
   - an App test of the dialog.
 
+- *Built in S47 (2026-10-28):* `TimetableCsv` (export, tolerant read, merge; CLI `wtt-csv`) and `PlanToDraft` with Timetable ▸ New draft ▸ From the working plan (`08-…md` §9.1). `.xlsx` left out: CSV opens in any spreadsheet, and no new dependency was needed.
+
 ### S48 — Testing in SimSig, the guide and closing #20
 - **Test in SimSig…** (Timetable menu) gives the steps: save, load in SimSig, run F4 ▸ Tools 1 ▸ Timetable Analyser, start the sim with Stringline connected and recording.
 - **Timetable test report** (`Stringline.Editing`; `stringline report --test --wtt t.wtt --log x.sslog [out.csv]`; and in the app when a session using a draft's timetable ends, or from a recording) lists:

@@ -220,6 +220,11 @@ So:
     - platform clashes and booked conflicts that happened.
   - The report opens in the draft's Issues panel against the trains.
 
+### 9.1 Built in S47
+- **`TimetableCsv`** (`Stringline.Editing.Csv`): `Columns` (headcode, UID, category, entry, entry time, point, location, arr, dep, plat, line, path, eng, pth, prf, dwell, req %, set down, thru line, wait), `Export` (UTF-8 with BOM for Excel, CRLF; a pass as `12/34`; the stop flags as their own `Y` columns so a round trip is exact), `Read` (aliases ignoring case, spaces and punctuation; `,` `;` or tab by the header; quoted fields; SimSig notation, the marks setting their flags as the grid does; a new train where the headcode or UID changes or the point goes back to 1; unreadable rows by line number), `Merge` (UID, else headcode and first time, else the only train with the headcode when no time is given, else a new train; same locations: field edits; different: the trips replaced, an old point's element reused where its location comes again, so its activities stay). **Waterloo exported and imported changes nothing.** CLI `stringline wtt-csv export|import`.
+- **`PlanToDraft`** (`Stringline.Editing.Drafts`): the plan's modified trains on a fresh read of the timetable (same `TrainId`s): point fields (pass, times, platform, line) as edits; terminate short removes the later trips, reporting next workings no longer formed; cancelled removed or kept; a clone is a copy of its source with the plan's points, a new UID (the headcode, made unique) where the file uses UIDs, and no activities naming other trains. Disruptions, notes and signal holds are listed. The main window's Timetable ▸ New draft ▸ From the working plan asks about cancellations, applies it as the draft's first edit and lists the rest. `.xlsx` was left out (CSV opens in any spreadsheet).
+- **Editor:** Draft ▸ Export trains (CSV)… and Import trains (CSV)… (the import's changes shown before it is applied, as one edit).
+
 ## 10. Where the code goes
 
 | Part | Project |

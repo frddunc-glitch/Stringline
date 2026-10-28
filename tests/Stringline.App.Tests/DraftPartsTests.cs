@@ -279,4 +279,63 @@ public sealed class DraftPartsTests : IDisposable
             draft.Error.Should().NotBeNull();
         });
     }
+
+    [Fact]
+    public async Task A_draft_from_the_working_plan_has_the_sessions_re_plans_and_lists_the_rest()
+    {
+        await using var app = App();
+        var folder = Directory.CreateDirectory(Path.Combine(_root.FullName, "timetables")).FullName;
+        var source = Path.Combine(folder, Waterloo);
+        File.Copy(Fixtures.Path(Waterloo), source, overwrite: true);
+        var vm = app.ViewModel;
+        await app.Ui.RunAsync(() => vm.LoadTimetableAsync(source));
+        await app.Ui.WaitUntil(() => vm.Snapshot.Plan.Count > 0, "the plan");
+        var (retimed, cancelled) = await app.Ui.Run(() => (vm.Snapshot.Plan.Trains[0], vm.Snapshot.Plan.Trains[1]));
+        await app.Ui.RunAsync(() => vm.ExecuteAsync(new Planning.ShiftTrain(retimed.Id, 0, 300)));
+        await app.Ui.RunAsync(() => vm.ExecuteAsync(new Planning.CancelTrain(cancelled.Id)));
+        await app.Ui.RunAsync(() => vm.ExecuteAsync(new Planning.AddNote(new Planning.PlanNote("N1", retimed.Points[0].Location, Core.SimTime.Parse("08:00"), "Fog"))));
+        await app.Ui.WaitUntil(() => vm.Snapshot.Plan.Modified.Count() == 2 && vm.Snapshot.Plan.Notes.Count == 1, "the re-plans");
+
+        app.Dialogs.Choices.Enqueue(0);
+        await app.Ui.Run(() =>
+        {
+            vm.NewDraftFromPlanCommand.Execute(null);
+            app.Dialogs.Asked[^1].Should().Contain("1 train is cancelled");
+            var draft = vm.Draft!;
+            var after = draft.Snapshot.Timetable;
+            after.Find(retimed.Id)!.Points[0].Depart.Should().Be(retimed.Points[0].Depart + 300);
+            after.Find(cancelled.Id).Should().BeNull();
+            draft.UndoHeader.Should().Contain("Draft from the working plan");
+            app.Dialogs.Lists[^1].Lines.Should().Contain(l => l.Contains("Fog", StringComparison.Ordinal));
+            vm.Snapshot.Timetable!.Find(cancelled.Id).Should().NotBeNull("the session's timetable is untouched");
+        });
+    }
+
+    [Fact]
+    public async Task Trains_are_exported_as_a_sheet_and_a_changed_sheet_is_imported_as_one_edit()
+    {
+        await using var app = App();
+        var draft = await Draft(app);
+        var csv = Path.Combine(_root.FullName, "trains.csv");
+        app.Dialogs.SaveFiles.Enqueue(csv);
+        await app.Ui.Run(() => draft.ExportCsvCommand.Execute(null));
+        File.Exists(csv).Should().BeTrue();
+
+        var lines = File.ReadAllLines(csv).ToList();
+        var row = lines.FindIndex(l => l.StartsWith("1A11,", StringComparison.Ordinal) && l.Contains(",1,", StringComparison.Ordinal));
+        var fields = lines[row].Split(',');
+        fields[9] = "9";
+        lines[row] = string.Join(",", fields);
+        File.WriteAllLines(csv, lines);
+
+        app.Dialogs.Files.Enqueue(csv);
+        app.Dialogs.Choices.Enqueue(0);
+        await app.Ui.Run(() =>
+        {
+            draft.ImportCsvCommand.Execute(null);
+            app.Dialogs.Asked[^1].Should().Contain("1A11: 1 point changed");
+            new TrainNode(draft.Document, draft.Trains.First(r => r.Headcode == "1A11").Element).Trips.First().Platform.Should().Be("9");
+            draft.UndoHeader.Should().Contain("Import");
+        });
+    }
 }

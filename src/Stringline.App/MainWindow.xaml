@@ -216,6 +216,8 @@
           <MenuItem Header="_New draft">
             <MenuItem Header="From the _loaded timetable" Command="{Binding NewDraftFromLoadedCommand}"
                       ToolTip="A copy of the timetable this session uses, read again from its file; the session keeps running the original" />
+            <MenuItem Header="From the working _plan" Command="{Binding NewDraftFromPlanCommand}"
+                      ToolTip="A copy of the loaded timetable with this session's re-plans written in: retimes, platforms, skipped stops, terminations, cancellations and copies" />
             <MenuItem Header="From a _file…" Command="{Binding NewDraftFromFileCommand}" />
             <MenuItem Header="_Blank for this sim" Command="{Binding NewBlankDraftCommand}"
                       ToolTip="An empty timetable for the sim, with the loaded timetable's train categories" />

@@ -81,6 +81,9 @@
           <MenuItem Header="Pl_ot (multi-page PDF)…" Command="{Binding Board.ExportPlotCommand}" ToolTip="A corridor of the draft over a stretch of time" />
         </MenuItem>
         <Separator />
+        <MenuItem Header="Export _trains (CSV)…" Command="{Binding ExportCsvCommand}" ToolTip="Every train as a spreadsheet, one row per timing point" />
+        <MenuItem Header="_Import trains (CSV)…" Command="{Binding ImportCsvCommand}" ToolTip="Merge a spreadsheet back in: changed trains by UID, else headcode and first time; new ones added" />
+        <Separator />
         <MenuItem Header="_Close draft" Command="{Binding CloseDraftCommand}" />
       </MenuItem>
       <MenuItem Header="_Edit">

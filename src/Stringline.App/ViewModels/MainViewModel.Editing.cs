@@ -836,6 +836,7 @@ internal sealed partial class MainViewModel : IGraphEditor
         CloneSelectedCommand.NotifyCanExecuteChanged();
         LinkSelectedCommand.NotifyCanExecuteChanged();
         NewDraftFromLoadedCommand.NotifyCanExecuteChanged();
+        NewDraftFromPlanCommand.NotifyCanExecuteChanged();
         NewBlankDraftCommand.NotifyCanExecuteChanged();
         CheckTimetableCommand.NotifyCanExecuteChanged();
         UpdateReplanCommand();

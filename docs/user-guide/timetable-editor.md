@@ -9,6 +9,7 @@ The editor never changes the timetable a session is running. A draft is always i
 Everything is on the **Timetable** menu:
 
 - **New draft ▸ From the loaded timetable** copies the timetable the session uses.
+- **New draft ▸ From the working plan** copies the timetable the session uses with your re-plans written in: retimes, platform and line changes, skipped stops (as passes), trains terminated short (the points after are removed) and copies of trains (as new trains). If trains are cancelled, it asks whether to remove them or keep them as booked. Disruptions, notes and holds at signals have no place in a timetable, so they are listed instead, with any next working that is no longer formed.
 - **New draft ▸ From a file…** copies any `.wtt`.
 - **New draft ▸ Blank for this sim** starts an empty timetable for the sim loaded or connected, with the loaded timetable's train categories.
 - **Open draft…** opens a draft you worked on before, with its undo history.
@@ -76,6 +77,14 @@ The **Bulk** menu works on the trains selected in the list (Ctrl+click and Shift
 - **Auto-fill timings** times the points a train has no time for, from the run times the sim's other timetables book for trains of its speed: points between two times share the run as the sim does, and points after the last time are timed on, with the usual dwell where there is a platform. If the times you gave leave less than the sim's quickest run, it says how much short.
 - **Set lines** gives points with no line the line other timetables use most there (where two are used as often, it leaves the point for you).
 - **Insert timing points** adds, for the selected trains, the points other timetables book between two points SimSig may find no path between (the Issues panel's quick fix, for all of them at once).
+
+## Spreadsheets
+
+**Draft ▸ Export trains (CSV)…** writes every train as a spreadsheet, one row per timing point: headcode, UID, category, entry point and time (on a train's first row), point number, location, arrival, departure (`12/34` for a pass), platform, line, path, the three allowances (minutes, `H` for a half), dwell, request %, set down, through line and wait (`Y`).
+
+**Draft ▸ Import trains (CSV)…** reads a sheet back and merges it into the draft: a train is found by its UID, else by its headcode and first time, else it is added. A train whose locations are unchanged has its points' fields set; one whose locations changed has its points replaced (the activities of points at the same locations are kept). The sheet may come from any spreadsheet: columns in any order, with names such as *Train* or *TIPLOC*, separated by commas, semicolons or tabs, with times typed as in the trip grid. Rows it cannot read are listed with their line numbers. You see the changes before they are made, and they are one step for Undo.
+
+The same is on the command line: `stringline wtt-csv export t.wtt out.csv` and `stringline wtt-csv import t.wtt in.csv out.wtt`.
 
 ## The Issues panel
 

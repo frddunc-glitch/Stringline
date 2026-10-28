@@ -2523,6 +2523,28 @@ From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the
 ### Known issues
 - Pairing looks only at trains that end and start at the terminus named; a train that reverses there mid-journey is not offered.
 
+## 2026-10-28 — S47: Spreadsheet round trip and plan → draft (#20)
+
+### Done
+- **CSV** (`TimetableCsv`, `Stringline.Editing.Csv`, `08-…md` §9.1): export (one row per timing point, a train's own columns on its first row, the stop flags as `Y` columns so the round trip is exact), a tolerant read (column aliases, `,` `;` or tab, quoting, a BOM, SimSig notation with its marks, `H` allowances, `#` comments; unreadable rows by line number) and a merge as one edit (UID, else headcode and first time, else added; same locations set fields, different ones replace the trips keeping the activities of points that come again). Waterloo exported and imported changes nothing. CLI: `stringline wtt-csv export|import`.
+- **Plan → draft** (`PlanToDraft`): the session's re-plans written into a fresh read of the loaded timetable: times, platforms and lines, skipped stops as passes, terminate short (later points removed; next workings no longer formed reported), cancellations removed or kept, clones as new trains (a unique UID from the headcode where the file uses UIDs). Disruptions, notes and holds at signals are listed. Main window: **Timetable ▸ New draft ▸ From the working plan** asks about cancellations, applies it as the draft's first edit and lists the rest; the session's timetable is untouched.
+- **Editor:** Draft ▸ Export trains (CSV)… and Import trains (CSV)… (changes listed before applying, one edit).
+- **Docs:** `08-…md` §9.1, the plan, the guide (Making a draft, Spreadsheets), `CLAUDE.md`.
+- **Tests:** Editing +4 (`TimetableCsvTests`: Waterloo round trip; tolerant read and problems by line; a merge changing a time, replacing a route and adding a train, undone; `PlanToDraftTests`: a retime, platform, cancellation (removed and kept), termination, clone and note on Waterloo), App +2 (plan → draft through the menu with the cancellation question and the list; export, a changed sheet imported as one edit).
+- Totals: 2 117 (Editing 98, App 228). Green on Windows (Debug); both solutions build with `-warnaserror`. Linux not run.
+
+### Decisions
+- **No `.xlsx`:** CSV opens in Excel and LibreOffice as it is (the export has a BOM so Excel reads it as UTF-8), and it needs no new dependency. Left as a follow-up if wanted.
+- **Matching a sheet's train to the draft by UID, then headcode and first time:** headcodes repeat, so a headcode alone matches only when the sheet gives no time and one train has it.
+- **A changed route replaces the trips but reuses an old point's element where its location comes again,** so its activities and fields the sheet does not carry stay.
+
+### Next
+- S48 (testing in SimSig, the guide's pictures and closing #20).
+- 👤 **Try New draft ▸ From the working plan** after a session with a few re-plans, and **Export trains (CSV)** into a spreadsheet and back.
+
+### Known issues
+- A sheet cannot add or change activities, rules or seeding (only the train's category, entry and points).
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

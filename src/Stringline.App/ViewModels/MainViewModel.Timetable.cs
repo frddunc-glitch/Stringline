@@ -42,6 +42,65 @@ internal sealed partial class MainViewModel
         }
     }
 
+    /// <summary>
+    /// Timetable ▸ New draft ▸ From the working plan (S47): a draft of the loaded timetable with the session's re-plans
+    /// written in as its first edit. Cancelled trains are removed or kept as the user picks; what a timetable cannot
+    /// hold (disruptions, notes, holds at signals) is listed.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasTimetable))]
+    private void NewDraftFromPlan()
+    {
+        if (_timetable is not { } loaded)
+        {
+            return;
+        }
+
+        var plan = Snapshot.Plan;
+        if (!plan.Modified.Any() && plan.Disruptions.Count == 0 && plan.Notes.Count == 0)
+        {
+            _dialogs.ShowError("New draft from the working plan", "The working plan is as the timetable books it: nothing has been re-planned yet. Use From the loaded timetable for a copy.");
+            return;
+        }
+
+        var removeCancelled = true;
+        var cancelled = plan.Modified.Count(t => t.Cancelled);
+        if (cancelled > 0)
+        {
+            var choice = _dialogs.Choose(
+                "New draft from the working plan",
+                $"{cancelled} train{(cancelled == 1 ? " is" : "s are")} cancelled in the plan. In the draft:",
+                ["Remove them", "Keep them as booked", "Cancel"]);
+            if (choice is not (0 or 1))
+            {
+                return;
+            }
+
+            removeCancelled = choice == 0;
+        }
+
+        OpenNewDraft(loaded.Path);
+        if (Draft is not { } draft)
+        {
+            return;
+        }
+
+        var result = PlanToDraft.Build(draft.Document, plan, removeCancelled);
+        if (result.Edit is not null)
+        {
+            draft.TryApply(result.Edit);
+        }
+
+        var lines = result.Changes.Select(c => "• " + c).ToList();
+        if (result.Problems.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add("Not in the draft:");
+            lines.AddRange(result.Problems.Select(p => "• " + p));
+        }
+
+        _dialogs.ShowList("New draft from the working plan", $"{result.Changes.Count} train{(result.Changes.Count == 1 ? "" : "s")} changed from the timetable. The checks have run: see the Issues panel.", lines);
+    }
+
     [RelayCommand]
     private void NewDraftFromFile()
     {

@@ -12,6 +12,7 @@ internal static class Program
         root.Subcommands.Add(WttDumpCommand.Create());
         root.Subcommands.Add(WttSaveCommand.Create());
         root.Subcommands.Add(WttCheckCommand.Create());
+        root.Subcommands.Add(WttCsvCommand.Create());
         root.Subcommands.Add(SimdataCommand.Create());
         root.Subcommands.Add(MatchCommand.Create());
         root.Subcommands.Add(CorridorsCommand.Create());

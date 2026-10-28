@@ -1,7 +1,9 @@
+using System.IO;
 using System.Xml.Linq;
 using CommunityToolkit.Mvvm.Input;
 using Stringline.Core;
 using Stringline.Editing.Bulk;
+using Stringline.Editing.Csv;
 using Stringline.Editing.Validation;
 using Stringline.Planning;
 using Stringline.Timetable.Editing;
@@ -232,6 +234,58 @@ internal sealed partial class TimetableEditorViewModel
             [.. fixes.Select(f => $"{f.Headcode}: {f.QuickFix!.Title}")],
             []);
         Confirm("Insert timing points", result, preview: null);
+    }
+
+    // ---- Spreadsheet (S47) ----
+
+    /// <summary>Draft ▸ Export trains (CSV)…: every train, one row per timing point.</summary>
+    [RelayCommand]
+    private void ExportCsv()
+    {
+        var folder = _context.Exports?.Folder() ?? Path.GetDirectoryName(DraftPath) ?? string.Empty;
+        var name = Path.GetFileNameWithoutExtension(Document.Header.Name ?? "timetable") + ".csv";
+        if (_dialogs.PickSaveFile("Export trains", FileFilters.Csv, Path.Combine(folder, string.Concat(name.Split(Path.GetInvalidFileNameChars())))) is not { } path)
+        {
+            return;
+        }
+
+        try
+        {
+            File.WriteAllText(path, TimetableCsv.Export(Document), new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            _context.Exports?.Exported(path);
+            Status = $"Exported {Document.Trains.Count()} trains to {Path.GetFileName(path)}.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Refuse($"Cannot write {path}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Draft ▸ Import trains (CSV)…: a sheet merged into the draft (by UID, else headcode and first time, else added),
+    /// shown first as a list of changes and the rows it could not read, then applied as one edit.
+    /// </summary>
+    [RelayCommand]
+    private void ImportCsv()
+    {
+        var folder = _context.Exports?.Folder() ?? Path.GetDirectoryName(DraftPath) ?? string.Empty;
+        if (_dialogs.PickFile("Import trains", FileFilters.Csv, folder + Path.DirectorySeparatorChar) is not { } path)
+        {
+            return;
+        }
+
+        string csv;
+        try
+        {
+            csv = File.ReadAllText(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Refuse($"Cannot read {path}: {ex.Message}");
+            return;
+        }
+
+        Confirm($"Import trains from {Path.GetFileName(path)}", TimetableCsv.Merge(Document, TimetableCsv.Read(csv)), preview: null);
     }
 
     // ---- Running a tool ----
