@@ -205,6 +205,16 @@ internal sealed partial class ProfileEditorViewModel : ObservableObject
         return true;
     }
 
+    /// <summary>Opens the colour picker for a category (#24), with the other categories' colours to match or avoid; the colour picked, or null if cancelled.</summary>
+    internal Colour? PickCategoryColour(CategoryStyle style)
+    {
+        var others = Draft.Categories
+            .Where(c => c.CategoryId != style.CategoryId)
+            .Select(c => new ColourSwatch(c.Colour, $"{c.Name} ({c.CategoryId})"));
+        var picker = new ColourPickerViewModel("Category colour", $"Colour for {style.Name} ({style.CategoryId})", style.Colour, others);
+        return _dialogs.PickColour(picker) ? picker.Colour : null;
+    }
+
     /// <summary>Asks before discarding unapplied changes. True if the window may close.</summary>
     public bool CanClose() =>
         !IsDirty || _dialogs.Choose("Profile", "Discard your changes to the profile?", ["Discard", "Keep editing"]) == 0;

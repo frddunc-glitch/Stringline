@@ -178,6 +178,18 @@ internal sealed class ScriptedDialogs : IDialogService
         return Prompts.Count > 0 && Prompts.Dequeue()(viewModel) && viewModel.TryAccept();
     }
 
+    /// <summary>Answers to colour pickers, in order: each picks a colour and returns OK (true) or Cancel; none left means cancelled.</summary>
+    public Queue<Func<ColourPickerViewModel, bool>> ColourPicks { get; } = new();
+
+    /// <summary>Every colour picker shown.</summary>
+    public List<ColourPickerViewModel> ColourPickers { get; } = [];
+
+    public bool PickColour(ColourPickerViewModel viewModel)
+    {
+        ColourPickers.Add(viewModel);
+        return ColourPicks.Count > 0 && ColourPicks.Dequeue()(viewModel) && viewModel.TryAccept();
+    }
+
     public void ShowList(string title, string heading, IReadOnlyList<string> lines) => Lists.Add((title, lines));
 
     /// <summary>Answers to questions, in order (the index of the choice); none left means the window was closed.</summary>

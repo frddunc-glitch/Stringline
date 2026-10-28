@@ -399,6 +399,45 @@ public sealed class ProfileEditorTests
     }
 
     [Fact]
+    public async Task A_category_colour_is_picked_from_the_picker()
+    {
+        await using var app = new TestApp();
+        var vm = await LoadWaterloo(app);
+        string? category = null;
+
+        await Edit(app, e =>
+        {
+            var row = e.Categories.First(c => c.Trains > 0);
+            category = row.Id;
+            var before = row.Colour;
+
+            // Cancel changes nothing.
+            app.Dialogs.ColourPicks.Enqueue(_ => false);
+            row.PickColourCommand.Execute(null);
+            row.Colour.Should().Be(before);
+            e.IsDirty.Should().BeFalse();
+
+            // The picker opens on the category's colour, offers the other categories' colours, and its pick is the edit.
+            app.Dialogs.ColourPicks.Enqueue(p =>
+            {
+                p.Original.ToString().Should().Be(before);
+                p.Heading.Should().Contain(row.Name).And.Contain(row.Id);
+                p.InUse.Should().HaveCount(e.Categories.Select(c => c.Colour).Where((_, i) => e.Categories[i] != row).Distinct().Count());
+                p.ChooseCommand.Execute(p.Palette.Single(s => s.Name == "Teal"));
+                p.Blue = 0x80;
+                return true;
+            });
+            row.PickColourCommand.Execute(null);
+            row.Colour.Should().Be("#008980");
+            e.IsDirty.Should().BeTrue();
+            e.OkCommand.Execute(null);
+        });
+
+        app.Dialogs.ColourPickers.Should().HaveCount(2);
+        (await app.Ui.Run(() => vm.Profile!.StyleFor(category).Colour)).Should().Be(Colour.Parse("#008980"));
+    }
+
+    [Fact]
     public async Task Reload_rereads_the_file_and_open_shows_it()
     {
         await using var app = new TestApp();
@@ -662,6 +701,61 @@ public sealed class ProfileEditorWindowTests
 
         failure.Should().BeNull();
         bindingErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void The_colour_picker_loads_and_its_swatches_pick()
+    {
+        Exception? failure = null;
+        var bindingErrors = new List<string>();
+        Colour? picked = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                using var listener = new BindingErrorListener(bindingErrors);
+                var vm = new ColourPickerViewModel("Category colour", "Colour for Express (XP)", Colour.Parse("#D32F2F"), [new(Colour.Parse("#1976D2"), "Stopping (OO)")]);
+                var window = new Views.ColourPickerDialog(vm) { ShowActivated = false, WindowStartupLocation = System.Windows.WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
+                window.Show();
+                window.UpdateLayout();
+                System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+                var swatch = FindAll<System.Windows.Controls.Button>(window).First(b => b.DataContext is ColourSwatch { Name: "Teal" });
+                swatch.Command.Execute(swatch.CommandParameter);
+                picked = vm.Colour;
+                window.Close();
+            }
+#pragma warning disable CA1031 // Reported on the test thread.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                failure = ex;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join(TimeSpan.FromSeconds(60)).Should().BeTrue();
+
+        failure.Should().BeNull();
+        bindingErrors.Should().BeEmpty();
+        picked.Should().Be(Colour.Parse("#00897B"));
+    }
+
+    private static IEnumerable<T> FindAll<T>(System.Windows.DependencyObject parent)
+        where T : System.Windows.DependencyObject
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is T found)
+            {
+                yield return found;
+            }
+
+            foreach (var deeper in FindAll<T>(child))
+            {
+                yield return deeper;
+            }
+        }
     }
 
     private static T? FindChild<T>(System.Windows.DependencyObject parent)

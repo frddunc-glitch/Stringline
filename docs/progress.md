@@ -1190,7 +1190,20 @@ So GR-9 (< 33 ms while panning) holds with a wide margin, even at 1 000 trains. 
 - **The V0.1.0 release has no files.** The one Release run was started by hand without a tag, so the zip and setup only went to that run's workflow artifacts, which GitHub deletes after the retention period (90 days by default). Anyone who installed 0.1.0 got it from there.
 - **Not seen on the hosted runner yet.** The script passed on Fred's PC; the first tagged release will show whether the Restart Manager behaves the same on `windows-latest`.
 
-### Questions for Fred
+### 2026-10-28 — Train details in groups (#25)
+
+### Done
+- **The timetable editor's train details** (`EditorWindow.xaml`) are in four labelled groups instead of one wrapping row of boxes: *Train* (headcode, UID, category, operator), *Entry and seeding* (entry point and time, seed point and gap, seed group), *Running* (max speed, length, as required %, freight, goods lines) and *Description and journey* (description and what a `$template` shows as, origin and destination with their times, notes). Labels and boxes line up in each group; units (mph, m, %) follow their boxes. The first three groups wrap on a narrow window; the last takes the full width.
+- The trip grid's typing hint is one line (the full text is its tooltip), and the Train tab gets 3/5 of the height above the board (was half), so the trip grid keeps its room.
+- **Guide:** the Train tab paragraph names the groups; `timetable-editor.png` retaken.
+
+### Decisions
+- Grouped cards, always shown (Fred chose them over collapsible groups or sub-tabs).
+
+### Next
+- 👤 Try it on a sim you edit; reopen #25 if it still feels cramped.
+
+## Questions for Fred
 - 21. **Release 0.1.1?** It carries the save-on-close fix and the downgrade check. Pushing tag `v0.1.1` builds it, tests the update, and attaches the files. Should V0.1.0 also get its files, with Actions ▸ Release ▸ Run workflow and tag `V0.1.0`? That build would not have this change.
 
 ## Questions for Fred
@@ -2571,6 +2584,20 @@ From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the
 
 ### Questions for Fred
 - 54. **Nine Elms Junction to Vauxhall.** In the 4-hour Waterloo recording, all 26 trains timed between NINELMJ and VAUX took 45 s to 1 min 47 longer than booked. Is the 2010 timetable really booked that tight there, or does SimSig report the pass at Nine Elms Junction somewhere that makes the run look longer?
+
+## 2026-10-28 — Colour picker for train categories (#24)
+
+### Done
+- **Colour picker** (`ColourPickerViewModel`, `Views/ColourPickerDialog`, `IDialogService.PickColour`): clicking a category's swatch on the profile editor's Categories tab opens it. It offers the headcode classes' default colours (`CategoryStyle.ForClass`), a 40-colour palette, the colours the profile's other categories use, red/green/blue sliders and the `#RRGGBB` code, all kept in step, with the old and new colours side by side and a sample line. OK makes the same edit as typing the code (so Cancel/undo and the dirty flag work as before); the Colour column can still be typed in.
+- **Guide:** the Categories section of "Timetables and profiles" describes it, with a picture (`GuideScreenshotTests.The_dialogs` makes `colour-picker.png`). `05-…md` updated.
+- **Tests:** App +7 (`ColourPickerViewModelTests` ×5: opening colour, swatches/sliders/code in step, a half-typed or wrong code, alpha kept, colours in use listed once; the profile editor picking and cancelling; the dialog loading with no binding errors and a swatch picking).
+
+### Decisions
+- **Alpha is kept** from the category's colour unless a `#RRGGBBAA` code is typed; the sliders are red, green and blue only.
+- **The code box keeps what is typed** (e.g. `00ff00`, the `#` may be left out); a half-typed code leaves the colour as it was, and OK refuses one that is not a colour.
+
+### Next
+- #24 closed. 👤 Try the picker on a sim you play; reopen #24 or raise a new issue for anything missing.
 
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:

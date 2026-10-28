@@ -1,5 +1,6 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Stringline.Core;
 using Stringline.Network;
 using Stringline.Network.Profiles;
@@ -258,7 +259,7 @@ internal sealed class SectionRow(ProfileEditorViewModel editor, string corridorI
 }
 
 /// <summary>A category's style, on the Categories tab.</summary>
-internal sealed class CategoryRow(ProfileEditorViewModel editor, string categoryId) : ProfileEditorRow(editor)
+internal sealed partial class CategoryRow(ProfileEditorViewModel editor, string categoryId) : ProfileEditorRow(editor)
 {
     private CategoryStyle _style = CategoryStyle.Fallback;
     private string _name = string.Empty;
@@ -282,6 +283,16 @@ internal sealed class CategoryRow(ProfileEditorViewModel editor, string category
         {
             Colour = Network.Profiles.Colour.TryParse(value, out var c) ? c : throw new ProfileEditException($"'{value?.Trim()}' is not a colour: use #RRGGBB, e.g. #D32F2F."),
         }));
+    }
+
+    /// <summary>Picks the colour from a palette, sliders or a code (#24), as if it had been typed.</summary>
+    [RelayCommand]
+    private void PickColour()
+    {
+        if (Editor.PickCategoryColour(_style) is { } picked)
+        {
+            Colour = picked.ToString();
+        }
     }
 
     public LineStyle Style

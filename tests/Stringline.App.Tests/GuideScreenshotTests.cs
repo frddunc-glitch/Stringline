@@ -139,6 +139,12 @@ public sealed class GuideScreenshotTests
                 FindChild<TabControl>(w)!.SelectedIndex = 1; // Corridors
                 editor.SelectedCorridor = editor.Corridors[0];
             });
+
+            // The colour picker (#24) as a category's swatch opens it.
+            ColourPickerViewModel? picker = null;
+            dialogs.ColourPicks.Enqueue(p => (picker = p) is null);
+            editor.Categories.First(c => c.Trains > 0).PickColourCommand.Execute(null);
+            Show(new Views.ColourPickerDialog(picker!), "guide-colour-picker.png");
         }
         finally
         {

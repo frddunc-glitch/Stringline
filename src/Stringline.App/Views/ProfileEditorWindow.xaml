@@ -267,7 +267,7 @@
       <TabItem Header="Categories">
         <DockPanel Margin="8">
           <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}"
-                     Text="How each WTT category is drawn, and how much its trains matter when regulating (priority 0–100, higher first). Colours are #RRGGBB. Dashed and dotted styles apply to the WTT, plan and actual lines; forecasts are always dash-dot." />
+                     Text="How each WTT category is drawn, and how much its trains matter when regulating (priority 0–100, higher first). Click a swatch to pick a colour, or type it as #RRGGBB. Dashed and dotted styles apply to the WTT, plan and actual lines; forecasts are always dash-dot." />
           <DataGrid ItemsSource="{Binding Categories}">
             <DataGrid.Columns>
               <DataGridTextColumn Header="ID" Binding="{Binding Id, Mode=OneWay}" IsReadOnly="True" Width="70" />
@@ -275,7 +275,10 @@
               <DataGridTemplateColumn Header="" Width="34" IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate>
-                    <Border Width="22" Height="12" BorderBrush="#9E9E9E" BorderThickness="1" Background="{Binding Colour, Converter={StaticResource ColourBrush}}" />
+                    <Button Command="{Binding PickColourCommand}" Padding="0" Margin="0" Cursor="Hand" ToolTip="Pick a colour…"
+                            AutomationProperties.Name="Pick a colour" Background="Transparent" BorderThickness="0">
+                      <Border Width="22" Height="12" BorderBrush="#9E9E9E" BorderThickness="1" Background="{Binding Colour, Converter={StaticResource ColourBrush}}" />
+                    </Button>
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>

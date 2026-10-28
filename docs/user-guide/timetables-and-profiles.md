@@ -77,6 +77,10 @@ The signals, track circuits and train describer berths learned between timing lo
 
 Each category's name, colour (`#RRGGBB`), line style (solid, dashed or dotted; forecasts are always dash-dot, so they are never mistaken for a category), priority and number of trains. The graph draws each train in its category's colour.
 
+Click a category's colour swatch to open the colour picker. Pick one of the headcode classes' usual colours, a colour from the palette, or one another category already uses (to match it, or to see which to avoid). Or set it with the red, green and blue sliders, or type its code. **Was** and **Now** show the old and new colours side by side, with a line drawn as the graph would draw it. **Reset** goes back to the old colour. You can still type a code straight into the Colour column.
+
+![The colour picker](images/colour-picker.png)
+
 ### The other profile commands
 
 In the **Tools** menu:

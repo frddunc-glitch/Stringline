@@ -36,6 +36,9 @@ internal interface IDialogService
     /// <summary>Asks for the prompt's values; true if OK was pressed (they have then passed its validation).</summary>
     bool Prompt(ViewModels.PromptViewModel viewModel);
 
+    /// <summary>Asks for a colour (#24); true if OK was pressed (<see cref="ViewModels.ColourPickerViewModel.Colour"/> is then the one picked).</summary>
+    bool PickColour(ViewModels.ColourPickerViewModel viewModel);
+
     void ShowList(string title, string heading, IReadOnlyList<string> lines);
 
     /// <summary>Asks a question with these answers (as buttons, the first the default); the index picked, or null if the window was closed.</summary>
@@ -128,6 +131,9 @@ internal sealed class WpfDialogService : IDialogService
 
     public bool Prompt(ViewModels.PromptViewModel viewModel) =>
         new Views.PromptDialog(viewModel) { Owner = Owner }.ShowDialog() == true;
+
+    public bool PickColour(ViewModels.ColourPickerViewModel viewModel) =>
+        new Views.ColourPickerDialog(viewModel) { Owner = Owner }.ShowDialog() == true;
 
     public void ShowList(string title, string heading, IReadOnlyList<string> lines) =>
         new Views.ListWindow(title, heading, lines) { Owner = Owner }.Show();
