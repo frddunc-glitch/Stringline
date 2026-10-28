@@ -26,7 +26,7 @@ The list on the left has every train in the draft. Click a column's heading to s
 
 ## The train and its timing points
 
-The **Train** tab shows the selected train's details at the top. Change a box and press Enter, or move on, to make the change. A new headcode renumbers the train and the activities and rules that name it. A description of `$template` shows what SimSig will show, from the header's template.
+The **Train** tab shows the selected train's details at the top, in four groups: **Train** (headcode, UID, category and operator), **Entry and seeding** (where and when it enters, or its seed point, gap and seed group), **Running** (maximum speed, length, the chance an as-required train runs, freight and goods lines) and **Description and journey** (the description, origin, destination and notes). Change a box and press Enter, or move on, to make the change. A new headcode renumbers the train and the activities and rules that name it. A description of `$template` shows what SimSig will show, from the header's template.
 
 Below is the **trip grid**, one row for each timing point:
 

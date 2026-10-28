@@ -41,8 +41,28 @@
     </Style>
     <Style TargetType="TextBox" x:Key="Detail">
       <Setter Property="Width" Value="90" />
-      <Setter Property="Margin" Value="0,2,12,2" />
-      <Setter Property="Padding" Value="2" />
+      <Setter Property="Margin" Value="0,1,12,1" />
+      <Setter Property="Padding" Value="2,1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- One group of the train's details (#25) -->
+    <Style TargetType="GroupBox" x:Key="DetailGroup">
+      <Setter Property="Margin" Value="0,0,8,4" />
+      <Setter Property="Padding" Value="6,2,6,0" />
+      <Setter Property="BorderBrush" Value="#D0D0D0" />
+      <Setter Property="HeaderTemplate">
+        <Setter.Value>
+          <DataTemplate>
+            <TextBlock Text="{Binding}" FontWeight="SemiBold" Foreground="#424242" />
+          </DataTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- The unit after a box: mph, m, % -->
+    <Style TargetType="TextBlock" x:Key="Unit">
+      <Setter Property="Foreground" Value="#757575" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="-9,0,12,0" />
     </Style>
     <!-- The issue mark at the start of a row: a dot in the worst issue's colour, the issues on hover -->
     <DataTemplate x:Key="IssueMark">
@@ -156,9 +176,9 @@
         <ColumnDefinition Width="*" MinWidth="320" />
       </Grid.ColumnDefinitions>
       <Grid.RowDefinitions>
-        <RowDefinition Height="*" MinHeight="180" />
+        <RowDefinition Height="3*" MinHeight="180" />
         <RowDefinition Height="6" />
-        <RowDefinition Height="*" MinHeight="140" />
+        <RowDefinition Height="2*" MinHeight="140" />
         <RowDefinition Height="6" />
         <RowDefinition Height="160" MinHeight="80" />
       </Grid.RowDefinitions>
@@ -201,49 +221,132 @@
             <TextBlock Text="Choose a train in the list, or make one with New." Style="{StaticResource Hint}" Margin="12"
                        Visibility="{Binding Train, Converter={StaticResource NotNull}, ConverterParameter=invert}" />
             <DockPanel DataContext="{Binding Train}" Visibility="{Binding Converter={StaticResource NotNull}}" Margin="4">
-              <WrapPanel x:Name="DetailsPanel" DockPanel.Dock="Top" ToolTip="{Binding IssueTip}">
-                <Label Content="_Headcode" Target="{Binding ElementName=HeadcodeBox}" />
-                <TextBox x:Name="HeadcodeBox" Style="{StaticResource Detail}" Width="60" Text="{Binding Headcode}"
-                         ToolTip="Renumbering keeps the activities and rules that name this train" />
-                <Label Content="UID" />
-                <TextBox Style="{StaticResource Detail}" Width="70" Text="{Binding Uid}" />
-                <Label Content="Category" />
-                <ComboBox Width="200" Margin="0,2,12,2" IsEditable="True" ItemsSource="{Binding CategoryChoices}"
-                          TextSearch.TextPath="Code" Text="{Binding Category}" DisplayMemberPath="Label" />
-                <Label Content="Entry point" />
-                <TextBox Style="{StaticResource Detail}" Text="{Binding EntryPoint}" />
-                <Label Content="Entry time" />
-                <TextBox Style="{StaticResource Detail}" Width="60" Text="{Binding DepartTime}" ToolTip="The time the train enters, or is seeded" />
-                <Label Content="Seed point" />
-                <TextBox Style="{StaticResource Detail}" Text="{Binding SeedPoint}" />
-                <Label Content="Gap" />
-                <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding SeedingGap}" ToolTip="Seeding gap, metres" />
-                <Label Content="Seed group" />
-                <TextBox Style="{StaticResource Detail}" Width="60" Text="{Binding SeedGroup}" />
-                <Label Content="As required %" />
-                <TextBox Style="{StaticResource Detail}" Width="40" Text="{Binding AsRequiredPercent}" />
-                <Label Content="Max speed" />
-                <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding MaxSpeed}" ToolTip="mph; empty for the category's" />
-                <Label Content="Length" />
-                <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding TrainLength}" ToolTip="metres; empty for the category's" />
-                <CheckBox Content="Freight" VerticalAlignment="Center" Margin="0,2,12,2" IsChecked="{Binding IsFreight}" />
-                <CheckBox Content="Goods lines" VerticalAlignment="Center" Margin="0,2,12,2" IsChecked="{Binding CanUseGoodsLines}" />
-                <Label Content="_Description" Target="{Binding ElementName=DescriptionBox}" />
-                <TextBox x:Name="DescriptionBox" Style="{StaticResource Detail}" Width="260" Text="{Binding Description}"
-                         ToolTip="Free text, or $template to use the header's template" />
-                <TextBlock VerticalAlignment="Center" Margin="0,2,12,2" Style="{StaticResource Hint}"
-                           Text="{Binding DescriptionPreview, StringFormat=Shows as: {0}}" Visibility="{Binding UsesTemplate, Converter={StaticResource BoolToVisibility}}" />
-                <Label Content="Origin" />
-                <TextBox Style="{StaticResource Detail}" Width="120" Text="{Binding OriginName}" />
-                <TextBox Style="{StaticResource Detail}" Width="55" Text="{Binding OriginTime}" ToolTip="Origin time" />
-                <Label Content="Destination" />
-                <TextBox Style="{StaticResource Detail}" Width="120" Text="{Binding DestinationName}" />
-                <TextBox Style="{StaticResource Detail}" Width="55" Text="{Binding DestinationTime}" ToolTip="Destination time" />
-                <Label Content="Operator" />
-                <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding OperatorCode}" />
-                <Label Content="Notes" />
-                <TextBox Style="{StaticResource Detail}" Width="260" Text="{Binding Notes}" />
-              </WrapPanel>
+              <!-- The train's details in four groups (#25): the cards wrap on a narrow window; the description group
+                   takes the full width under them -->
+              <StackPanel x:Name="DetailsPanel" DockPanel.Dock="Top" ToolTip="{Binding IssueTip}">
+                <WrapPanel>
+                  <GroupBox Header="Train" Style="{StaticResource DetailGroup}">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                      </Grid.RowDefinitions>
+                      <Label Content="_Headcode" Target="{Binding ElementName=HeadcodeBox}" />
+                      <TextBox x:Name="HeadcodeBox" Grid.Column="1" Style="{StaticResource Detail}" Width="60" Text="{Binding Headcode}"
+                               FontWeight="SemiBold" ToolTip="Renumbering keeps the activities and rules that name this train" />
+                      <Label Grid.Column="2" Content="UID" />
+                      <TextBox Grid.Column="3" Style="{StaticResource Detail}" Width="70" Text="{Binding Uid}" />
+                      <Label Grid.Row="1" Content="Category" />
+                      <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Width="200" Margin="0,1,0,1" HorizontalAlignment="Left"
+                                IsEditable="True" ItemsSource="{Binding CategoryChoices}"
+                                TextSearch.TextPath="Code" Text="{Binding Category}" DisplayMemberPath="Label" />
+                      <Label Grid.Row="2" Content="Operator" />
+                      <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Detail}" Width="60" Text="{Binding OperatorCode}" />
+                    </Grid>
+                  </GroupBox>
+                  <GroupBox Header="Entry and seeding" Style="{StaticResource DetailGroup}">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                      </Grid.RowDefinitions>
+                      <Label Content="Entry point" />
+                      <TextBox Grid.Column="1" Style="{StaticResource Detail}" Text="{Binding EntryPoint}" />
+                      <Label Grid.Column="2" Content="Time" />
+                      <TextBox Grid.Column="3" Style="{StaticResource Detail}" Width="60" Text="{Binding DepartTime}" ToolTip="The time the train enters, or is seeded" />
+                      <Label Grid.Row="1" Content="Seed point" />
+                      <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Detail}" Text="{Binding SeedPoint}" />
+                      <Label Grid.Row="1" Grid.Column="2" Content="Gap" />
+                      <StackPanel Grid.Row="1" Grid.Column="3" Orientation="Horizontal">
+                        <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding SeedingGap}" ToolTip="Seeding gap, metres" />
+                        <TextBlock Style="{StaticResource Unit}" Text="m" />
+                      </StackPanel>
+                      <Label Grid.Row="2" Content="Seed group" />
+                      <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Detail}" Width="60" Text="{Binding SeedGroup}"
+                               ToolTip="The ID of a seed group on the Seed groups tab; empty to seed at the timetable's start" />
+                    </Grid>
+                  </GroupBox>
+                  <GroupBox Header="Running" Style="{StaticResource DetailGroup}">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                      </Grid.RowDefinitions>
+                      <Label Content="Max speed" />
+                      <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding MaxSpeed}" ToolTip="mph; empty for the category's" />
+                        <TextBlock Style="{StaticResource Unit}" Text="mph" />
+                      </StackPanel>
+                      <Label Grid.Row="1" Content="Length" />
+                      <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
+                        <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding TrainLength}" ToolTip="metres; empty for the category's" />
+                        <TextBlock Style="{StaticResource Unit}" Text="m" />
+                      </StackPanel>
+                      <Label Grid.Row="2" Content="As required" />
+                      <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                        <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding AsRequiredPercent}" ToolTip="The chance the train runs, per cent" />
+                        <TextBlock Style="{StaticResource Unit}" Text="%" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Grid.RowSpan="2" Margin="4,0,0,0">
+                        <CheckBox Content="Freight" Margin="0,3" IsChecked="{Binding IsFreight}" />
+                        <CheckBox Content="Goods lines" Margin="0,3" IsChecked="{Binding CanUseGoodsLines}" ToolTip="The train may use goods lines" />
+                      </StackPanel>
+                    </Grid>
+                  </GroupBox>
+                </WrapPanel>
+                <GroupBox Header="Description and journey" Style="{StaticResource DetailGroup}">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" MinWidth="80" MaxWidth="220" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" MinWidth="80" MaxWidth="220" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="2*" MinWidth="80" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Label Content="_Description" Target="{Binding ElementName=DescriptionBox}" />
+                    <TextBox x:Name="DescriptionBox" Grid.Column="1" Grid.ColumnSpan="5" Style="{StaticResource Detail}" Width="Auto"
+                             Text="{Binding Description}" ToolTip="Free text, or $template to use the header's template" />
+                    <TextBlock Grid.Column="6" Grid.ColumnSpan="2" VerticalAlignment="Center" Style="{StaticResource Hint}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               Text="{Binding DescriptionPreview, StringFormat=Shows as: {0}}" ToolTip="{Binding DescriptionPreview}"
+                               Visibility="{Binding UsesTemplate, Converter={StaticResource BoolToVisibility}}" />
+                    <Label Grid.Row="1" Content="Origin" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Detail}" Width="Auto" Margin="0,1,4,1" Text="{Binding OriginName}" />
+                    <TextBox Grid.Row="1" Grid.Column="2" Style="{StaticResource Detail}" Width="55" Text="{Binding OriginTime}" ToolTip="Origin time" />
+                    <Label Grid.Row="1" Grid.Column="3" Content="Destination" />
+                    <TextBox Grid.Row="1" Grid.Column="4" Style="{StaticResource Detail}" Width="Auto" Margin="0,1,4,1" Text="{Binding DestinationName}" />
+                    <TextBox Grid.Row="1" Grid.Column="5" Style="{StaticResource Detail}" Width="55" Text="{Binding DestinationTime}" ToolTip="Destination time" />
+                    <Label Grid.Row="1" Grid.Column="6" Content="Notes" />
+                    <TextBox Grid.Row="1" Grid.Column="7" Style="{StaticResource Detail}" Width="Auto" Margin="0,1,0,1" Text="{Binding Notes}" />
+                  </Grid>
+                </GroupBox>
+              </StackPanel>
               <TextBlock DockPanel.Dock="Top" Margin="4,2" Text="{Binding FormedBy}" FontStyle="Italic"
                          Visibility="{Binding FormedBy, Converter={StaticResource NotNull}}" />
               <!-- Activities of the point the grid is on (S45) -->
@@ -281,8 +384,9 @@
                   </DataGrid.Columns>
                 </DataGrid>
               </DockPanel>
-              <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,4"
-                         Text="Type 1234 for 12:34, 1234H for 12:34½, 12/34 for a pass, +3 for 3 minutes after the time before. Enter moves down; Insert adds a point above, Ctrl+Delete removes points, Ctrl+D fills down. Greyed points were added by Stringline." />
+              <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                         Text="1234 is 12:34, 1234H 12:34½, 12/34 a pass, +3 three minutes after the time before · Insert adds a point, Ctrl+Delete removes, Ctrl+D fills down · grey points were added by Stringline"
+                         ToolTip="Type 1234 for 12:34, 1234H for 12:34½, 12/34 for a pass, +3 for 3 minutes after the time before. Enter moves down; Insert adds a point above, Ctrl+Delete removes points, Ctrl+D fills down. Greyed points were added by Stringline." />
               <DataGrid x:Name="TripGrid" ItemsSource="{Binding Trips}" SelectionUnit="CellOrRowHeader" SelectionMode="Extended"
                         CanUserSortColumns="False" HeadersVisibility="All" RowHeaderWidth="12"
                         PreviewKeyDown="OnTripGridKeyDown" PreparingCellForEdit="OnTripCellPreparing" CellEditEnding="OnTripCellEditEnding"
