@@ -6,33 +6,33 @@
   <ItemGroup Label="App">
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <!-- Markdig: BSD-2-Clause. Renders the bundled user guide (S28). -->
-    <PackageVersion Include="Markdig" Version="1.4.0" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
-    <PackageVersion Include="SkiaSharp.Views.WPF" Version="4.153.1" />
+    <PackageVersion Include="Markdig" Version="1.5.0" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
+    <PackageVersion Include="SkiaSharp.Views.WPF" Version="4.154.0" />
   </ItemGroup>
   <ItemGroup Label="Libraries">
     <!-- Google.OrTools: Apache-2.0 (with Google.Protobuf, BSD-3-Clause). The optimiser's CP-SAT solver (S20). -->
     <PackageVersion Include="Google.OrTools" Version="9.15.6755" />
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />
     <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageVersion Include="SkiaSharp" Version="4.153.1" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
-    <PackageVersion Include="System.CommandLine" Version="2.0.13" />
+    <PackageVersion Include="SkiaSharp" Version="4.154.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.154.0" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.14" />
   </ItemGroup>
   <ItemGroup Label="Tests">
     <!-- FluentAssertions pinned to 7.x: 8.x is under a commercial licence. -->
     <PackageVersion Include="FluentAssertions" Version="7.2.2" />
-    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.11.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageVersion Include="Verify.Xunit" Version="31.12.5" />
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>
   <ItemGroup Label="Benchmarks">
     <!-- BenchmarkDotNet: MIT. -->

@@ -2599,6 +2599,19 @@ From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the
 ### Next
 - 👤 Try it on a sim you edit; reopen #25 if it still feels cramped.
 
+## 2026-10-28 — Package updates
+
+### Done
+- Bumped 10 of the 11 packages Visual Studio listed as outdated: Markdig 1.5.0; Microsoft.Extensions.Hosting, Microsoft.Extensions.Logging.Abstractions and Microsoft.Data.Sqlite 10.0.14; SkiaSharp, SkiaSharp.Views.WPF and SkiaSharp.NativeAssets.Linux.NoDependencies 4.154.0; System.CommandLine 2.0.14; Microsoft.Extensions.TimeProvider.Testing 10.11.0; xunit.runner.visualstudio 4.0.1.
+- `dotnet build -warnaserror --no-incremental` is clean; all 2,129 tests pass (the same counts per project as before); the app starts and runs with no warnings in its log.
+
+### Decisions
+- FluentAssertions stays at 7.2.2: 8.x is under a commercial licence.
+- The new versions' licences are unchanged (MIT, BSD-2-Clause for Markdig, Apache-2.0 for the xUnit runner).
+
+### Next
+- Run `dotnet test Stringline.Portable.slnf` on Linux (CI) to confirm the SkiaSharp 4.154.0 Linux native assets.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
