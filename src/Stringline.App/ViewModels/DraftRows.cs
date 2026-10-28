@@ -124,6 +124,36 @@ internal static class DraftText
             _ => "?" + Number(code),
         };
 
+    /// <summary>
+    /// The timetable's categories as choices (#27): the ID as the code, the description as the label (with the ID where
+    /// two share a description, or the ID alone where there is none).
+    /// </summary>
+    public static IReadOnlyList<CodeChoice> CategoryChoices(WttDocument document)
+    {
+        var categories = document.Categories.Where(c => c.Id is not null).Select(c => (Id: c.Id!, Name: c.Description is { Length: > 0 } d ? d.Trim() : c.Id!)).ToList();
+        var shared = categories.GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return [.. categories.Select(c => new CodeChoice(c.Id, shared.Contains(c.Name) && c.Name != c.Id ? $"{c.Name} ({c.Id})" : c.Name))];
+    }
+
+    /// <summary>A category ID as its name; an ID no category has, as it is.</summary>
+    public static string CategoryName(IReadOnlyList<CodeChoice> categories, string? id) =>
+        id is null ? string.Empty : categories.FirstOrDefault(c => string.Equals(c.Code, id, StringComparison.OrdinalIgnoreCase))?.Label ?? id;
+
+    /// <summary>A category typed or picked by name (or by ID) as its choice; null for none, or with why it is not one.</summary>
+    public static bool TryCategory(IReadOnlyList<CodeChoice> categories, string text, out CodeChoice? category, out string? error)
+    {
+        error = null;
+        category = categories.FirstOrDefault(c => string.Equals(c.Label, text, StringComparison.Ordinal))
+            ?? categories.FirstOrDefault(c => string.Equals(c.Label, text, StringComparison.OrdinalIgnoreCase) || string.Equals(c.Code, text, StringComparison.OrdinalIgnoreCase));
+        if (category is null && text.Length > 0)
+        {
+            error = $"There is no category '{text}': choose one from the list, or make it on the Categories tab.";
+            return false;
+        }
+
+        return true;
+    }
+
     /// <summary>The issues' text for a hover: each message, its hint and its quick fix.</summary>
     public static string IssueTip(IEnumerable<ValidationIssue> issues) =>
         string.Join("\n\n", issues.Select(i => $"{i.Severity}: {i.Message}\n{i.Hint}{(i.QuickFix is { } fix ? $"\nQuick fix: {fix.Title}" : string.Empty)}"));
@@ -299,7 +329,7 @@ internal sealed class TripRow(DraftTrainViewModel train, XElement element) : Obs
         Show(nameof(SetDown), trip.SetDownOnly ? "1" : string.Empty);
         Show(nameof(ThroughLine), trip.AllowStopsOnThroughLines ? "1" : string.Empty);
         Show(nameof(StopLocation), DraftText.Number(trip.StopLocation));
-        Show(nameof(NewCategory), trip.NewCategory ?? string.Empty);
+        Show(nameof(NewCategory), DraftText.CategoryName(train.CategoryChoices, trip.NewCategory));
         Set(DraftText.Activities(trip), Activities, a => Activities = a, nameof(Activities));
         Set(added, IsAdded, a => IsAdded = a, nameof(IsAdded));
         Set(issues.Count == 0 ? null : issues.Max(i => i.Severity), Worst, w => Worst = w, nameof(Worst));

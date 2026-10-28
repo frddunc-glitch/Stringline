@@ -153,6 +153,41 @@ public sealed class TimetablePartsTests
     }
 
     [Fact]
+    public void Caution_speed_sets_are_added_with_rules_in_order_and_deleted_with_their_categories_cleared()
+    {
+        var d = Two();
+        ApplyUndo(d, TimetableParts.AddCautionSpeedSet(d, " Freight ", "CS1"), () =>
+        {
+            var made = d.CautionSpeedSets!.Items.Should().ContainSingle().Subject;
+            ((string?)made.Element.Attribute("ID")).Should().Be("CS1");
+            made.GetText("Name").Should().Be("Freight");
+            made.Element.Element("CautionSpeeds").Should().NotBeNull();
+        });
+        FluentActions.Invoking(() => TimetableParts.AddCautionSpeedSet(d, "Again", "cs1")).Should().Throw<InvalidOperationException>();
+        FluentActions.Invoking(() => TimetableParts.AddCautionSpeedSet(d, " ")).Should().Throw<InvalidOperationException>();
+
+        var set = d.CautionSpeedSets!.Items.Single();
+        ApplyUndo(d, TimetableParts.AddCautionSpeed(set), () =>
+            set.Element.Element("CautionSpeeds")!.Elements("CautionSpeed").Should().ContainSingle().Which.Element("AspectPassed")!.Value.Should().Be("2", "a single yellow"));
+        d.Apply(TimetableParts.AddCautionSpeed(set, 0));
+        var rules = set.Element.Element("CautionSpeeds")!.Elements().ToList();
+        d.Apply(TimetableParts.SetItemField(new ElementNode(d, rules[0]), "AspectPassed", "4"));
+        ApplyUndo(d, TimetableParts.MoveCautionSpeed(new ElementNode(d, rules[0]), 1), () =>
+            set.Element.Element("CautionSpeeds")!.Elements().Select(r => r.Element("AspectPassed")!.Value).Should().Equal("2", "4"));
+
+        var category = d.Categories.Single();
+        d.Apply(TimetableEdit.Change(category, c => c.CautionSpeedSet = "CS1"));
+        TimetableParts.CategoriesUsing(d, "cs1").Should().ContainSingle();
+        ApplyUndo(d, TimetableParts.RemoveCautionSpeedSet(set), () =>
+        {
+            d.CautionSpeedSets!.Items.Should().BeEmpty();
+            category.CautionSpeedSet.Should().BeNullOrEmpty("its trains go back to SimSig's standard rules");
+        });
+
+        TimetableParts.CautionAspects.Should().Equal("R", "sub", "Y", "FY", "YY", "FYY", "G");
+    }
+
+    [Fact]
     public void Lists_and_scenario_options_are_edited_by_field()
     {
         var d = Two();

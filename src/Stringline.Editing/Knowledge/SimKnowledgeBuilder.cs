@@ -31,6 +31,7 @@ public sealed class SimKnowledgeBuilder
     private readonly List<Train> _allTrains = [];
     private readonly Dictionary<Headcode, HashSet<string>> _entryPointsByHeadcode = [];
     private readonly List<PlaySummary> _plays = [];
+    private readonly Dictionary<string, int> _journeyNames = new(StringComparer.Ordinal);
     private StringlineProfile? _profile;
     private int _timetables;
 
@@ -206,12 +207,15 @@ public sealed class SimKnowledgeBuilder
             Signals = [.. signals.Values.Select(s => s.ToKnowledge())],
             TrackCircuits = [.. places.TrackCircuits.Select(p => ToKnowledge(p, minSamples))],
             Berths = [.. places.Berths.Select(p => ToKnowledge(p, minSamples))],
+            JourneyNames = Sorted(_journeyNames) ?? new SortedDictionary<string, int>(StringComparer.Ordinal),
         };
     }
 
     private void AddTrain(WorkingTimetable timetable, Train train)
     {
         var band = RunBand.Of(train);
+        Count(_journeyNames, train.OriginName);
+        Count(_journeyNames, train.DestinationName);
         if (train.Start == TrainStart.EntryPoint && train.EntryPoint is { } entry)
         {
             var at = Location(entry);

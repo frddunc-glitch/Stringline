@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Stringline.Core;
 using Stringline.Editing.Bulk;
 using Stringline.Editing.Csv;
+using Stringline.Editing.Drafts;
 using Stringline.Editing.Validation;
 using Stringline.Planning;
 using Stringline.Timetable.Editing;
@@ -203,6 +204,24 @@ internal sealed partial class TimetableEditorViewModel
         RunTool((d, trains) => Combine($"Fill timings of {trains.Count} train{(trains.Count == 1 ? "" : "s")}", trains.Select(t => BulkTools.AutoFill(d, knowledge, t))));
     }
 
+    /// <summary>
+    /// Edit ▸ Fill in timing points (#32, Ctrl+Shift+D): every timing location other timetables book between the
+    /// selected trains' points, inserted as passes timed from the sim's run times. The points show grey until edited.
+    /// </summary>
+    [RelayCommand]
+    private void FillTimingPoints()
+    {
+        if (Editor.Knowledge is not { } knowledge)
+        {
+            Refuse("Stringline is still learning the sim's timing locations from its other timetables; try again in a moment.");
+            return;
+        }
+
+        RunTool(
+            (d, trains) => Combine($"Fill in timing points of {trains.Count} train{(trains.Count == 1 ? "" : "s")}", trains.Select(t => BulkTools.FillTimingPoints(d, knowledge, t))),
+            EditOrigin.Stringline);
+    }
+
     [RelayCommand]
     private void SetLines()
     {
@@ -294,7 +313,7 @@ internal sealed partial class TimetableEditorViewModel
     /// Runs a tool on a copy of the draft for its preview (the changes listed, the trains drawn as ghosts), then, if
     /// confirmed, on the draft itself as one edit.
     /// </summary>
-    private void RunTool(Func<WttDocument, IReadOnlyList<TrainNode>, BulkResult> tool)
+    private void RunTool(Func<WttDocument, IReadOnlyList<TrainNode>, BulkResult> tool, EditOrigin origin = EditOrigin.User)
     {
         var selected = SelectedNodes();
         if (selected.Count == 0)
@@ -316,10 +335,10 @@ internal sealed partial class TimetableEditorViewModel
             return;
         }
 
-        Confirm(result.Edit?.Description ?? "Bulk edit", result, preview);
+        Confirm(result.Edit?.Description ?? "Bulk edit", result, preview, origin);
     }
 
-    private void Confirm(string title, BulkResult result, IReadOnlyList<TrainPlan>? preview)
+    private void Confirm(string title, BulkResult result, IReadOnlyList<TrainPlan>? preview, EditOrigin origin = EditOrigin.User)
     {
         if (result.Edit is null)
         {
@@ -346,7 +365,7 @@ internal sealed partial class TimetableEditorViewModel
             var message = $"{result.Changes.Count} change{(result.Changes.Count == 1 ? "" : "s")}{(preview is { Count: > 0 } ? " (drawn on the board)" : string.Empty)}:\n{string.Join("\n", lines)}";
             if (_dialogs.Choose(title, message, ["Apply", "Cancel"]) == 0)
             {
-                TryApply(result.Edit);
+                TryApply(result.Edit, origin);
             }
         }
         finally

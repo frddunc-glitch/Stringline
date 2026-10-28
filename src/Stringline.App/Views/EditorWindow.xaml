@@ -45,6 +45,25 @@
       <Setter Property="Padding" Value="2,1" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <!-- A drop-down in the train's details (#26, #28): picked from what the sim's timetables use, or typed -->
+    <Style TargetType="ComboBox" x:Key="DetailChoice">
+      <Setter Property="Width" Value="130" />
+      <Setter Property="Margin" Value="0,1,12,1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="IsEditable" Value="True" />
+      <Setter Property="IsTextSearchEnabled" Value="True" />
+      <Setter Property="StaysOpenOnEdit" Value="True" />
+    </Style>
+    <Style TargetType="ComboBox" x:Key="DetailCode" BasedOn="{StaticResource DetailChoice}">
+      <Setter Property="TextSearch.TextPath" Value="Code" />
+      <Setter Property="ItemTemplate">
+        <Setter.Value>
+          <DataTemplate>
+            <TextBlock Text="{Binding Label}" />
+          </DataTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <!-- One group of the train's details (#25) -->
     <Style TargetType="GroupBox" x:Key="DetailGroup">
       <Setter Property="Margin" Value="0,0,8,4" />
@@ -58,6 +77,20 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <!-- A tab's toolbar of labelled boxes (#29, #30): each label spaced from the box before it, each box from the next label -->
+    <Style TargetType="Label" x:Key="ToolLabel">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="12,0,6,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style TargetType="Label" x:Key="FirstToolLabel" BasedOn="{StaticResource ToolLabel}">
+      <Setter Property="Margin" Value="0,0,6,0" />
+    </Style>
+    <Style TargetType="Control" x:Key="ToolBox">
+      <Setter Property="Margin" Value="0,2" />
+      <Setter Property="Padding" Value="3,2" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
     <!-- The unit after a box: mph, m, % -->
     <Style TargetType="TextBlock" x:Key="Unit">
       <Setter Property="Foreground" Value="#757575" />
@@ -69,6 +102,8 @@
       <TextBlock Text="●" HorizontalAlignment="Center" Foreground="{Binding Worst, Converter={StaticResource SeverityBrush}}"
                  ToolTip="{Binding IssueTip}" ToolTipService.ShowDuration="60000" />
     </DataTemplate>
+    <!-- Where the platform, line and path drop-downs' codes come from (#33) -->
+    <system:String x:Key="CodeSources" xmlns:system="clr-namespace:System;assembly=System.Runtime">The codes other timetables of the sim book here, those trains were reported at in recordings, those this draft uses, and those you have typed here before. SimSig's sim files cannot be read, so a code none of them has used is not listed: type it, and it will be offered from then on.</system:String>
     <!-- An editable drop-down for a code cell: typed text with completion from the codes other timetables use -->
     <Style TargetType="ComboBox" x:Key="CodeBox">
       <Setter Property="IsEditable" Value="True" />
@@ -122,7 +157,10 @@
         <MenuItem Header="_Insert point above" InputGestureText="Insert" Command="{Binding Train.InsertPointCommand}" />
         <MenuItem Header="Insert point _below" Command="{Binding Train.InsertPointAfterCommand}" />
         <MenuItem Header="Re_move points" InputGestureText="Ctrl+Delete" Command="{x:Static views:EditorWindow.DeletePointsCommand}" />
-        <MenuItem Header="_Fill down" InputGestureText="Ctrl+D" Command="{x:Static views:EditorWindow.FillDownCommand}" />
+        <MenuItem Header="_Fill down" InputGestureText="Ctrl+D" Command="{x:Static views:EditorWindow.FillDownCommand}"
+                  ToolTip="Copy the cell above (or the first selected) into the selected cells" />
+        <MenuItem Header="Fill in _timing points" InputGestureText="Ctrl+Shift+D" Command="{Binding FillTimingPointsCommand}"
+                  ToolTip="Add every timing location other timetables of the sim book between the selected trains' points, as passes timed from the sim's run times" />
       </MenuItem>
       <MenuItem Header="_View">
         <MenuItem Header="Draft _ghosts">
@@ -144,6 +182,8 @@
         <MenuItem Header="Repeat as _pattern…" Command="{Binding RepeatPatternCommand}" />
         <MenuItem Header="Pair _next workings…" Command="{Binding PairNextWorkingsCommand}" />
         <Separator />
+        <MenuItem Header="Fill in timing p_oints" Command="{Binding FillTimingPointsCommand}"
+                  ToolTip="Add every timing location other timetables of the sim book between each train's points, as passes timed from the sim's run times" />
         <MenuItem Header="Auto-fill _timings" Command="{Binding AutoFillCommand}" ToolTip="Time the untimed points from the sim's run times for each train's speed" />
         <MenuItem Header="Set _lines" Command="{Binding SetLinesCommand}" ToolTip="Give points with no line the line other timetables use there" />
         <MenuItem Header="_Insert timing points" Command="{Binding InsertTimingPointsCommand}" ToolTip="Add the points other timetables book where SimSig may find no path" />
@@ -244,9 +284,10 @@
                       <Label Grid.Column="2" Content="UID" />
                       <TextBox Grid.Column="3" Style="{StaticResource Detail}" Width="70" Text="{Binding Uid}" />
                       <Label Grid.Row="1" Content="Category" />
-                      <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Width="200" Margin="0,1,0,1" HorizontalAlignment="Left"
+                      <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Width="260" Margin="0,1,0,1" HorizontalAlignment="Left"
                                 IsEditable="True" ItemsSource="{Binding CategoryChoices}"
-                                TextSearch.TextPath="Code" Text="{Binding Category}" DisplayMemberPath="Label" />
+                                TextSearch.TextPath="Label" Text="{Binding Category}" DisplayMemberPath="Label"
+                                ToolTip="The train type, by name: pick one, or type its name or ID" />
                       <Label Grid.Row="2" Content="Operator" />
                       <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Detail}" Width="60" Text="{Binding OperatorCode}" />
                     </Grid>
@@ -265,11 +306,13 @@
                         <RowDefinition Height="Auto" />
                       </Grid.RowDefinitions>
                       <Label Content="Entry point" />
-                      <TextBox Grid.Column="1" Style="{StaticResource Detail}" Text="{Binding EntryPoint}" />
+                      <ComboBox Grid.Column="1" Style="{StaticResource DetailCode}" ItemsSource="{Binding EntryPointChoices}" Text="{Binding EntryPoint}"
+                                ToolTip="Where the train enters the sim: the entry points the sim's other timetables use, or type one" />
                       <Label Grid.Column="2" Content="Time" />
                       <TextBox Grid.Column="3" Style="{StaticResource Detail}" Width="60" Text="{Binding DepartTime}" ToolTip="The time the train enters, or is seeded" />
                       <Label Grid.Row="1" Content="Seed point" />
-                      <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Detail}" Text="{Binding SeedPoint}" />
+                      <ComboBox Grid.Row="1" Grid.Column="1" Style="{StaticResource DetailCode}" ItemsSource="{Binding SeedPointChoices}" Text="{Binding SeedPoint}"
+                                ToolTip="Where the train is seeded: the seed points the sim's other timetables use, or type one" />
                       <Label Grid.Row="1" Grid.Column="2" Content="Gap" />
                       <StackPanel Grid.Row="1" Grid.Column="3" Orientation="Horizontal">
                         <TextBox Style="{StaticResource Detail}" Width="45" Text="{Binding SeedingGap}" ToolTip="Seeding gap, metres" />
@@ -337,10 +380,12 @@
                                Text="{Binding DescriptionPreview, StringFormat=Shows as: {0}}" ToolTip="{Binding DescriptionPreview}"
                                Visibility="{Binding UsesTemplate, Converter={StaticResource BoolToVisibility}}" />
                     <Label Grid.Row="1" Content="Origin" />
-                    <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Detail}" Width="Auto" Margin="0,1,4,1" Text="{Binding OriginName}" />
+                    <ComboBox Grid.Row="1" Grid.Column="1" Style="{StaticResource DetailChoice}" Width="Auto" Margin="0,1,4,1" ItemsSource="{Binding JourneyNameChoices}"
+                              Text="{Binding OriginName}" ToolTip="Where the train starts its journey: a name the sim's timetables use, or any text" />
                     <TextBox Grid.Row="1" Grid.Column="2" Style="{StaticResource Detail}" Width="55" Text="{Binding OriginTime}" ToolTip="Origin time" />
                     <Label Grid.Row="1" Grid.Column="3" Content="Destination" />
-                    <TextBox Grid.Row="1" Grid.Column="4" Style="{StaticResource Detail}" Width="Auto" Margin="0,1,4,1" Text="{Binding DestinationName}" />
+                    <ComboBox Grid.Row="1" Grid.Column="4" Style="{StaticResource DetailChoice}" Width="Auto" Margin="0,1,4,1" ItemsSource="{Binding JourneyNameChoices}"
+                              Text="{Binding DestinationName}" ToolTip="Where the train ends its journey: a name the sim's timetables use, or any text" />
                     <TextBox Grid.Row="1" Grid.Column="5" Style="{StaticResource Detail}" Width="55" Text="{Binding DestinationTime}" ToolTip="Destination time" />
                     <Label Grid.Row="1" Grid.Column="6" Content="Notes" />
                     <TextBox Grid.Row="1" Grid.Column="7" Style="{StaticResource Detail}" Width="Auto" Margin="0,1,0,1" Text="{Binding Notes}" />
@@ -385,8 +430,8 @@
                 </DataGrid>
               </DockPanel>
               <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                         Text="1234 is 12:34, 1234H 12:34½, 12/34 a pass, +3 three minutes after the time before · Insert adds a point, Ctrl+Delete removes, Ctrl+D fills down · grey points were added by Stringline"
-                         ToolTip="Type 1234 for 12:34, 1234H for 12:34½, 12/34 for a pass, +3 for 3 minutes after the time before. Enter moves down; Insert adds a point above, Ctrl+Delete removes points, Ctrl+D fills down. Greyed points were added by Stringline." />
+                         Text="1234 is 12:34, 1234H 12:34½, 12/34 a pass, +3 three minutes after the time before · Insert adds a point, Ctrl+Delete removes, Ctrl+D fills down, Ctrl+Shift+D fills in timing points · grey points were added by Stringline"
+                         ToolTip="Type 1234 for 12:34, 1234H for 12:34½, 12/34 for a pass, +3 for 3 minutes after the time before. Enter moves down; Insert adds a point above, Ctrl+Delete removes points, Ctrl+D fills down (copies the cell above), Ctrl+Shift+D fills in every timing location other timetables book between the points. Greyed points were added by Stringline." />
               <DataGrid x:Name="TripGrid" ItemsSource="{Binding Trips}" SelectionUnit="CellOrRowHeader" SelectionMode="Extended"
                         CanUserSortColumns="False" HeadersVisibility="All" RowHeaderWidth="12"
                         PreviewKeyDown="OnTripGridKeyDown" PreparingCellForEdit="OnTripCellPreparing" CellEditEnding="OnTripCellEditEnding"
@@ -422,7 +467,8 @@
                     </DataGridTemplateColumn.CellTemplate>
                     <DataGridTemplateColumn.CellEditingTemplate>
                       <DataTemplate>
-                        <ComboBox Style="{StaticResource CodeBox}" Text="{Binding Platform, UpdateSourceTrigger=Explicit}" ItemsSource="{Binding PlatformChoices}" />
+                        <ComboBox Style="{StaticResource CodeBox}" Text="{Binding Platform, UpdateSourceTrigger=Explicit}" ItemsSource="{Binding PlatformChoices}"
+                                  ToolTip="{StaticResource CodeSources}" />
                       </DataTemplate>
                     </DataGridTemplateColumn.CellEditingTemplate>
                   </DataGridTemplateColumn>
@@ -432,7 +478,8 @@
                     </DataGridTemplateColumn.CellTemplate>
                     <DataGridTemplateColumn.CellEditingTemplate>
                       <DataTemplate>
-                        <ComboBox Style="{StaticResource CodeBox}" Text="{Binding Line, UpdateSourceTrigger=Explicit}" ItemsSource="{Binding LineChoices}" />
+                        <ComboBox Style="{StaticResource CodeBox}" Text="{Binding Line, UpdateSourceTrigger=Explicit}" ItemsSource="{Binding LineChoices}"
+                                  ToolTip="{StaticResource CodeSources}" />
                       </DataTemplate>
                     </DataGridTemplateColumn.CellEditingTemplate>
                   </DataGridTemplateColumn>
@@ -442,7 +489,8 @@
                     </DataGridTemplateColumn.CellTemplate>
                     <DataGridTemplateColumn.CellEditingTemplate>
                       <DataTemplate>
-                        <ComboBox Style="{StaticResource CodeBox}" Text="{Binding Path, UpdateSourceTrigger=Explicit}" ItemsSource="{Binding PathChoices}" />
+                        <ComboBox Style="{StaticResource CodeBox}" Text="{Binding Path, UpdateSourceTrigger=Explicit}" ItemsSource="{Binding PathChoices}"
+                                  ToolTip="{StaticResource CodeSources}" />
                       </DataTemplate>
                     </DataGridTemplateColumn.CellEditingTemplate>
                   </DataGridTemplateColumn>
@@ -454,7 +502,18 @@
                   <DataGridCheckBoxColumn Header="Set down" Binding="{Binding SetDown, UpdateSourceTrigger=PropertyChanged}" SortMemberPath="SetDown" Width="58" />
                   <DataGridCheckBoxColumn Header="Thru line" Binding="{Binding ThroughLine, UpdateSourceTrigger=PropertyChanged}" SortMemberPath="ThroughLine" Width="58" />
                   <DataGridTextColumn Header="Stop loc" Binding="{Binding StopLocation}" SortMemberPath="StopLocation" Width="50" />
-                  <DataGridTextColumn Header="New cat" Binding="{Binding NewCategory}" SortMemberPath="NewCategory" Width="60" />
+                  <DataGridTemplateColumn Header="New category" Width="120" SortMemberPath="NewCategory">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate><TextBlock Text="{Binding NewCategory}" TextTrimming="CharacterEllipsis" ToolTip="{Binding NewCategory}" /></DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                      <DataTemplate>
+                        <ComboBox IsEditable="True" StaysOpenOnEdit="True" TextSearch.TextPath="Label" DisplayMemberPath="Label"
+                                  Text="{Binding NewCategory, UpdateSourceTrigger=Explicit}"
+                                  ItemsSource="{Binding DataContext.CategoryChoices, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                  </DataGridTemplateColumn>
                   <DataGridTextColumn Header="Activities" Binding="{Binding Activities}" IsReadOnly="True" Width="*" />
                 </DataGrid.Columns>
               </DataGrid>
@@ -504,19 +563,19 @@
         <!-- Rules (S45) -->
         <TabItem Header="Rules" DataContext="{Binding Rules}" views:Help.Topic="{x:Static services:HelpTopics.TimetableEditorRules}">
           <DockPanel Margin="4">
-            <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,4">
-              <ComboBox Width="250" ItemsSource="{Binding Kinds}" SelectedItem="{Binding NewKind}" ToolTip="The kind of rule" />
-              <Label Content="X" />
-              <ComboBox Width="170" IsEditable="True" ItemsSource="{Binding TrainChoices}" Text="{Binding NewX}" ToolTip="Train X: pick, or type a headcode or UID" />
-              <Label Content="Y" />
-              <ComboBox Width="170" IsEditable="True" ItemsSource="{Binding TrainChoices}" Text="{Binding NewY}" ToolTip="Train Y" />
-              <Label Content="Z" />
-              <TextBox Width="80" Padding="2" Text="{Binding NewLocation}" ToolTip="The location, for the rules that name one" />
-              <Label Content="Minutes" />
-              <TextBox Width="45" Padding="2" Text="{Binding NewMinutes}" ToolTip="Minutes after Y's event; H for a half (0H, 2, 25)" />
-              <Button Content="Add _rule" Margin="6,0,0,0" Command="{Binding AddCommand}" />
-              <Button Content="De_lete rule" Command="{Binding RemoveCommand}" />
-              <CheckBox Content="Only rules about the _selected train" VerticalAlignment="Center" Margin="12,0" IsChecked="{Binding ThisTrainOnly}" />
+            <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+              <ComboBox Width="250" Style="{StaticResource ToolBox}" ItemsSource="{Binding Kinds}" SelectedItem="{Binding NewKind}" ToolTip="The kind of rule" />
+              <Label Style="{StaticResource ToolLabel}" Content="X" />
+              <ComboBox Width="170" Style="{StaticResource ToolBox}" IsEditable="True" ItemsSource="{Binding TrainChoices}" Text="{Binding NewX}" ToolTip="Train X: pick, or type a headcode or UID" />
+              <Label Style="{StaticResource ToolLabel}" Content="Y" />
+              <ComboBox Width="170" Style="{StaticResource ToolBox}" IsEditable="True" ItemsSource="{Binding TrainChoices}" Text="{Binding NewY}" ToolTip="Train Y" />
+              <Label Style="{StaticResource ToolLabel}" Content="Z" />
+              <TextBox Width="80" Style="{StaticResource ToolBox}" Text="{Binding NewLocation}" ToolTip="The location, for the rules that name one" />
+              <Label Style="{StaticResource ToolLabel}" Content="Minutes" />
+              <TextBox Width="45" Style="{StaticResource ToolBox}" Text="{Binding NewMinutes}" ToolTip="Minutes after Y's event; H for a half (0H, 2, 25)" />
+              <Button Content="Add _rule" Margin="18,2,6,2" Command="{Binding AddCommand}" />
+              <Button Content="De_lete rule" Margin="0,2,6,2" Command="{Binding RemoveCommand}" />
+              <CheckBox Content="Only rules about the _selected train" VerticalAlignment="Center" Margin="12,0,0,0" IsChecked="{Binding ThisTrainOnly}" />
             </WrapPanel>
             <DataGrid ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}" SelectionMode="Single" CanUserAddRows="False" CanUserDeleteRows="False" AutoGenerateColumns="False">
               <DataGrid.Columns>
@@ -572,16 +631,26 @@
             </StackPanel>
             <Border DockPanel.Dock="Bottom" DataContext="{Binding Selected}" Visibility="{Binding Converter={StaticResource NotNull}}" Margin="0,6,0,0">
               <StackPanel>
-                <TextBlock Text="Dwell times (seconds)" FontWeight="SemiBold" />
+                <TextBlock Text="Dwell times (seconds)" FontWeight="SemiBold" Margin="0,0,0,2" />
+                <!-- Each label and its box kept together, so a narrow window wraps whole pairs (#30) -->
                 <WrapPanel>
-                  <Label Content="Red signal move off" /><TextBox Width="45" Padding="2" Text="{Binding [RedSignalMoveOff]}" />
-                  <Label Content="Station forward" /><TextBox Width="45" Padding="2" Text="{Binding [StationForward]}" />
-                  <Label Content="Station reverse" /><TextBox Width="45" Padding="2" Text="{Binding [StationReverse]}" />
-                  <Label Content="Terminate forward" /><TextBox Width="45" Padding="2" Text="{Binding [TerminateForward]}" />
-                  <Label Content="Terminate reverse" /><TextBox Width="45" Padding="2" Text="{Binding [TerminateReverse]}" />
-                  <Label Content="Join" /><TextBox Width="45" Padding="2" Text="{Binding [Join]}" />
-                  <Label Content="Divide" /><TextBox Width="45" Padding="2" Text="{Binding [Divide]}" />
-                  <Label Content="Crew change" /><TextBox Width="45" Padding="2" Text="{Binding [CrewChange]}" />
+                  <WrapPanel.Resources>
+                    <Style TargetType="StackPanel">
+                      <Setter Property="Orientation" Value="Horizontal" />
+                      <Setter Property="Margin" Value="0,2,18,2" />
+                    </Style>
+                    <Style TargetType="TextBox" BasedOn="{StaticResource ToolBox}">
+                      <Setter Property="Width" Value="50" />
+                    </Style>
+                  </WrapPanel.Resources>
+                  <StackPanel><Label Style="{StaticResource FirstToolLabel}" Content="Red signal move off" /><TextBox Text="{Binding [RedSignalMoveOff]}" /></StackPanel>
+                  <StackPanel><Label Style="{StaticResource FirstToolLabel}" Content="Station forward" /><TextBox Text="{Binding [StationForward]}" /></StackPanel>
+                  <StackPanel><Label Style="{StaticResource FirstToolLabel}" Content="Station reverse" /><TextBox Text="{Binding [StationReverse]}" /></StackPanel>
+                  <StackPanel><Label Style="{StaticResource FirstToolLabel}" Content="Terminate forward" /><TextBox Text="{Binding [TerminateForward]}" /></StackPanel>
+                  <StackPanel><Label Style="{StaticResource FirstToolLabel}" Content="Terminate reverse" /><TextBox Text="{Binding [TerminateReverse]}" /></StackPanel>
+                  <StackPanel><Label Style="{StaticResource FirstToolLabel}" Content="Join" /><TextBox Text="{Binding [Join]}" /></StackPanel>
+                  <StackPanel><Label Style="{StaticResource FirstToolLabel}" Content="Divide" /><TextBox Text="{Binding [Divide]}" /></StackPanel>
+                  <StackPanel><Label Style="{StaticResource FirstToolLabel}" Content="Crew change" /><TextBox Text="{Binding [CrewChange]}" /></StackPanel>
                 </WrapPanel>
                 <TextBlock Text="Speed classes (each sim names its own; numbered here)" FontWeight="SemiBold" Margin="0,6,0,0" />
                 <ItemsControl ItemsSource="{Binding Bits}">
@@ -605,7 +674,19 @@
                 <DataGridTextColumn Header="Accel/brake" Binding="{Binding AccelBrake}" Width="75" />
                 <DataGridTextColumn Header="Power/weight" Binding="{Binding PowerToWeight}" Width="85" />
                 <DataGridTextColumn Header="Electrification" Binding="{Binding Electrification}" Width="95" />
-                <DataGridTextColumn Header="Caution set" Binding="{Binding CautionSpeedSet}" Width="80" />
+                <DataGridComboBoxColumn Header="Caution set" SelectedItemBinding="{Binding CautionSpeedSet, UpdateSourceTrigger=PropertyChanged}" Width="130">
+                  <DataGridComboBoxColumn.ElementStyle>
+                    <Style TargetType="ComboBox">
+                      <Setter Property="ItemsSource" Value="{Binding DataContext.Categories.CautionSetNames, RelativeSource={RelativeSource AncestorType=Window}}" />
+                      <Setter Property="ToolTip" Value="The defensive driving rules the category's trains follow (sets are made on Lists ▸ Driving)" />
+                    </Style>
+                  </DataGridComboBoxColumn.ElementStyle>
+                  <DataGridComboBoxColumn.EditingElementStyle>
+                    <Style TargetType="ComboBox">
+                      <Setter Property="ItemsSource" Value="{Binding DataContext.Categories.CautionSetNames, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    </Style>
+                  </DataGridComboBoxColumn.EditingElementStyle>
+                </DataGridComboBoxColumn>
                 <DataGridTextColumn Header="Speed classes" Binding="{Binding SpeedClassText, Mode=OneWay}" IsReadOnly="True" Width="90" />
                 <DataGridTextColumn Header="Trains" Binding="{Binding UsedBy, Mode=OneWay}" IsReadOnly="True" Width="50" />
               </DataGrid.Columns>
@@ -681,29 +762,80 @@
                 </DataGrid>
               </DockPanel>
             </TabItem>
+            <!-- Defensive driving rules (#31): sets, usually one per operator, chosen by a category on the Categories tab -->
             <TabItem Header="Driving">
               <Grid>
                 <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
                   <RowDefinition Height="*" />
+                  <RowDefinition Height="Auto" />
                   <RowDefinition Height="Auto" />
                   <RowDefinition Height="2*" />
                 </Grid.RowDefinitions>
-                <DataGrid ItemsSource="{Binding CautionSets}" SelectedItem="{Binding SelectedCautionSet}" SelectionMode="Single" CanUserAddRows="False" AutoGenerateColumns="False">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                  <Button Content="New _set…" Command="{Binding AddCautionSetCommand}" ToolTip="A set of defensive driving rules; a category chooses it on the Categories tab" />
+                  <Button Content="Delete set…" Command="{Binding RemoveCautionSetCommand}" ToolTip="Its categories go back to SimSig's standard rules" />
+                </StackPanel>
+                <DataGrid Grid.Row="1" ItemsSource="{Binding CautionSets}" SelectedItem="{Binding SelectedCautionSet}" SelectionMode="Single" CanUserAddRows="False" AutoGenerateColumns="False">
                   <DataGrid.Columns>
                     <DataGridTextColumn Header="Caution speed set" Binding="{Binding [Name]}" Width="*" />
+                    <DataGridTextColumn Header="ID" Binding="{Binding [@ID], Mode=OneWay}" IsReadOnly="True" Width="100" />
                   </DataGrid.Columns>
                 </DataGrid>
-                <TextBlock Grid.Row="1" Text="Caution speeds of the selected set" FontWeight="SemiBold" Margin="0,6,0,4" />
-                <DataGrid Grid.Row="2" ItemsSource="{Binding CautionSpeeds}" CanUserAddRows="False" AutoGenerateColumns="False">
+                <DockPanel Grid.Row="2" Margin="0,8,0,4">
+                  <TextBlock Text="Rules of the selected set" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
+                  <Button Content="New r_ule" Command="{Binding AddCautionSpeedCommand}" ToolTip="A new rule below the selected one" />
+                  <Button Content="▲" Command="{Binding MoveCautionSpeedUpCommand}" ToolTip="Move up: SimSig uses the first rule that matches" />
+                  <Button Content="▼" Command="{Binding MoveCautionSpeedDownCommand}" ToolTip="Move down" />
+                  <Button Content="Delete rule" Command="{Binding RemoveCautionSpeedCommand}" />
+                  <TextBlock />
+                </DockPanel>
+                <TextBlock Grid.Row="3" Style="{StaticResource Hint}" Margin="0,0,0,4"
+                           Text="SimSig tries the rules from the top and uses the first that matches the aspect passed and the line speed. Speeds in mph, the distance in metres; a To line speed of 0 has no upper limit. A category with a set follows only its rules." />
+                <DataGrid Grid.Row="4" ItemsSource="{Binding CautionSpeeds}" SelectedItem="{Binding SelectedCautionSpeed}" SelectionMode="Single" CanUserAddRows="False"
+                          CanUserSortColumns="False" AutoGenerateColumns="False">
                   <DataGrid.Columns>
-                    <DataGridTextColumn Header="Aspect passed" Binding="{Binding [AspectPassed]}" Width="*" />
-                    <DataGridTextColumn Header="From line speed" Binding="{Binding [FromLineSpeed]}" Width="*" />
-                    <DataGridTextColumn Header="To line speed" Binding="{Binding [ToLineSpeed]}" Width="*" />
-                    <DataGridTextColumn Header="Reduce now" Binding="{Binding [ReduceNowValue]}" Width="*" />
-                    <DataGridTextColumn Header="Approach next" Binding="{Binding [ApproachNextValue]}" Width="*" />
-                    <DataGridTextColumn Header="Next distance" Binding="{Binding [ApproachNextDistance]}" Width="*" />
-                    <DataGridTextColumn Header="Now type" Binding="{Binding [NowValueType]}" Width="*" />
-                    <DataGridTextColumn Header="Next type" Binding="{Binding [NextValueType]}" Width="*" />
+                    <DataGridComboBoxColumn Header="Aspect passed" SelectedItemBinding="{Binding Aspect, UpdateSourceTrigger=PropertyChanged}" Width="95">
+                      <DataGridComboBoxColumn.ElementStyle>
+                        <Style TargetType="ComboBox">
+                          <Setter Property="ItemsSource" Value="{Binding DataContext.Lists.CautionAspects, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        </Style>
+                      </DataGridComboBoxColumn.ElementStyle>
+                      <DataGridComboBoxColumn.EditingElementStyle>
+                        <Style TargetType="ComboBox">
+                          <Setter Property="ItemsSource" Value="{Binding DataContext.Lists.CautionAspects, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        </Style>
+                      </DataGridComboBoxColumn.EditingElementStyle>
+                    </DataGridComboBoxColumn>
+                    <DataGridTextColumn Header="From line speed" Binding="{Binding FromLineSpeed}" Width="100" />
+                    <DataGridTextColumn Header="To line speed" Binding="{Binding ToLineSpeed}" Width="90" />
+                    <DataGridTextColumn Header="Reduce now to" Binding="{Binding ReduceNow}" Width="95" />
+                    <DataGridComboBoxColumn Header="as" SelectedItemBinding="{Binding NowType, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="150">
+                      <DataGridComboBoxColumn.ElementStyle>
+                        <Style TargetType="ComboBox">
+                          <Setter Property="ItemsSource" Value="{Binding DataContext.Lists.CautionValueTypes, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        </Style>
+                      </DataGridComboBoxColumn.ElementStyle>
+                      <DataGridComboBoxColumn.EditingElementStyle>
+                        <Style TargetType="ComboBox">
+                          <Setter Property="ItemsSource" Value="{Binding DataContext.Lists.CautionValueTypes, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        </Style>
+                      </DataGridComboBoxColumn.EditingElementStyle>
+                    </DataGridComboBoxColumn>
+                    <DataGridTextColumn Header="Approach next at" Binding="{Binding ApproachNext}" Width="110" />
+                    <DataGridComboBoxColumn Header="as" SelectedItemBinding="{Binding NextType, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="150">
+                      <DataGridComboBoxColumn.ElementStyle>
+                        <Style TargetType="ComboBox">
+                          <Setter Property="ItemsSource" Value="{Binding DataContext.Lists.CautionValueTypes, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        </Style>
+                      </DataGridComboBoxColumn.ElementStyle>
+                      <DataGridComboBoxColumn.EditingElementStyle>
+                        <Style TargetType="ComboBox">
+                          <Setter Property="ItemsSource" Value="{Binding DataContext.Lists.CautionValueTypes, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        </Style>
+                      </DataGridComboBoxColumn.EditingElementStyle>
+                    </DataGridComboBoxColumn>
+                    <DataGridTextColumn Header="within (m)" Binding="{Binding Distance}" Width="80" />
                   </DataGrid.Columns>
                 </DataGrid>
               </Grid>

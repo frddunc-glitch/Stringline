@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using Stringline.App.Services;
 using Stringline.Core;
+using Stringline.Editing.Bulk;
 using Stringline.Editing.Drafts;
 using Stringline.Editing.Knowledge;
 using Stringline.Editing.Validation;
@@ -23,6 +24,9 @@ internal sealed record DraftContext(string SimName, string TimetableFolder, stri
 
     /// <summary>Where the draft board's exports go, and the Plot dialog's choices (S44): the main window's.</summary>
     public DraftExports? Exports { get; init; }
+
+    /// <summary>Where the platform, line and path codes typed for each sim are remembered (#33); null to remember none.</summary>
+    public TypedCodesStore? TypedCodes { get; init; }
 }
 
 /// <summary>Which issues the Issues panel lists.</summary>
@@ -54,6 +58,8 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
     private readonly ILogger _logger;
     private readonly Dictionary<XElement, DraftTrainRow> _rows = [];
     private IReadOnlyList<CodeChoice> _locations = [];
+    private TypedCodes? _typed;
+    private (DraftSnapshot Snapshot, Dictionary<string, Dictionary<string, int>[]> Codes)? _draftCodes;
     private int _autosaveGeneration;
     private bool _autosavePending;
     private bool _refreshingIssues;
@@ -73,10 +79,11 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
         Rules = new DraftRulesViewModel(this);
         SeedGroups = new DraftSeedGroupsViewModel(this, dialogs);
         Categories = new DraftCategoriesViewModel(this, dialogs);
-        Lists = new DraftListsViewModel(this);
+        Lists = new DraftListsViewModel(this, dialogs);
         Snapshot = editor.Current;
         Board = new DraftBoardViewModel(this, dialogs, ui, logger, context.Exports);
         _locations = LocationChoices();
+        _typed = context.TypedCodes is { } typedCodes && editor.Document.Header.AreaId is { Length: > 0 } area ? typedCodes.Load(area) : null;
         editor.SnapshotPublished += (_, snapshot) => OnSnapshot(snapshot);
         OnSnapshot(editor.Current);
     }
@@ -265,18 +272,131 @@ internal sealed partial class TimetableEditorViewModel : ObservableObject
     /// <summary>Says why an edit cannot be made.</summary>
     public void Refuse(string message) => Error = message;
 
-    /// <summary>The platforms, lines and paths other timetables use at a location, most used first.</summary>
+    /// <summary>
+    /// The platforms, lines and paths offered at a location (#33): those other timetables book there (most used first),
+    /// then those trains were reported at in recordings, those this draft's trains use, and those typed here before.
+    /// SimSig's sim files cannot be read, so a code none of them has used is not offered, but can still be typed.
+    /// </summary>
     public (IReadOnlyList<CodeChoice> Platforms, IReadOnlyList<CodeChoice> Lines, IReadOnlyList<CodeChoice> Paths) ChoicesAt(string? location)
     {
-        if (Editor.Knowledge is not { } knowledge || !Tiploc.TryCreate(location, out var tiploc) || knowledge.Location(tiploc) is not { } known)
+        if (!Tiploc.TryCreate(location, out var tiploc))
         {
             return ([], [], []);
         }
 
-        static IReadOnlyList<CodeChoice> Of(IReadOnlyDictionary<string, int>? counts) =>
-            counts is null ? [] : [.. counts.OrderByDescending(c => c.Value).ThenBy(c => c.Key, StringComparer.Ordinal).Select(c => new CodeChoice(c.Key, $"{c.Key}  ({c.Value}×)"))];
+        var known = Editor.Knowledge?.Location(tiploc);
+        var draft = DraftCodesAt(tiploc.Code);
+        var typed = _typed?.At(tiploc);
+        return (
+            Merge(known?.Platforms, known?.ReportedPlatforms, draft?[0], typed?.Platforms),
+            Merge(known?.Lines, null, draft?[1], typed?.Lines),
+            Merge(known?.Paths, null, draft?[2], typed?.Paths));
 
-        return (Of(known.Platforms), Of(known.Lines), Of(known.Paths));
+        static IReadOnlyList<CodeChoice> Merge(IReadOnlyDictionary<string, int>? booked, IReadOnlyDictionary<string, int>? reported, IReadOnlyDictionary<string, int>? draft, IEnumerable<string>? typed)
+        {
+            var choices = new List<CodeChoice>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            void Add(IEnumerable<KeyValuePair<string, int>>? counts, Func<int, string> how)
+            {
+                foreach (var (code, count) in (counts ?? []).OrderByDescending(c => c.Value).ThenBy(c => c.Key, StringComparer.Ordinal))
+                {
+                    if (seen.Add(code))
+                    {
+                        choices.Add(new CodeChoice(code, $"{code}  ({how(count)})"));
+                    }
+                }
+            }
+
+            Add(booked, n => $"{n}×");
+            Add(reported, n => $"reported {n}×");
+            Add(draft, _ => "this draft");
+            Add(typed?.Select(t => KeyValuePair.Create(t, 0)), _ => "typed before");
+            return choices;
+        }
+    }
+
+    /// <summary>The entry points offered for a train (#26): those of the sim's other timetables, most used first, then this draft's.</summary>
+    public IReadOnlyList<CodeChoice> EntryPointChoices => RoleChoices(LocationRoles.Entry, k => k.Entries, Snapshot.Timetable.Trains.Select(t => t.EntryPoint?.Code));
+
+    /// <summary>The seed points offered for a train (#26): those of the sim's other timetables, then this draft's.</summary>
+    public IReadOnlyList<CodeChoice> SeedPointChoices => RoleChoices(LocationRoles.Seed, k => k.Seeds, Snapshot.Timetable.Trains.Select(t => t.SeedPoint?.Code));
+
+    /// <summary>The origin and destination names offered (#28): the sim's other timetables', most used first, then this draft's.</summary>
+    public IReadOnlyList<string> JourneyNameChoices
+    {
+        get
+        {
+            var names = (Editor.Knowledge?.JourneyNames ?? new Dictionary<string, int>())
+                .OrderByDescending(n => n.Value).ThenBy(n => n.Key, StringComparer.CurrentCultureIgnoreCase).Select(n => n.Key).ToList();
+            var seen = names.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            names.AddRange(Document.Trains.SelectMany(t => new[] { t.OriginName?.Trim(), t.DestinationName?.Trim() })
+                .OfType<string>().Where(n => n.Length > 0 && seen.Add(n)).Order(StringComparer.CurrentCultureIgnoreCase));
+            return names;
+        }
+    }
+
+    /// <summary>Remembers a platform, line or path typed at a location, so it is offered from then on (#33).</summary>
+    public void RememberCode(string? location, TripCode code, string value)
+    {
+        if (_context.TypedCodes is not { } store || _typed is not { } typed || value.Length == 0 || !Tiploc.TryCreate(location, out var tiploc))
+        {
+            return;
+        }
+
+        var known = Editor.Knowledge?.Location(tiploc);
+        var booked = code switch
+        {
+            TripCode.Platform => known?.Platforms?.ContainsKey(value) == true || known?.ReportedPlatforms?.ContainsKey(value) == true,
+            TripCode.Line => known?.Lines?.ContainsKey(value) == true,
+            _ => known?.Paths?.ContainsKey(value) == true,
+        };
+        var with = typed.With(tiploc, code, value);
+        if (!booked && !ReferenceEquals(with, typed))
+        {
+            _typed = with;
+            store.Save(with);
+        }
+    }
+
+    private List<CodeChoice> RoleChoices(LocationRoles role, Func<LocationKnowledge, int> count, IEnumerable<string?> draft)
+    {
+        var known = (Editor.Knowledge?.Locations ?? []).Where(l => l.Is(role)).OrderByDescending(count).ThenBy(l => l.Tiploc.Code, StringComparer.Ordinal).ToList();
+        var choices = known.Select(l => new CodeChoice(l.Tiploc.Code, l.Name is { Length: > 0 } name ? $"{l.Tiploc.Code}  {name} ({count(l)}×)" : $"{l.Tiploc.Code}  ({count(l)}×)")).ToList();
+        var seen = choices.Select(c => c.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        choices.AddRange(draft.OfType<string>().Where(seen.Add).Order(StringComparer.Ordinal).Select(c => new CodeChoice(c, $"{c}  (this draft)")));
+        return choices;
+    }
+
+    /// <summary>The platforms, lines and paths this draft's trains use at a location, counted once per snapshot.</summary>
+    private Dictionary<string, int>[]? DraftCodesAt(string location)
+    {
+        if (_draftCodes is not { } cached || !ReferenceEquals(cached.Snapshot, Snapshot))
+        {
+            var codes = new Dictionary<string, Dictionary<string, int>[]>(StringComparer.Ordinal);
+            foreach (var point in Snapshot.Timetable.Trains.SelectMany(t => t.Points))
+            {
+                if (!codes.TryGetValue(point.Location.Code, out var at))
+                {
+                    codes[point.Location.Code] = at = [new(StringComparer.Ordinal), new(StringComparer.Ordinal), new(StringComparer.Ordinal)];
+                }
+
+                Count(at[0], point.Platform);
+                Count(at[1], point.Line);
+                Count(at[2], point.Path);
+            }
+
+            _draftCodes = cached = (Snapshot, codes);
+        }
+
+        return cached.Codes.GetValueOrDefault(location);
+
+        static void Count(Dictionary<string, int> counts, string? value)
+        {
+            if (value is { Length: > 0 })
+            {
+                counts[value] = counts.GetValueOrDefault(value) + 1;
+            }
+        }
     }
 
     /// <summary>Knowledge of the sim, built in the background after the draft opened: the checks run again with it.</summary>

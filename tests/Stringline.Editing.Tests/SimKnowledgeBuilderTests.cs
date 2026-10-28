@@ -236,8 +236,8 @@ public sealed class SimKnowledgeBuilderTests
     {
         var builder = new SimKnowledgeBuilder("test");
         builder.AddTimetable(Of(
-            Fast("1A01", Call("A", null, "10:00") with { Platform = "1", Line = "F" }, Call("B", "10:05", "10:06"), Call("C", "10:10", null)),
-            Fast("1A02", Call("A", null, "11:00"), Call("C", "11:10", null))));
+            Fast("1A01", Call("A", null, "10:00") with { Platform = "1", Line = "F" }, Call("B", "10:05", "10:06"), Call("C", "10:10", null)) with { OriginName = "Sydney Terminal ", DestinationName = "Moss Vale" },
+            Fast("1A02", Call("A", null, "11:00"), Call("C", "11:10", null)) with { OriginName = "Moss Vale", DestinationName = "" }));
         builder.AddPlay([Location("1", "1A01", "S1", "10:03") with { AspectPassed = 1 }]);
         var k = builder.Build([new KnowledgeSource(KnowledgeSourceKind.Timetable, "x.wtt", new DateTime(2026, 10, 22, 1, 2, 3, DateTimeKind.Utc).AddTicks(1234), 99)], DateTimeOffset.UnixEpoch);
 
@@ -247,6 +247,7 @@ public sealed class SimKnowledgeBuilderTests
         SimKnowledgeJson.Serialize(back).Should().Be(json);
         back.Sources[0].SameAs(k.Sources[0]).Should().BeTrue();
         back.RunTime(A, B, new RunBand(SpeedBand.UpTo100, false)).Should().Be(new TimeStats(1, 300, 300));
+        back.JourneyNames.Should().Equal(new Dictionary<string, int> { ["Moss Vale"] = 2, ["Sydney Terminal"] = 1 }, "origin and destination names, trimmed, an empty one left out (#28)");
         SimKnowledgeJson.TryDeserialize(json.Replace($"\"format\": {SimKnowledge.CurrentFormat}", "\"format\": 99", StringComparison.Ordinal)).Should().BeNull("another format is rebuilt");
         SimKnowledgeJson.TryDeserialize("{ not json").Should().BeNull();
     }

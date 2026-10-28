@@ -526,7 +526,19 @@ internal sealed class DraftCategoryRow : DraftPartRow
     /// <summary>The electrification letters the train can use (as the file writes them, e.g. <c>D</c>, <c>O</c>, <c>V</c>).</summary>
     public string Electrification { get => Cell(nameof(Electrification)); set => Edit(nameof(Electrification), value, typed => Change(c => c.Electrification = typed, "electrification")); }
 
-    public string CautionSpeedSet { get => Cell(nameof(CautionSpeedSet)); set => Edit(nameof(CautionSpeedSet), value, typed => Change(c => c.CautionSpeedSet = typed, "caution speed set")); }
+    /// <summary>The caution speed set by name (#31); <see cref="CautionSetChoice.Standard"/> for SimSig's standard rules.</summary>
+    public string CautionSpeedSet
+    {
+        get => Cell(nameof(CautionSpeedSet));
+        set => Edit(nameof(CautionSpeedSet), value, typed =>
+        {
+            var sets = DraftCategoriesViewModel.CautionSetChoicesOf(Owner.Document);
+            var set = sets.FirstOrDefault(s => string.Equals(s.Name, typed, StringComparison.Ordinal))
+                ?? sets.FirstOrDefault(s => string.Equals(s.Id, typed, StringComparison.OrdinalIgnoreCase))
+                ?? (typed.Length == 0 ? sets[0] : throw new InvalidOperationException($"There is no caution speed set '{typed}': make it on Lists ▸ Driving."));
+            return Change(c => c.CautionSpeedSet = set.Id, $"caution speed set {set.Name}");
+        });
+    }
 
     /// <summary>"used by 12 trains".</summary>
     public string UsedBy => Cell(nameof(UsedBy));
@@ -564,7 +576,8 @@ internal sealed class DraftCategoryRow : DraftPartRow
         Show(nameof(AccelBrake), DraftText.Number(node.AccelBrakeIndex));
         Show(nameof(PowerToWeight), DraftText.Number(node.PowerToWeightCategory));
         Show(nameof(Electrification), node.Electrification);
-        Show(nameof(CautionSpeedSet), node.CautionSpeedSet);
+        Show(nameof(CautionSpeedSet), DraftCategoriesViewModel.CautionSetChoicesOf(Owner.Document).FirstOrDefault(s => string.Equals(s.Id, node.CautionSpeedSet ?? string.Empty, StringComparison.OrdinalIgnoreCase))?.Name
+            ?? node.CautionSpeedSet);
         var users = node.Id is { } id ? TimetableParts.TrainsOf(Owner.Document, id).Count() : 0;
         Show(nameof(UsedBy), users.ToString(CultureInfo.CurrentCulture));
         Show(nameof(SpeedClassText), string.Join(", ", TimetableParts.SpeedClassBits(node.SpeedClass)));
@@ -604,6 +617,18 @@ internal sealed partial class DraftCategoriesViewModel(TimetableEditorViewModel 
     public partial DraftCategoryRow? Selected { get; set; }
 
     public IReadOnlyList<string> DwellKinds { get; } = DraftCategoryRow.DwellKinds;
+
+    /// <summary>The names a category's caution speed set can take: SimSig's standard rules, then each set.</summary>
+    public IReadOnlyList<string> CautionSetNames { get; private set; } = [CautionSetChoice.Standard];
+
+    /// <summary>SimSig's standard rules (no set), then the timetable's caution speed sets by name.</summary>
+    public static IReadOnlyList<CautionSetChoice> CautionSetChoicesOf(WttDocument document) =>
+    [
+        new(string.Empty, CautionSetChoice.Standard),
+        .. (document.CautionSpeedSets?.Items ?? []).Select(i => (Id: (string?)i.Element.Attribute("ID"), Name: i.GetText("Name")))
+            .Where(s => s.Id is not null)
+            .Select(s => new CautionSetChoice(s.Id!, string.IsNullOrWhiteSpace(s.Name) ? s.Id! : s.Name!)),
+    ];
 
     /// <summary>A new category, a copy of the selected one if any.</summary>
     [RelayCommand]
@@ -671,6 +696,13 @@ internal sealed partial class DraftCategoriesViewModel(TimetableEditorViewModel 
 
     public void Load(DraftSnapshot snapshot)
     {
+        var names = CautionSetChoicesOf(snapshot.Document).Select(c => c.Name).ToList();
+        if (!names.SequenceEqual(CautionSetNames))
+        {
+            CautionSetNames = names;
+            OnPropertyChanged(nameof(CautionSetNames));
+        }
+
         var rows = new List<DraftCategoryRow>();
         foreach (var category in snapshot.Document.Categories)
         {
@@ -729,6 +761,72 @@ internal sealed class ListItemRow(TimetableEditorViewModel owner, XElement eleme
     }
 }
 
+/// <summary>
+/// A rule of a caution speed set (#31): the aspect passed, the line speeds it applies between, the speed to reduce to
+/// now and to approach the next signal at (each absolute, a percentage of line speed, or not applicable), and how far
+/// from the next signal the approach speed applies.
+/// </summary>
+internal sealed class CautionSpeedRow(TimetableEditorViewModel owner, XElement element) : DraftPartRow(owner, element)
+{
+    public ElementNode Node => new(Owner.Document, Element);
+
+    /// <summary>R, sub, Y, FY, YY, FYY or G.</summary>
+    public string Aspect { get => Cell(nameof(Aspect)); set => Edit(nameof(Aspect), value, typed => Pick("AspectPassed", typed, TimetableParts.CautionAspects, "an aspect")); }
+
+    public string FromLineSpeed { get => Cell(nameof(FromLineSpeed)); set => Edit(nameof(FromLineSpeed), value, typed => Number("FromLineSpeed", typed, 999, "a line speed in mph")); }
+
+    /// <summary>0 for no upper limit.</summary>
+    public string ToLineSpeed { get => Cell(nameof(ToLineSpeed)); set => Edit(nameof(ToLineSpeed), value, typed => Number("ToLineSpeed", typed, 999, "a line speed in mph (0 for no limit)")); }
+
+    public string ReduceNow { get => Cell(nameof(ReduceNow)); set => Edit(nameof(ReduceNow), value, typed => Number("ReduceNowValue", typed, 999, "a speed or percentage")); }
+
+    public string NowType { get => Cell(nameof(NowType)); set => Edit(nameof(NowType), value, typed => Pick("NowValueType", typed, TimetableParts.CautionValueTypes, "a kind of value")); }
+
+    public string ApproachNext { get => Cell(nameof(ApproachNext)); set => Edit(nameof(ApproachNext), value, typed => Number("ApproachNextValue", typed, 999, "a speed or percentage")); }
+
+    public string NextType { get => Cell(nameof(NextType)); set => Edit(nameof(NextType), value, typed => Pick("NextValueType", typed, TimetableParts.CautionValueTypes, "a kind of value")); }
+
+    public string Distance { get => Cell(nameof(Distance)); set => Edit(nameof(Distance), value, typed => Number("ApproachNextDistance", typed, 99_999, "a distance in metres")); }
+
+    public void Load()
+    {
+        var node = Node;
+        Show(nameof(Aspect), Named(node.GetText("AspectPassed"), TimetableParts.CautionAspects));
+        Show(nameof(FromLineSpeed), node.GetText("FromLineSpeed") ?? "0");
+        Show(nameof(ToLineSpeed), node.GetText("ToLineSpeed") ?? "0");
+        Show(nameof(ReduceNow), node.GetText("ReduceNowValue") ?? "0");
+        Show(nameof(NowType), Named(node.GetText("NowValueType"), TimetableParts.CautionValueTypes));
+        Show(nameof(ApproachNext), node.GetText("ApproachNextValue") ?? "0");
+        Show(nameof(NextType), Named(node.GetText("NextValueType"), TimetableParts.CautionValueTypes));
+        Show(nameof(Distance), node.GetText("ApproachNextDistance") ?? "0");
+    }
+
+    /// <summary>A code's name (a missing field is SimSig's default, 0); a code the list does not know shows as it is.</summary>
+    private static string Named(string? code, IReadOnlyList<string> names) =>
+        int.TryParse(code ?? "0", NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) && i >= 0 && i < names.Count ? names[i] : code ?? string.Empty;
+
+    private TimetableEdit Pick(string field, string typed, IReadOnlyList<string> names, string what)
+    {
+        var index = names.ToList().FindIndex(n => string.Equals(n, typed, StringComparison.OrdinalIgnoreCase));
+        return index >= 0
+            ? TimetableParts.SetItemField(Node, field, index.ToString(CultureInfo.InvariantCulture))
+            : throw new InvalidOperationException($"'{typed}' is not {what}: choose one of {string.Join(", ", names)}.");
+    }
+
+    private TimetableEdit Number(string field, string typed, int most, string what) =>
+        DraftText.TryNumber(typed, 0, most, out var value)
+            ? TimetableParts.SetItemField(Node, field, (value ?? 0).ToString(CultureInfo.InvariantCulture))
+            : throw new InvalidOperationException($"'{typed}' is not {what}.");
+}
+
+/// <summary>A caution speed set as a category can choose it: its ID and name; an empty ID is SimSig's standard rules.</summary>
+internal sealed record CautionSetChoice(string Id, string Name)
+{
+    public const string Standard = "(SimSig's standard rules)";
+
+    public override string ToString() => Name;
+}
+
 /// <summary>A scenario option: its code and value (the header's <c>ScenarioOptions</c> pairs).</summary>
 internal sealed partial class ScenarioOptionRow(DraftListsViewModel owner, int index) : ObservableObject
 {
@@ -751,16 +849,15 @@ internal sealed partial class ScenarioOptionRow(DraftListsViewModel owner, int i
 /// The Lists tab (S45): Decisions and their choices, Class of Service rules, scenario options and Driving (caution
 /// speed sets), each over the fields the XML format page documents. What else they hold is kept as it is.
 /// </summary>
-internal sealed partial class DraftListsViewModel(TimetableEditorViewModel owner) : ObservableObject
+internal sealed partial class DraftListsViewModel(TimetableEditorViewModel owner, IDialogService dialogs) : ObservableObject
 {
     public static readonly string[] DecisionFields = ["@ID", "Description", "Chosen"];
     public static readonly string[] ChoiceFields = ["@ID", "Announcement", "Weight", "Chosen"];
     public static readonly string[] ClassOfServiceFields = ["ClassOfService", "IDmatch", "Freight", "SpeedClassMatchType", "MatchSpeedClass"];
-    public static readonly string[] CautionSetFields = ["Name"];
-    public static readonly string[] CautionSpeedFields =
-        ["AspectPassed", "FromLineSpeed", "ToLineSpeed", "ReduceNowValue", "ApproachNextValue", "ApproachNextDistance", "NowValueType", "NextValueType"];
+    public static readonly string[] CautionSetFields = ["Name", "@ID"];
 
     private readonly Dictionary<XElement, ListItemRow> _rows = [];
+    private readonly Dictionary<XElement, CautionSpeedRow> _cautionRows = [];
 
     public ObservableCollection<ListItemRow> Decisions { get; } = [];
 
@@ -783,15 +880,25 @@ internal sealed partial class DraftListsViewModel(TimetableEditorViewModel owner
     public ObservableCollection<ListItemRow> CautionSets { get; } = [];
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RemoveCautionSetCommand), nameof(AddCautionSpeedCommand))]
     public partial ListItemRow? SelectedCautionSet { get; set; }
 
-    public ObservableCollection<ListItemRow> CautionSpeeds { get; } = [];
+    /// <summary>The rules of the selected set, in the order SimSig tries them.</summary>
+    public ObservableCollection<CautionSpeedRow> CautionSpeeds { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RemoveCautionSpeedCommand), nameof(MoveCautionSpeedUpCommand), nameof(MoveCautionSpeedDownCommand))]
+    public partial CautionSpeedRow? SelectedCautionSpeed { get; set; }
+
+    public IReadOnlyList<string> CautionAspects { get; } = TimetableParts.CautionAspects;
+
+    public IReadOnlyList<string> CautionValueTypes { get; } = TimetableParts.CautionValueTypes;
 
     public ObservableCollection<ScenarioOptionRow> Scenario { get; } = [];
 
     partial void OnSelectedDecisionChanged(ListItemRow? value) => Sync(Choices, value?.Element.Element("Choices")?.Elements("Choice"), ChoiceFields);
 
-    partial void OnSelectedCautionSetChanged(ListItemRow? value) => Sync(CautionSpeeds, value?.Element.Element("CautionSpeeds")?.Elements(), CautionSpeedFields);
+    partial void OnSelectedCautionSetChanged(ListItemRow? value) => SyncCautionSpeeds(value);
 
     [RelayCommand]
     private void AddDecision()
@@ -892,6 +999,93 @@ internal sealed partial class DraftListsViewModel(TimetableEditorViewModel owner
         }
     }
 
+    /// <summary>A new caution speed set, named by the user; its rules are added below it.</summary>
+    [RelayCommand]
+    private void AddCautionSet()
+    {
+        var prompt = new PromptViewModel(
+            "New caution speed set",
+            "A set of defensive driving rules, usually one per operator. A category that uses it follows its rules instead of SimSig's standard ones.",
+            new PromptField("Name", string.Empty))
+        {
+            Validate = p => string.IsNullOrWhiteSpace(p[0]) ? "Name the set." : null,
+        };
+        if (dialogs.Prompt(prompt) && owner.TryApply(TimetableParts.AddCautionSpeedSet(owner.Document, prompt[0])))
+        {
+            SelectedCautionSet = CautionSets.LastOrDefault();
+        }
+    }
+
+    /// <summary>Deletes the selected set; the categories that use it go back to SimSig's standard rules (asked first).</summary>
+    [RelayCommand(CanExecute = nameof(HasCautionSet))]
+    private void RemoveCautionSet()
+    {
+        if (SelectedCautionSet is not { } row)
+        {
+            return;
+        }
+
+        var users = TimetableParts.CategoriesUsing(owner.Document, (string?)row.Element.Attribute("ID"));
+        if (users.Count > 0 && dialogs.Choose(
+                "Delete caution speed set",
+                $"{string.Join(", ", users.Select(c => c.Description ?? c.Id))} use{(users.Count == 1 ? "s" : "")} {row["Name"]}. Their trains will follow SimSig's standard driving rules.",
+                ["Delete the set", "Cancel"]) != 0)
+        {
+            return;
+        }
+
+        owner.TryApply(TimetableParts.RemoveCautionSpeedSet(row.Node));
+    }
+
+    /// <summary>A new rule below the selected one (at the end if none).</summary>
+    [RelayCommand(CanExecute = nameof(HasCautionSet))]
+    private void AddCautionSpeed()
+    {
+        if (SelectedCautionSet is not { } set)
+        {
+            return;
+        }
+
+        var index = SelectedCautionSpeed is { } after ? CautionSpeeds.IndexOf(after) + 1 : (int?)null;
+        if (owner.TryApply(TimetableParts.AddCautionSpeed(set.Node, index)))
+        {
+            SelectedCautionSpeed = CautionSpeeds.ElementAtOrDefault(index ?? CautionSpeeds.Count - 1);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasCautionSpeed))]
+    private void RemoveCautionSpeed()
+    {
+        if (SelectedCautionSpeed is { } row)
+        {
+            owner.TryApply(TimetableParts.RemoveListItem(row.Node, $"Delete a caution speed rule from {SelectedCautionSet?["Name"]}"));
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasCautionSpeed))]
+    private void MoveCautionSpeedUp() => MoveCautionSpeed(-1);
+
+    [RelayCommand(CanExecute = nameof(HasCautionSpeed))]
+    private void MoveCautionSpeedDown() => MoveCautionSpeed(1);
+
+    private void MoveCautionSpeed(int by)
+    {
+        if (SelectedCautionSpeed is not { } row)
+        {
+            return;
+        }
+
+        var to = CautionSpeeds.IndexOf(row) + by;
+        if (to >= 0 && to < CautionSpeeds.Count && owner.TryApply(TimetableParts.MoveCautionSpeed(row.Node, to)))
+        {
+            SelectedCautionSpeed = row;
+        }
+    }
+
+    private bool HasCautionSet() => SelectedCautionSet is not null;
+
+    private bool HasCautionSpeed() => SelectedCautionSpeed is not null;
+
     private bool HasDecision() => SelectedDecision is not null;
 
     private bool HasChoice() => SelectedChoice is not null;
@@ -905,7 +1099,8 @@ internal sealed partial class DraftListsViewModel(TimetableEditorViewModel owner
         Sync(Choices, SelectedDecision?.Element.Element("Choices")?.Elements("Choice"), ChoiceFields);
         Sync(ClassOfService, document.ClassOfServiceRules?.Items.Select(i => i.Element), ClassOfServiceFields);
         Sync(CautionSets, document.CautionSpeedSets?.Items.Select(i => i.Element), CautionSetFields);
-        Sync(CautionSpeeds, SelectedCautionSet?.Element.Element("CautionSpeeds")?.Elements(), CautionSpeedFields);
+        SelectedCautionSet = SelectedCautionSet is { } s && CautionSets.Contains(s) ? s : null;
+        SyncCautionSpeeds(SelectedCautionSet);
         SelectedDecision = SelectedDecision is { } d && Decisions.Contains(d) ? d : null;
         SelectedClassOfService = SelectedClassOfService is { } c && ClassOfService.Contains(c) ? c : null;
 
@@ -948,6 +1143,33 @@ internal sealed partial class DraftListsViewModel(TimetableEditorViewModel owner
             {
                 rows.Add(row);
             }
+        }
+    }
+
+    private void SyncCautionSpeeds(ListItemRow? set)
+    {
+        var wanted = new List<CautionSpeedRow>();
+        foreach (var element in set?.Element.Element("CautionSpeeds")?.Elements("CautionSpeed") ?? [])
+        {
+            if (!_cautionRows.TryGetValue(element, out var row))
+            {
+                _cautionRows[element] = row = new CautionSpeedRow(owner, element);
+            }
+
+            row.Load();
+            wanted.Add(row);
+        }
+
+        if (!wanted.SequenceEqual(CautionSpeeds))
+        {
+            var selected = SelectedCautionSpeed;
+            CautionSpeeds.Clear();
+            foreach (var row in wanted)
+            {
+                CautionSpeeds.Add(row);
+            }
+
+            SelectedCautionSpeed = selected is not null && CautionSpeeds.Contains(selected) ? selected : null;
         }
     }
 

@@ -2622,6 +2622,30 @@ From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the
 ### Next
 - Run `dotnet test Stringline.Portable.slnf` on Linux (CI) to confirm the SkiaSharp 4.154.0 Linux native assets.
 
+## 2026-10-28 — Timetable editor issues from Moss Vale 2017 (#26–#33)
+
+### Done
+- **#26 Entry and seed points** are drop-downs of those the sim's other timetables use (the knowledge's `Entry` and `Seed` roles, most used first, with the profile's name), then the draft's own; still typed freely. Moss Vale offers its 22 entry points (EPICTON 325×, EJUNEE 116×…).
+- **#27 Category names:** the Train tab's category, the trip grid's New category column and the trains list show the category's description (with its ID where two share one); a name or ID can be typed, anything else is refused (`DraftText.CategoryChoices`/`TryCategory`).
+- **#28 Origin and destination** are editable drop-downs of the names the sim's timetables book (`SimKnowledge.JourneyNames`, knowledge format 3, so caches rebuild), then the draft's own.
+- **#29 Rules toolbar** and **#30 dwell times:** labels spaced from the box before them (`ToolLabel`, `ToolBox` styles); each dwell label and box kept together so a narrow window wraps whole pairs.
+- **#31 Driving rules:** Lists ▸ Driving has New set… / Delete set… (asks when categories use it; they go back to SimSig's standard rules) and New rule / ▲▼ / Delete rule; the aspect (R, sub, Y, FY, YY, FYY, G) and the now/next value kinds (not applicable, absolute mph, percent of line speed) are drop-downs, from SimSig's XML timetable and defensive driving wiki pages. The Categories tab picks a category's caution set by name. `TimetableParts.AddCautionSpeedSet`, `RemoveCautionSpeedSet`, `CategoriesUsing`, `AddCautionSpeed`, `MoveCautionSpeed`.
+- **#32 Fill in timing points** (Edit menu and Bulk menu, Ctrl+Shift+D): between each two of a train's points, every timing location other timetables book there (`SimKnowledge.Finest`: skip chains expanded recursively, only where every link is booked the train's way), as passes timed from the least runs with the slack shared in proportion; grey until edited, one undo. Ctrl+D is still the spreadsheet fill down. On 1PS6 it adds 13 points; three of 1PS6's own runs are 2 min quicker than any train runs through their locations, which it reports.
+- **#33 Platform, line and path drop-downs:** they now merge the codes other timetables book, platforms reported in recordings, the draft's own and codes typed before; a typed code no source knows is remembered per sim in `{area}.codes.json` beside the profile (`TypedCodesStore`). The cause on Moss Vale: its timetables book no lines or paths anywhere and no platform on the Cootamundra West route (STKBGL, CTMNDRW, JINDLEE, DEMNDRL…), so 1PS6 had nothing and ST22 had platforms. A tooltip on the cells says where the codes come from.
+- **Guide:** the Train tab, trip grid, Categories, Driving and Bulk passages; `timetable-editor.png` retaken. `08-…md` §8.2–8.4.
+- **Tests:** 2,137 pass (+8): Editing +4 (fill order and least-run timing; the direction guard, mutation-checked, and the shortfall note; typed codes ×2), journey names in the knowledge JSON test; Timetable +1 (caution sets); App +3 (details by name and choices with a remembered code; Driving; fill in timing points greyed).
+
+### Decisions
+- **Fill in timing points is a new command** (Fred's choice), not a replacement for Ctrl+D.
+- **Typed codes are kept beside the profile, not in it**: the main window saves its profile whole and would overwrite them. They only feed the drop-downs, never the checks, so a typo is not taken as proof that a platform exists (Fred chose "merge all sources + remember").
+- **The fill keeps to links booked the train's way:** Moss Vale's Harden–Yass chain, learned from Down trains, gave an Up train Galong–Binalong, which the checks then flagged as no known path.
+
+### Next
+- 👤 Try #26–#33 on Moss Vale and close the issues that are right; reopen any that are not.
+
+### Questions for Fred
+- 55. **Lines and paths on Moss Vale.** No Moss Vale timetable books a line or path, so those drop-downs fill only from what you type. Does SimSig's own editor list lines and paths at Moss Vale locations (from the sim data)? If so, typing them once per location is the only way in, as the sim files cannot be read.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

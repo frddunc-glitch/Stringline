@@ -204,6 +204,134 @@ public sealed class DraftPartsTests : IDisposable
     }
 
     [Fact]
+    public async Task A_trains_details_show_its_category_by_name_and_offer_the_sims_entry_and_seed_points_names_and_codes()
+    {
+        await using var app = App();
+        var draft = await Draft(app);
+        await app.Ui.WaitUntil(() => draft.Editor.Knowledge is not null, "the sim's knowledge");
+        await app.Ui.Run(() =>
+        {
+            Select(draft, "1A11");
+            var train = draft.Train!;
+            var node = train.Node;
+
+            // #27: the category by its name, picked by name, a trip's new category too; a name no category has is refused.
+            var own = draft.Document.Categories.Single(c => c.Id == node.Category);
+            train.Category.Should().Be(own.Description);
+            var other = train.CategoryChoices.First(c => c.Code != node.Category);
+            train.Category = other.Label;
+            train.Node.Category.Should().Be(other.Code);
+            train.Category.Should().Be(other.Label);
+            train.Category = "No such train type";
+            draft.Error.Should().Contain("no category 'No such train type'");
+            train.Node.Category.Should().Be(other.Code);
+            train.Trips[^1].NewCategory = own.Description!;
+            new TripNode(draft.Document, train.Trips[^1].Element).NewCategory.Should().Be(own.Id);
+            train.Trips[^1].NewCategory.Should().Be(own.Description);
+
+            // #26: entry and seed points the sim's timetables use, most used first.
+            train.EntryPointChoices.Select(c => c.Code).Should().Contain(draft.Document.Trains.Select(t => t.EntryPoint).OfType<string>().Distinct());
+            train.EntryPointChoices.Select(c => c.Code).Should().OnlyHaveUniqueItems();
+            train.SeedPointChoices.Should().NotBeEmpty();
+
+            // #28: origin and destination names, this draft's among them.
+            train.OriginName = "Woking Up Yard";
+            train.JourneyNameChoices.Should().Contain("Woking Up Yard");
+
+            // #33: a code typed at a location is offered there, and remembered for the sim after it is undone.
+            var row = train.Trips[1];
+            row.Platform = "Z9";
+            var platforms = draft.ChoicesAt(row.Location).Platforms;
+            platforms.Should().Contain(c => c.Code == "Z9" && c.Label.Contains("this draft"));
+            draft.UndoCommand.Execute(null);
+            draft.ChoicesAt(row.Location).Platforms.Should().Contain(c => c.Code == "Z9" && c.Label.Contains("typed before"));
+            new Editing.Knowledge.TypedCodesStore(app.Paths.Profiles).Load(draft.Document.Header.AreaId!).At(new Core.Tiploc(row.Location))!.Platforms.Should().Contain("Z9");
+        });
+    }
+
+    [Fact]
+    public async Task Caution_speed_sets_and_their_rules_are_made_ordered_chosen_by_a_category_and_deleted()
+    {
+        await using var app = App();
+        var draft = await Draft(app);
+        await app.Ui.Run(() =>
+        {
+            // #31: a set, named when it is made.
+            var lists = draft.Lists;
+            app.Dialogs.Prompts.Enqueue(p =>
+            {
+                p.Fields[0].Value = "Passenger";
+                return true;
+            });
+            lists.AddCautionSetCommand.Execute(null);
+            var set = lists.CautionSets.Should().ContainSingle().Subject;
+            lists.SelectedCautionSet.Should().Be(set);
+
+            // Rules by aspect and kind of value; a new one goes below the selected one, and they move.
+            lists.AddCautionSpeedCommand.Execute(null);
+            var first = lists.CautionSpeeds.Should().ContainSingle().Subject;
+            first.Aspect.Should().Be("Y");
+            first.NowType.Should().Be("Not applicable");
+            first.Aspect = "YY";
+            first.ReduceNow = "67";
+            first.NowType = "Percent of line speed";
+            first.Element.Element("AspectPassed")!.Value.Should().Be("4");
+            first.Element.Element("NowValueType")!.Value.Should().Be("2");
+            first.Aspect = "Q";
+            draft.Error.Should().Contain("'Q' is not an aspect");
+            lists.SelectedCautionSpeed = first;
+            lists.AddCautionSpeedCommand.Execute(null);
+            lists.CautionSpeeds.Select(r => r.Aspect).Should().Equal("YY", "Y");
+            lists.SelectedCautionSpeed = lists.CautionSpeeds[1];
+            lists.MoveCautionSpeedUpCommand.Execute(null);
+            lists.CautionSpeeds.Select(r => r.Aspect).Should().Equal(["Y", "YY"], "SimSig tries them from the top");
+
+            // A category chooses it by name, and goes back to SimSig's rules when it is deleted (asked first).
+            var category = draft.Categories.Rows[0];
+            draft.Categories.CautionSetNames.Should().Equal(CautionSetChoice.Standard, "Passenger");
+            category.CautionSpeedSet = "Passenger";
+            new CategoryNode(draft.Document, category.Element).CautionSpeedSet.Should().Be(set["@ID"]);
+            app.Dialogs.Choices.Enqueue(0);
+            lists.RemoveCautionSetCommand.Execute(null);
+            app.Dialogs.Asked[^1].Should().Contain("Passenger").And.Contain("standard driving rules");
+            lists.CautionSets.Should().BeEmpty();
+            category.CautionSpeedSet.Should().Be(CautionSetChoice.Standard);
+        });
+    }
+
+    [Fact]
+    public async Task Filling_in_timing_points_adds_the_locations_other_timetables_book_greyed_as_one_edit()
+    {
+        await using var app = App();
+        var draft = await Draft(app);
+        await app.Ui.WaitUntil(() => draft.Editor.Knowledge is not null, "the sim's knowledge");
+        await app.Ui.Run(() =>
+        {
+            // #32: a train with a booked pass taken out has it back, as a pass between its neighbours' times.
+            var (train, middle) = draft.Trains.Select(r =>
+            {
+                draft.SelectedTrainRow = r;
+                var t = draft.Train!;
+                return (Train: t, Middle: t.Trips.Skip(1).SkipLast(1).FirstOrDefault(p => p.Departure.Contains('/', StringComparison.Ordinal)
+                    && t.Trips[p.Index - 1].Departure.Length > 0 && t.Trips[p.Index + 1].Departure.Length > 0));
+            }).First(x => x.Middle is not null);
+            var location = middle!.Location;
+            var (before, after) = (train.Trips[middle.Index - 1].Location, train.Trips[middle.Index + 1].Location);
+            train.DeletePoints([middle]);
+            train.Trips.Should().NotContain(r => r.Location == location);
+
+            app.Dialogs.Choices.Enqueue(0);
+            draft.FillTimingPointsCommand.Execute(null);
+            draft.Error.Should().BeNull();
+            var back = train.Trips.Should().ContainSingle(r => r.Location == location).Subject;
+            train.Trips.Select(r => r.Location).Should().ContainInOrder(before, location, after);
+            back.IsAdded.Should().BeTrue("Stringline added it");
+            back.Departure.Should().Contain("/");
+            draft.UndoHeader.Should().Contain("Fill in timing points");
+        });
+    }
+
+    [Fact]
     public async Task Decisions_choices_and_scenario_options_are_edited_as_lists()
     {
         await using var app = App();

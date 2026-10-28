@@ -178,6 +178,68 @@ public sealed class BulkToolsTests
         BulkTools.AutoFill(tight, knowledge, Of(tight, "2K03")).Problems.Should().ContainSingle().Which.Should().Contain("3 min short");
     }
 
+    /// <summary>1K01 books every location A–F; 1K02 runs A, D, F only, so A–D and D–F are skip chains.</summary>
+    private static SimKnowledge AToF(params XElement[] more)
+    {
+        var builder = new SimKnowledgeBuilder("test");
+        builder.AddTimetable(Doc(
+            Category("C1", new XElement("MaxSpeed", 75)),
+            Train("1K01", Field("Category", "C1"), Trips(Stop("A", null, "08:00"), Pass("B", "08:02"), Pass("C", "08:08"), Pass("D", "08:10"), Pass("E", "08:13"), Stop("F", "08:15", null))),
+            Train("1K02", Field("Category", "C1"), Trips(Stop("A", null, "09:00"), Pass("D", "09:10"), Stop("F", "09:15", null))),
+            more).ToWorkingTimetable());
+        return builder.Build();
+    }
+
+    [Fact]
+    public void Filling_in_timing_points_inserts_every_location_other_timetables_book_in_order_timed_by_the_least_runs()
+    {
+        var knowledge = AToF();
+        var d = Doc(
+            Category("C1", new XElement("MaxSpeed", 75)),
+            Train("2K01", Field("Category", "C1"), Trips(Stop("A", null, "10:00"), Pass("D", "10:20"), Stop("F", "10:30", null))));
+
+        var result = BulkTools.FillTimingPoints(d, knowledge, Of(d, "2K01"));
+
+        result.Problems.Should().BeEmpty();
+        result.Changes.Should().HaveCount(3);
+        ApplyUndo(d, result, () =>
+        {
+            var trips = Of(d, "2K01").Trips.ToList();
+            trips.Select(t => t.Location).Should().Equal("A", "B", "C", "D", "E", "F");
+            trips.Where(t => t.Location is "B" or "C" or "E").Should().AllSatisfy(t => t.IsPassTime.Should().BeTrue());
+
+            // A–D: least runs 2, 6 and 2 min leave 10 min over, shared 2:6:2. D–F: 3 and 2 leave 5, shared 3:2.
+            trips[1].DepPassTime.Should().Be(new SimTime(T("10:04")));
+            trips[2].DepPassTime.Should().Be(new SimTime(T("10:16")));
+            trips[4].DepPassTime.Should().Be(new SimTime(T("10:26")));
+        });
+
+        BulkTools.FillTimingPoints(d, knowledge, Of(d, "2K01")).Edit.Should().BeNull("every location is booked now");
+    }
+
+    [Fact]
+    public void Filling_in_timing_points_keeps_to_links_booked_the_trains_way_and_says_where_the_booking_is_too_quick()
+    {
+        // The chain C–B–A is learned from trains going the other way only: a train A to C is left as it is.
+        var builder = new SimKnowledgeBuilder("test");
+        builder.AddTimetable(Doc(
+            Train("1U01", Trips(Stop("C", null, "08:00"), Pass("B", "08:05"), Stop("A", "08:10", null))),
+            Train("1U02", Trips(Stop("C", null, "09:00"), Stop("A", "09:10", null))),
+            Train("1D01", Trips(Stop("A", null, "09:30"), Stop("C", "09:40", null)))).ToWorkingTimetable());
+        var reverse = Doc(Train("2D01", Trips(Stop("A", null, "10:00"), Stop("C", "10:10", null))));
+
+        BulkTools.FillTimingPoints(reverse, builder.Build(), Of(reverse, "2D01")).Edit.Should().BeNull();
+
+        // Booked A–D in 6 min where trains take 10 through B and C: still filled, in proportion, and said.
+        var d = Doc(
+            Category("C1", new XElement("MaxSpeed", 75)),
+            Train("2K02", Field("Category", "C1"), Trips(Stop("A", null, "10:00"), Stop("D", "10:06", null))));
+        var result = BulkTools.FillTimingPoints(d, AToF(), Of(d, "2K02"));
+
+        result.Problems.Should().ContainSingle().Which.Should().Contain("A to D is booked 4 min quicker");
+        ApplyUndo(d, result, () => Of(d, "2K02").Trips.Select(t => t.Location).Should().Equal("A", "B", "C", "D"));
+    }
+
     [Fact]
     public void Auto_fill_on_Waterloo_lies_within_the_timetables_own_run_times()
     {

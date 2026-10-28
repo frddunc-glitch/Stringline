@@ -290,6 +290,7 @@ internal sealed partial class MainViewModel
             _settings.TimetableFolder is { Length: > 0 } folder ? folder : WttCatalogue.DefaultFolder,
             _paths.TimetableBackups)
         {
+            TypedCodes = new TypedCodesStore(_paths.Profiles),
             Exports = new DraftExports(
                 () => _settings.LastExportFolder is { Length: > 0 } last && Directory.Exists(last) ? last : _paths.Exports,
                 path =>

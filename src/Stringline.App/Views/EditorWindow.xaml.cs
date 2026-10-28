@@ -33,6 +33,7 @@ public partial class EditorWindow : Window
         InputBindings.Add(new KeyBinding(viewModel.RedoCommand, Key.Y, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(viewModel.RedoCommand, Key.Z, ModifierKeys.Control | ModifierKeys.Shift));
         InputBindings.Add(new KeyBinding(viewModel.CheckAllCommand, Key.F7, ModifierKeys.None));
+        InputBindings.Add(new KeyBinding(viewModel.FillTimingPointsCommand, Key.D, ModifierKeys.Control | ModifierKeys.Shift));
         CommandBindings.Add(new CommandBinding(DeletePointsCommand, (_, _) => DeletePoints(), (_, e) => e.CanExecute = _viewModel.Train is not null));
         CommandBindings.Add(new CommandBinding(FillDownCommand, (_, _) => FillDown(), (_, e) => e.CanExecute = _viewModel.Train is not null));
         DetailsPanel.AddHandler(KeyDownEvent, new KeyEventHandler(OnDetailKeyDown), handledEventsToo: false);
@@ -164,6 +165,10 @@ public partial class EditorWindow : Window
                 DeletePoints();
                 e.Handled = true;
                 break;
+            case Key.D when control && (Keyboard.Modifiers & ModifierKeys.Shift) != 0:
+                _viewModel.FillTimingPointsCommand.Execute(null);
+                e.Handled = true;
+                break;
             case Key.D when control:
                 FillDown();
                 e.Handled = true;
@@ -222,7 +227,17 @@ public partial class EditorWindow : Window
     {
         if (e.Key == Key.Enter && e.OriginalSource is TextBox box)
         {
-            box.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+            // An editable drop-down's text box is bound to the drop-down, whose text is bound to the train.
+            if (box.TemplatedParent is ComboBox combo)
+            {
+                combo.GetBindingExpression(ComboBox.TextProperty)?.UpdateSource();
+                combo.IsDropDownOpen = false;
+            }
+            else
+            {
+                box.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+            }
+
             e.Handled = true;
         }
     }

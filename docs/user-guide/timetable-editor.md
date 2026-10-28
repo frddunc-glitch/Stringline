@@ -26,19 +26,19 @@ The list on the left has every train in the draft. Click a column's heading to s
 
 ## The train and its timing points
 
-The **Train** tab shows the selected train's details at the top, in four groups: **Train** (headcode, UID, category and operator), **Entry and seeding** (where and when it enters, or its seed point, gap and seed group), **Running** (maximum speed, length, the chance an as-required train runs, freight and goods lines) and **Description and journey** (the description, origin, destination and notes). Change a box and press Enter, or move on, to make the change. A new headcode renumbers the train and the activities and rules that name it. A description of `$template` shows what SimSig will show, from the header's template.
+The **Train** tab shows the selected train's details at the top, in four groups: **Train** (headcode, UID, category and operator), **Entry and seeding** (where and when it enters, or its seed point, gap and seed group), **Running** (maximum speed, length, the chance an as-required train runs, freight and goods lines) and **Description and journey** (the description, origin, destination and notes). Change a box and press Enter, or move on, to make the change. The category is shown and picked by its name (its description); typing its ID works too. The entry point and seed point drop-downs offer those the sim's other timetables use, most used first, and the origin and destination offer the names they use; you can still type any other. A new headcode renumbers the train and the activities and rules that name it. A description of `$template` shows what SimSig will show, from the header's template.
 
 Below is the **trip grid**, one row for each timing point:
 
 - **Location**, with completion from the TIPLOCs the sim's other timetables use.
 - **Arr** and **Dep/pass**, in SimSig's notation: type `1234` or `12:34`, `1234H` for 12:34½, `12/34` for a pass, `12d34` set down only, `12t34` may stop on the through line, `12w34` waits for its booked time, `12r34` a request stop, and `+3` for 3 minutes after the time before. Times after midnight go on past 23:59 (`24:10`).
-- **Plat**, **Line** and **Path**, with the codes other timetables use at that location, most used first.
-- The engineering, pathing and performance allowances in minutes (`1H` is 1½), the dwell in seconds, the request stop's chance, set down, the through line, the stop location and a new category.
+- **Plat**, **Line** and **Path**, with the codes other timetables book at that location (most used first), then those trains were reported at in your recordings, those this draft uses, and those you have typed there before. SimSig's sim files cannot be read, so where no timetable of the sim books a code at a location (a route few trains take, or a sim whose timetables book no lines or paths), nothing is offered: type the code, and Stringline remembers it for the sim and offers it from then on.
+- The engineering, pathing and performance allowances in minutes (`1H` is 1½), the dwell in seconds, the request stop's chance, set down, the through line, the stop location and a new category (by name).
 - **Activities**, such as `N: 2B44` for a next working.
 
-Enter moves down a row. **Insert** adds a point above the current one, **Ctrl+Delete** removes the selected points, and **Ctrl+D** fills the current column down: the first selected row's value goes into the others, or, with one row selected, the value above comes into it. **Ctrl+Z** and **Ctrl+Y** undo and redo, as many steps as you like, and **Ctrl+S** saves.
+Enter moves down a row. **Insert** adds a point above the current one, **Ctrl+Delete** removes the selected points, **Ctrl+D** fills the current column down: the first selected row's value goes into the others, or, with one row selected, the value above comes into it. **Ctrl+Shift+D** (Edit ▸ Fill in timing points) fills in the train's timing points: between each two of its points it adds every timing location the sim's other timetables book there, as a pass. Each is timed between its neighbours: every run gets at least the least time trains of its speed have taken, and the time left over is shared out in proportion. The graph then draws the train through every location, and SimSig's own timetable view shows them too. If the train is booked quicker than trains have run through those locations, it says so. **Ctrl+Z** and **Ctrl+Y** undo and redo, as many steps as you like, and **Ctrl+S** saves.
 
-Points shown grey were added by Stringline, by a quick fix. Edit one to keep it as yours.
+Points shown grey were added by Stringline, by a quick fix or by filling in timing points. Edit one to keep it as yours.
 
 ### Activities
 
@@ -60,11 +60,13 @@ The **Seed groups** tab lists the other times the sim can start at, each with it
 
 ## Categories
 
-The **Categories** tab lists the train types: ID, description, freight, goods lines, maximum speed, length, acceleration and braking, power to weight, electrification, caution speed set, speed classes and how many trains use each. Under the list are the selected category's dwell times and its speed classes as tick boxes. Each sim names its own speed classes, which the timetable does not hold, so they are numbered here. **New category…** copies the selected one (or uses SimSig's usual values) with a new ID. A new ID typed in the ID column goes to every train and point that uses the category. **Delete category…** asks which category its trains move to first.
+The **Categories** tab lists the train types: ID, description, freight, goods lines, maximum speed, length, acceleration and braking, power to weight, electrification, caution speed set (by name: SimSig's standard rules, or a set from Lists ▸ Driving), speed classes and how many trains use each. Under the list are the selected category's dwell times and its speed classes as tick boxes. Each sim names its own speed classes, which the timetable does not hold, so they are numbered here. **New category…** copies the selected one (or uses SimSig's usual values) with a new ID. A new ID typed in the ID column goes to every train and point that uses the category. **Delete category…** asks which category its trains move to first.
 
 ## Decisions, Class of Service, Scenarios and Driving
 
-The **Lists** tab edits the rest of the timetable as lists: **Decisions** and their choices (ID, description or announcement, weight, chosen), **Class of Service** rules, **Scenario options** (an option and its value) and **Driving**, the caution speed sets and their speeds. What they hold that is not shown is kept as it is.
+The **Lists** tab edits the rest of the timetable as lists: **Decisions** and their choices (ID, description or announcement, weight, chosen), **Class of Service** rules, **Scenario options** (an option and its value) and **Driving**. What they hold that is not shown is kept as it is.
+
+**Driving** holds the caution speed sets: defensive driving rules, usually one set per operator, that say how drivers slow down after passing a restrictive aspect. A category that uses a set (chosen on the Categories tab) follows only its rules, instead of SimSig's standard ones. **New set…** asks for a name; **Delete set…** asks first if categories use it, and they go back to SimSig's standard rules. Each rule of the selected set has the **aspect passed** (R, sub, Y, FY, YY, FYY or G), the **line speeds** it applies between (mph; a To of 0 has no upper limit), the speed to **reduce to now** and the speed to **approach the next signal at**, each absolute (mph), a percentage of line speed or not applicable, and **within** how many metres of the next signal the approach speed applies. SimSig tries the rules from the top and uses the first that matches, so order matters: **New rule** adds one below the selected one, and ▲ and ▼ move it.
 
 ## Bulk tools
 
@@ -76,6 +78,7 @@ The **Bulk** menu works on the trains selected in the list (Ctrl+click and Shift
 - **Find and replace…** replaces a whole value in headcodes, UIDs, descriptions or the trips' locations and codes.
 - **Repeat as pattern…** copies one train every so many minutes up to a last start, its headcode counting on (and its UID, if that ends in a number). Its next working and other links are not copied:
 - **Pair next workings…** joins trains that end at a terminus to trains that start there, each to the first that leaves at least the turnaround you give after it arrives.
+- **Fill in timing points** adds every timing location other timetables book between each train's points, timed as Ctrl+Shift+D does (see above).
 - **Auto-fill timings** times the points a train has no time for, from the run times the sim's other timetables book for trains of its speed: points between two times share the run as the sim does, and points after the last time are timed on, with the usual dwell where there is a platform. If the times you gave leave less than the sim's quickest run, it says how much short.
 - **Set lines** gives points with no line the line other timetables use most there (where two are used as often, it leaves the point for you).
 - **Insert timing points** adds, for the selected trains, the points other timetables book between two points SimSig may find no path between (the Issues panel's quick fix, for all of them at once).

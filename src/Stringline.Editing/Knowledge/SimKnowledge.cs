@@ -182,7 +182,7 @@ public sealed record SignalKnowledge(
 public sealed class SimKnowledge
 {
     /// <summary>The cache format this build writes; a cache in any other is rebuilt.</summary>
-    public const int CurrentFormat = 2;
+    public const int CurrentFormat = 3;
 
     private Dictionary<Tiploc, LocationKnowledge>? _locations;
     private Dictionary<(Tiploc, Tiploc), LinkKnowledge>? _links;
@@ -223,6 +223,12 @@ public sealed class SimKnowledge
 
     /// <summary>The profile's learned TD berths.</summary>
     public IReadOnlyList<PlaceKnowledge> Berths { get; init; } = [];
+
+    /// <summary>
+    /// The origin and destination names trains are booked with (<c>Sydney Terminal</c>, <c>Moss Vale Up Sdgs</c>), with
+    /// how often, for the editor's drop-downs (#28). Many are beyond the sim's area, so they are names, not TIPLOCs.
+    /// </summary>
+    public IReadOnlyDictionary<string, int> JourneyNames { get; init; } = new Dictionary<string, int>();
 
     public LocationKnowledge? Location(Tiploc location) =>
         (_locations ??= Locations.ToDictionary(l => l.Tiploc)).GetValueOrDefault(location);
@@ -298,17 +304,9 @@ public sealed class SimKnowledge
             return null;
         }
 
-        foreach (var skip in SkipChains)
+        if (SkipChainOf(from, to) is { } skipped)
         {
-            if (skip.Chain[0] == from && skip.Chain[^1] == to)
-            {
-                return skip.Chain;
-            }
-
-            if (skip.Chain[0] == to && skip.Chain[^1] == from)
-            {
-                return [.. skip.Chain.Reverse()];
-            }
+            return skipped;
         }
 
         // Breadth first, so the first paths to reach B are the shortest; among them, the one whose least-booked link is
@@ -347,6 +345,72 @@ public sealed class SimKnowledge
             }
 
             frontier = [.. reached.Keys.OrderBy(t => t.Code, StringComparer.Ordinal)];
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Every timing location other timetables book between A and B, both included (#32): the skip chain with these ends,
+    /// with each of its links expanded by its own skip chain in turn, so the finest detail any train shows. Skip chains
+    /// are learned from trains either way, so with <paramref name="booked"/> a chain is used only where each of its
+    /// links is booked this way (<see cref="Link"/>); A, B where no train books anything between them that way.
+    /// </summary>
+    public IReadOnlyList<Tiploc> Finest(Tiploc from, Tiploc to, bool booked = false)
+    {
+        var chain = new List<Tiploc> { from };
+        if (!Expand(from, to, 0))
+        {
+            chain.Add(to);
+        }
+
+        return chain;
+
+        // Adds a → b's chain after a; false (adding nothing) if it has a link not booked this way.
+        bool Expand(Tiploc a, Tiploc b, int depth)
+        {
+            var mark = chain.Count;
+            var skip = depth < 8 ? SkipChainOf(a, b) : null;
+            if (skip is not null && !skip.Skip(1).SkipLast(1).Any(chain.Contains))
+            {
+                var expanded = true;
+                for (var i = 1; i < skip.Count && expanded; i++)
+                {
+                    expanded = Expand(skip[i - 1], skip[i], depth + 1);
+                }
+
+                if (expanded)
+                {
+                    return true;
+                }
+
+                chain.RemoveRange(mark, chain.Count - mark);
+            }
+
+            if (booked && Link(a, b) is null)
+            {
+                return false;
+            }
+
+            chain.Add(b);
+            return true;
+        }
+    }
+
+    /// <summary>The skip chain with these ends, turned round if need be; null if there is none.</summary>
+    private IReadOnlyList<Tiploc>? SkipChainOf(Tiploc from, Tiploc to)
+    {
+        foreach (var skip in SkipChains)
+        {
+            if (skip.Chain[0] == from && skip.Chain[^1] == to)
+            {
+                return skip.Chain;
+            }
+
+            if (skip.Chain[0] == to && skip.Chain[^1] == from)
+            {
+                return [.. skip.Chain.Reverse()];
+            }
         }
 
         return null;

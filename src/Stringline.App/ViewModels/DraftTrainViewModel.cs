@@ -3,6 +3,7 @@ using System.Xml.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stringline.Core;
+using Stringline.Editing.Bulk;
 using Stringline.Editing.Drafts;
 using Stringline.Timetable.Editing;
 
@@ -34,6 +35,15 @@ internal sealed partial class DraftTrainViewModel : ObservableObject
     /// <summary>Every TIPLOC known, for the location cell's completion.</summary>
     public IReadOnlyList<CodeChoice> Locations => _owner.Locations;
 
+    /// <summary>The sim's entry points, for the entry point box (#26).</summary>
+    public IReadOnlyList<CodeChoice> EntryPointChoices { get; private set; } = [];
+
+    /// <summary>The sim's seed points, for the seed point box (#26).</summary>
+    public IReadOnlyList<CodeChoice> SeedPointChoices { get; private set; } = [];
+
+    /// <summary>Origin and destination names the sim's timetables use (#28).</summary>
+    public IReadOnlyList<string> JourneyNameChoices { get; private set; } = [];
+
     /// <summary>The trip row the grid's current cell is on (set by the grid).</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InsertPointCommand), nameof(InsertPointAfterCommand))]
@@ -50,8 +60,10 @@ internal sealed partial class DraftTrainViewModel : ObservableObject
 
     public bool UsesTemplate { get; private set; }
 
+    /// <summary>The category by its name (#27): its description, with its ID where two share one; an ID no category has shows as it is.</summary>
     public string Category { get => Detail(nameof(Category)); set => EditDetail(nameof(Category), value); }
 
+    /// <summary>The timetable's categories: the ID as the code, the name as the label.</summary>
     public IReadOnlyList<CodeChoice> CategoryChoices { get; private set; } = [];
 
     public string EntryPoint { get => Detail(nameof(EntryPoint)); set => EditDetail(nameof(EntryPoint), value); }
@@ -96,7 +108,8 @@ internal sealed partial class DraftTrainViewModel : ObservableObject
         Show(nameof(Headcode), node.Headcode);
         Show(nameof(Uid), node.Uid);
         Show(nameof(Description), node.Description);
-        Show(nameof(Category), node.Category);
+        CategoryChoices = DraftText.CategoryChoices(snapshot.Document);
+        Show(nameof(Category), DraftText.CategoryName(CategoryChoices, node.Category));
         Show(nameof(EntryPoint), node.EntryPoint);
         Show(nameof(DepartTime), DraftText.Time(node.DepartTime));
         Show(nameof(SeedPoint), node.SeedPoint);
@@ -117,7 +130,6 @@ internal sealed partial class DraftTrainViewModel : ObservableObject
         var imported = snapshot.Import.TrainOf(node);
         UsesTemplate = string.Equals(node.Description, "$template", StringComparison.OrdinalIgnoreCase);
         DescriptionPreview = imported?.Description ?? string.Empty;
-        CategoryChoices = [.. snapshot.Document.Categories.Where(c => c.Id is not null).Select(c => new CodeChoice(c.Id!, $"{c.Id}  {c.Description}"))];
         var issues = snapshot.Validation.For(Element).ToList();
         IssueTip = issues.Count == 0 ? null : DraftText.IssueTip(issues);
         OnPropertyChanged(nameof(UsesTemplate));
@@ -125,6 +137,10 @@ internal sealed partial class DraftTrainViewModel : ObservableObject
         OnPropertyChanged(nameof(CategoryChoices));
         OnPropertyChanged(nameof(IssueTip));
         OnPropertyChanged(nameof(Locations));
+        (EntryPointChoices, SeedPointChoices, JourneyNameChoices) = (_owner.EntryPointChoices, _owner.SeedPointChoices, _owner.JourneyNameChoices);
+        OnPropertyChanged(nameof(EntryPointChoices));
+        OnPropertyChanged(nameof(SeedPointChoices));
+        OnPropertyChanged(nameof(JourneyNameChoices));
 
         var trips = node.Trips.ToList();
         if (!trips.Select(t => t.Element).SequenceEqual(Trips.Select(r => r.Element)))
@@ -160,7 +176,18 @@ internal sealed partial class DraftTrainViewModel : ObservableObject
             return false;
         }
 
-        return _owner.TryApply(edit);
+        if (!_owner.TryApply(edit))
+        {
+            return false;
+        }
+
+        if (cell is nameof(TripRow.Platform) or nameof(TripRow.Line) or nameof(TripRow.Path))
+        {
+            var code = cell switch { nameof(TripRow.Platform) => TripCode.Platform, nameof(TripRow.Line) => TripCode.Line, _ => TripCode.Path };
+            _owner.RememberCode(new TripNode(_owner.Document, row.Element).Location, code, text);
+        }
+
+        return true;
     }
 
     /// <summary>The edit a cell's text makes, or null with the reason it cannot be read.</summary>
@@ -250,7 +277,12 @@ internal sealed partial class DraftTrainViewModel : ObservableObject
             case nameof(TripRow.ThroughLine):
                 return TimetableEdit.Change(trip, t => t.AllowStopsOnThroughLines = text.Length > 0, $"{where}: stop on the through line {(text.Length > 0 ? "allowed" : "off")}");
             case nameof(TripRow.NewCategory):
-                return TimetableEdit.Change(trip, t => t.NewCategory = NullIfEmpty(text), $"{where}: new category {Shown(text)}");
+                if (!DraftText.TryCategory(CategoryChoices, text, out var newCategory, out error))
+                {
+                    return null;
+                }
+
+                return TimetableEdit.Change(trip, t => t.NewCategory = newCategory?.Code, $"{where}: new category {newCategory?.Label ?? "(none)"}");
             default:
                 error = $"The {cell} column cannot be typed in.";
                 return null;
@@ -499,8 +531,12 @@ internal sealed partial class DraftTrainViewModel : ObservableObject
             case nameof(Description):
                 return TimetableEdit.Change(node, t => t.Description = NullIfEmpty(text), $"{who}: description");
             case nameof(Category):
-                var category = CategoryChoices.FirstOrDefault(c => string.Equals(c.Label, text, StringComparison.Ordinal))?.Code ?? text;
-                return TimetableEdit.Change(node, t => t.Category = NullIfEmpty(category), $"{who}: category {Shown(category)}");
+                if (!DraftText.TryCategory(CategoryChoices, text, out var category, out error))
+                {
+                    return null;
+                }
+
+                return TimetableEdit.Change(node, t => t.Category = category?.Code, $"{who}: category {category?.Label ?? "(none)"}");
             case nameof(EntryPoint):
                 return TimetableEdit.Change(node, t => t.EntryPoint = NullIfEmpty(text), $"{who}: entry point {Shown(text)}");
             case nameof(SeedPoint):

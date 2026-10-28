@@ -575,18 +575,8 @@ public static class TimetableParts
         }
     }
 
-    private static string NewCategoryId(WttDocument document)
-    {
-        var taken = document.Categories.Select(c => c.Id).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
-        for (var seed = taken.Count; ; seed++)
-        {
-            var id = ((uint)HashCode.Combine(seed, document.Header.Name, "category")).ToString("X8", CultureInfo.InvariantCulture);
-            if (!taken.Contains(id))
-            {
-                return id;
-            }
-        }
-    }
+    private static string NewCategoryId(WttDocument document) =>
+        NewId(document.Categories.Select(c => c.Id).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase), document, "category");
 
     private static XElement DefaultCategory() => new(
         "TrainCategory",
@@ -691,6 +681,106 @@ public static class TimetableParts
         return choices is null
             ? TimetableEdit.Insert(decision.Element, new XElement("Choices", choice), description: $"Add choice {id}")
             : TimetableEdit.Insert(choices, choice, description: $"Add choice {id}");
+    }
+
+    // ---- Driving: caution speed sets (#31) ----
+
+    /// <summary>The aspects a caution speed rule is for, by <c>AspectPassed</c> code (0 to 6), as SimSig names them.</summary>
+    public static IReadOnlyList<string> CautionAspects { get; } = ["R", "sub", "Y", "FY", "YY", "FYY", "G"];
+
+    /// <summary>How a caution speed rule's value is taken, by <c>NowValueType</c>/<c>NextValueType</c> code (0 to 2).</summary>
+    public static IReadOnlyList<string> CautionValueTypes { get; } = ["Not applicable", "Absolute (mph)", "Percent of line speed"];
+
+    /// <summary>
+    /// A new caution speed set (a "defensive driving" rule set): an ID of eight hex digits, as SimSig makes them, its
+    /// name and no rules yet.
+    /// </summary>
+    public static TimetableEdit AddCautionSpeedSet(WttDocument document, string name, string? id = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new InvalidOperationException("A caution speed set needs a name.");
+        }
+
+        var taken = CautionSpeedSetIds(document);
+        id ??= NewId(taken, document, "caution");
+        if (taken.Contains(id))
+        {
+            throw new InvalidOperationException($"There is already a caution speed set {id}.");
+        }
+
+        var set = new XElement("CautionSpeedSet", new XAttribute("ID", id), new XElement("Name", name.Trim()), new XElement("CautionSpeeds"));
+        return AddListItem(document, "CautionSpeedSets", set, $"Add caution speed set {name.Trim()}");
+    }
+
+    /// <summary>
+    /// Deletes a caution speed set. The categories that use it are cleared in the same edit, so their trains go back
+    /// to SimSig's standard driving rules.
+    /// </summary>
+    public static TimetableEdit RemoveCautionSpeedSet(ElementNode set)
+    {
+        ArgumentNullException.ThrowIfNull(set);
+        var id = (string?)set.Element.Attribute("ID");
+        var name = set.GetText("Name") ?? id ?? "caution speed set";
+        var edits = CategoriesUsing(set.Document, id).Select(c => TimetableEdit.Change(c, n => n.CautionSpeedSet = string.Empty)).ToList();
+        edits.Add(TimetableEdit.Remove(set.Element));
+        return TimetableEdit.Composite($"Delete caution speed set {name}", edits);
+    }
+
+    /// <summary>The categories whose caution speed set is <paramref name="id"/>.</summary>
+    public static IReadOnlyList<CategoryNode> CategoriesUsing(WttDocument document, string? id)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return [.. document.Categories.Where(c => Same(c.CautionSpeedSet, id))];
+    }
+
+    /// <summary>
+    /// A new rule in a caution speed set, at <paramref name="index"/> (the end if null): a single yellow, at any line
+    /// speed, with both parts not applicable until they are typed. SimSig takes the first rule that matches, so the
+    /// order matters.
+    /// </summary>
+    public static TimetableEdit AddCautionSpeed(ElementNode set, int? index = null)
+    {
+        ArgumentNullException.ThrowIfNull(set);
+        var rule = new XElement(
+            "CautionSpeed",
+            new XElement("AspectPassed", 2),
+            new XElement("FromLineSpeed", 0),
+            new XElement("ToLineSpeed", 0),
+            new XElement("ReduceNowValue", 0),
+            new XElement("ApproachNextValue", 0),
+            new XElement("ApproachNextDistance", 0),
+            new XElement("NowValueType", 0),
+            new XElement("NextValueType", 0));
+        var name = set.GetText("Name") ?? "the set";
+        return set.Element.Element("CautionSpeeds") is { } speeds
+            ? TimetableEdit.Insert(speeds, rule, index is { } i ? Math.Clamp(i, 0, speeds.Elements().Count()) : null, $"Add a caution speed rule to {name}")
+            : TimetableEdit.Insert(set.Element, new XElement("CautionSpeeds", rule), description: $"Add a caution speed rule to {name}");
+    }
+
+    /// <summary>Moves a caution speed rule up or down its set (SimSig takes the first that matches).</summary>
+    public static TimetableEdit MoveCautionSpeed(ElementNode rule, int index)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        var list = rule.Element.Parent ?? throw new InvalidOperationException("The rule is not in a set.");
+        var to = Math.Clamp(index, 0, list.Elements().Count() - 1);
+        return TimetableEdit.Move(rule.Element, to, $"Move a caution speed rule to {to + 1}");
+    }
+
+    private static HashSet<string> CautionSpeedSetIds(WttDocument document) =>
+        (document.CautionSpeedSets?.Items.Select(i => (string?)i.Element.Attribute("ID")) ?? []).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static string NewId(HashSet<string> taken, WttDocument document, string salt)
+    {
+        for (var seed = taken.Count; ; seed++)
+        {
+            var id = ((uint)HashCode.Combine(seed, document.Header.Name, salt)).ToString("X8", CultureInfo.InvariantCulture);
+            if (!taken.Contains(id))
+            {
+                return id;
+            }
+        }
     }
 
     // ---- Scenario options ----

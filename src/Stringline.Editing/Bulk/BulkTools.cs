@@ -563,6 +563,164 @@ public static class BulkTools
         return Result($"Fill {train.Headcode}'s timings", edits, changes, problems);
     }
 
+    /// <summary>
+    /// Fills in timing points (#32): between each two of the train's points, inserts every timing location other
+    /// timetables of the sim book there (<see cref="SimKnowledge.Finest"/>; where no timetable books the two straight
+    /// after each other, the chain they do book, as the "no known path" fix does). Each is a pass, timed between the
+    /// two points' times in proportion to the sim's usual run times (equal shares where one is unknown), to the half
+    /// minute; untimed where either end has no time. The graph then draws the train through each location, and SimSig
+    /// shows them in its timetable.
+    /// </summary>
+    public static BulkResult FillTimingPoints(WttDocument document, SimKnowledge knowledge, TrainNode train)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(knowledge);
+        ArgumentNullException.ThrowIfNull(train);
+        var trips = train.Trips.ToList();
+        var band = RunBand.Of(train.MaxSpeed ?? CategoryOf(document, train)?.MaxSpeed, train.IsFreight || CategoryOf(document, train)?.IsFreight == true);
+        var edits = new List<TimetableEdit>();
+        var changes = new List<string>();
+        var problems = new List<string>();
+        var inserted = 0; // the edits apply in order, so each gap's points go after those inserted before it
+        for (var i = 1; i < trips.Count; i++)
+        {
+            var (before, after) = (trips[i - 1], trips[i]);
+            if (!Tiploc.TryCreate(before.Location, out var from) || !Tiploc.TryCreate(after.Location, out var to) || from == to)
+            {
+                continue;
+            }
+
+            var chain = knowledge.Finest(from, to, booked: true);
+            if (chain.Count == 2 && knowledge.Link(from, to) is null)
+            {
+                if (knowledge.Chain(from, to) is not { Count: > 2 } path)
+                {
+                    problems.Add($"{train.Headcode}: no timetable of the sim books a way from {from} to {to}; left as it is.");
+                    continue;
+                }
+
+                var expanded = new List<Tiploc> { from };
+                for (var k = 1; k < path.Count; k++)
+                {
+                    expanded.AddRange(knowledge.Finest(path[k - 1], path[k], booked: true).Skip(1));
+                }
+
+                chain = expanded;
+            }
+
+            if (chain.Count <= 2)
+            {
+                continue;
+            }
+
+            var times = PassTimes(knowledge, band, before.DepPassTime ?? before.ArrTime, after.ArrTime ?? after.DepPassTime, chain, out var shortfall);
+            if (shortfall > 0)
+            {
+                problems.Add($"{train.Headcode}: {from} to {to} is booked {Minutes(shortfall).TrimStart('+')} quicker than trains have run through its timing locations, so not every pass time keeps to the least run (shared out in proportion).");
+            }
+
+            var parent = before.Element.Parent!;
+            var at = before.Element.ElementsBeforeSelf().Count() + 1 + inserted;
+            for (var j = 1; j < chain.Count - 1; j++)
+            {
+                var node = new TripNode(document, new XElement("Trip")) { Location = chain[j].Code };
+                if (times?[j - 1] is { } time)
+                {
+                    node.DepPassTime = time;
+                    node.IsPassTime = true;
+                }
+
+                node.DownDirection = after.DownDirection;
+                edits.Add(TimetableEdit.Insert(parent, node.Element, at + j - 1, $"Add {chain[j]}"));
+                changes.Add($"{train.Headcode}: {chain[j]} between {from} and {to}{(times?[j - 1] is { } t ? $", pass {SimTimeNotation.Format(t)}" : ", untimed")}");
+            }
+
+            inserted += chain.Count - 2;
+        }
+
+        if (edits.Count == 0 && problems.Count == 0)
+        {
+            return BulkResult.Nothing($"{train.Headcode} already has every timing location other timetables book on its way.");
+        }
+
+        return Result($"Fill in {train.Headcode}'s timing points", edits, changes, problems);
+    }
+
+    /// <summary>
+    /// Pass times for a chain's middle locations, between the times at its ends: each link gets the least run seen for
+    /// the band (to the half minute above), and what is left over is shared out in proportion to them, so no link is
+    /// booked quicker than a train has run it. Where the ends leave less than the least runs (by
+    /// <paramref name="shortfall"/> seconds), or a link's run is unknown, the time is shared out in proportion (equally
+    /// where one is unknown). Null without both times.
+    /// </summary>
+    private static SimTime[]? PassTimes(SimKnowledge knowledge, RunBand band, SimTime? leaves, SimTime? reaches, IReadOnlyList<Tiploc> chain, out int shortfall)
+    {
+        shortfall = 0;
+        if (leaves is not { Seconds: > 0 } start || reaches is not { Seconds: > 0 } end || end.Seconds < start.Seconds)
+        {
+            return null;
+        }
+
+        var least = new int[chain.Count - 1];
+        var known = true;
+        for (var j = 0; j < least.Length; j++)
+        {
+            if (knowledge.NearestRunTime(chain[j], chain[j + 1], band)?.Times.LeastSeconds is { } run)
+            {
+                least[j] = (run + Step - 1) / Step * Step;
+            }
+            else
+            {
+                known = false;
+            }
+        }
+
+        var span = end.Seconds - start.Seconds;
+        var segments = new int[least.Length];
+        if (known && least.Sum() <= span)
+        {
+            // The slack in half minutes, shared by largest remainder; any odd seconds go to the last link.
+            var slack = (span - least.Sum()) / Step;
+            var total = (double)Math.Max(1, least.Sum());
+            var shares = least.Select(l => slack * l / total).ToArray();
+            var whole = shares.Select(x => (int)Math.Floor(x)).ToArray();
+            foreach (var j in Enumerable.Range(0, shares.Length).OrderByDescending(j => shares[j] - whole[j]).ThenBy(j => j).Take(slack - whole.Sum()))
+            {
+                whole[j]++;
+            }
+
+            for (var j = 0; j < segments.Length; j++)
+            {
+                segments[j] = least[j] + (whole[j] * Step);
+            }
+        }
+        else
+        {
+            shortfall = known ? least.Sum() - span : 0;
+            var weights = known && least.Sum() > 0 ? least.Select(l => (double)l).ToArray() : [.. least.Select(_ => 1.0)];
+            var total = weights.Sum();
+            var sofar = 0.0;
+            var previous = 0;
+            for (var j = 0; j < segments.Length; j++)
+            {
+                sofar += weights[j];
+                var reached = Math.Clamp(Half(span * (sofar / total)), previous, span);
+                segments[j] = reached - previous;
+                previous = reached;
+            }
+        }
+
+        var times = new SimTime[chain.Count - 2];
+        var seconds = start.Seconds;
+        for (var j = 0; j < times.Length; j++)
+        {
+            seconds += segments[j];
+            times[j] = new SimTime(seconds);
+        }
+
+        return times;
+    }
+
     /// <summary>Sets the line at every trip with none to the line other timetables use most there, where they agree on one.</summary>
     public static BulkResult SetLine(SimKnowledge knowledge, IReadOnlyList<TrainNode> trains)
     {
