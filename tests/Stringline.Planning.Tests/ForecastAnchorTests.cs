@@ -1,4 +1,5 @@
 using Stringline.Core;
+using Stringline.Core.Events;
 using Stringline.Core.Timetables;
 using Stringline.Network;
 using static Stringline.Planning.Tests.ForecastTesting;
@@ -125,5 +126,41 @@ public sealed class ForecastAnchorTests
         var slow = forecast.Find(Slow)!;
         slow.Anchor.Should().Be(new ProgressAnchor(new Tiploc("X"), SimTime.Parse("07:09"), 1, 2, 0.5));
         Times(slow).Should().Equal("A -/07:00:00 A", "B 07:06:00/- A", "C pass 07:11:00 F", "D 07:17:00/- F");
+    }
+
+    /// <summary>1A01 A 06:00, B with no booked time (as Carlisle's 6C34 at Dalston), pass C 06:10, D 06:15.</summary>
+    private static WorkingTimetable WithUntimedB() =>
+        Of(Train("1A01", points: [Call("A", null, "06:00"), new TimingPoint { Index = 0, Location = new Tiploc("B") }, Pass("C", "06:10"), Call("D", "06:15", null)]));
+
+    [Theory]
+    [InlineData(TrainLocationAction.Pass, "B -/06:04:00 A")]
+    [InlineData(TrainLocationAction.Arrive, "B 06:04:00/- A")]
+    [InlineData(TrainLocationAction.Depart, "B -/06:04:00 A")]
+    public void A_report_at_a_plan_point_with_no_time_is_an_anchor_on_the_run_past_it(TrainLocationAction action, string atB)
+    {
+        var tt = WithUntimedB();
+        var network = Network(tt, Corridor(["A", "B", "C", "D"], 120, 360, 300));
+
+        // It used to start the next run from B, which has no time, and the train's forecast failed (6C34, Carlisle).
+        var forecast = Run(WorkingPlan.FromTimetable(tt), "06:04:10", network, interaction: false, Running("10", "1A01", Dep("A", "06:02"), ("B", "06:04", action)));
+
+        var fast = forecast.Find(Fast)!;
+        fast.Status.Should().Be(TrainForecastStatus.Running);
+        fast.Anchor.Should().Be(new ProgressAnchor(new Tiploc("B"), SimTime.Parse("06:04"), 0, 2, 0.25));
+        // B is a quarter of the way by the corridor; no train times A–C, so the rest takes three quarters of the 10 min booked.
+        Times(fast).Should().Equal("A -/06:02:00 A", atB, "C pass 06:11:30 F", "D 06:16:30/- F");
+    }
+
+    [Fact]
+    public void A_report_at_an_untimed_point_before_any_timed_one_starts_the_train_at_its_first()
+    {
+        var tt = Of(Train("1A01", points: [new TimingPoint { Index = 0, Location = new Tiploc("A") }, Pass("C", "06:10"), Call("D", "06:15", null)]));
+        var network = Network(tt, Corridor(["A", "C", "D"], 480, 300));
+
+        var forecast = Run(WorkingPlan.FromTimetable(tt), "06:04:10", network, interaction: false, Running("10", "1A01", Dep("A", "06:04")));
+
+        var fast = forecast.Find(Fast)!;
+        fast.Status.Should().Be(TrainForecastStatus.Running);
+        Times(fast)[1..].Should().Equal("C pass 06:10:00 F", "D 06:15:00/- F");
     }
 }

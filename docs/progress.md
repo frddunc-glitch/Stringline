@@ -2660,7 +2660,22 @@ From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the
 - **Retention is per sim:** each sim keeps the configured number of files (Serilog's roller only deletes files that match its own name pattern), so a sim played rarely keeps its last files rather than losing them to busier sims.
 
 ### Known issues
-- `tests/Stringline.Planning.Tests/ForecastAnchorTests.cs` had uncommitted changes from elsewhere that do not build (CS9035, `TimingPoint.Index`). They were left out of this commit.
+- ~~`tests/Stringline.Planning.Tests/ForecastAnchorTests.cs` had uncommitted changes from elsewhere that do not build (CS9035, `TimingPoint.Index`). They were left out of this commit.~~ Those were the untimed-point tests below, unfinished at the time; they build and pass in that commit.
+
+## 2026-11-01 — Carlisle: forecast lost at a point with no booked time
+
+### Done
+- A user on Carlisle (GH day 15-10-09) reported that, after the boundary fixes (#22), departures drew on the graph but arrivals did not. Their log shows one fault, repeated for 1½ hours: `The forecast failed for 6C34 (H73995)`, `Nullable object must have a value` in `Forecaster.Pass.Step`. 6C34 leaves Dalston Oil Terminal (entry EDOIL) at 05:59, then DALSOGF and DALSTON have no booked times (Dalston divides and joins). Once it reported at either, the forecaster started the next run from that point, which has no time to depart from. The forecast became Unavailable, so the graph showed the actual line out of Dalston and no forecast run on to Carlisle N.Y.
+- `Forecaster.StartRunning`: a train last reported at an untimed plan point is forecast from the timed point before it, anchored at the report, as at an unbooked timing location (S36). With no timed point before it, the train starts at its first timed point. The departure from the timed point before it is that point's actual departure, else the report's time.
+- `RunShares.Of`: a plan point with neither a minimum nor a booked time is placed by the corridor (`ForecastNetwork.ShareAt`), so the anchor has a share when no WTT train times the section.
+- Tests: `ForecastAnchorTests` +4 (an untimed point reported as a pass, an arrival and a departure; an untimed point before any timed one). All tests pass; `dotnet build -warnaserror` is clean.
+
+### Decisions
+- **An untimed point's report is an anchor, not a new start.** Holding to the timed point before it reuses the S36 path (anchored run, signal places, standing at signals), and the actual still shows at the point itself.
+- **A train standing at an untimed point** (6C34 dividing at Dalston) is forecast as though it goes on at once. Its arrival on is then held at "now" until it moves, and it is flagged possibly stopped. The WTT gives no dwell to go by.
+
+### Next
+- 👤 Ask the reporter to try the next build on Carlisle GH day and confirm 6C34 and its arrivals draw. If other trains still lose arrivals, ask for the session file (`Documents\Stringline\sessions\carlisle-20261101-1233.stringline`) and which trains.
 
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:

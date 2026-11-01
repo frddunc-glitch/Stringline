@@ -343,6 +343,22 @@ public static class Forecaster
                 return;
             }
 
+            // Reported at a plan point with no booked time (Carlisle's 6C34 at Dalston): the run on is forecast from the
+            // timed point before it, anchored where the train was seen, as at an unbooked location (S36).
+            (int Point, ActualEvent Report)? untimed = null;
+            if (!points[last].IsTimed)
+            {
+                if (PreviousTimed(points, last) is not { } before)
+                {
+                    Begin(r, null);
+                    return;
+                }
+
+                untimed = (last, lastTiming!);
+                last = before;
+                lastWasArrival = false;
+            }
+
             var lastPoint = last == points.Count - 1;
             if (_options.UnbookedAnchors && !lastPoint && unbooked.Count > 0 && NextTimed(points, last) is { } next)
             {
@@ -350,6 +366,11 @@ public static class Forecaster
                 {
                     r.Anchor = AnchorAt(r, last, next, unbooked[i]);
                 }
+            }
+
+            if (untimed is { } u && r.Anchor is null && NextTimed(points, last) is { } on && LocationShare(r, last, on, points[u.Point].Location) is { } share)
+            {
+                r.Anchor = new ProgressAnchor(points[u.Point].Location, u.Report.Time, last, on, share);
             }
 
             if (_options.SignalPlaces && !lastPoint && lastTiming is not null && NextTimed(points, last) is { } then)
@@ -390,8 +411,23 @@ public static class Forecaster
             }
             else
             {
-                Queue(r, last, r.ActualDepart[last]!.Value, fixedDeparture: true);
+                // The timed point before an untimed report may not have reported its own departure.
+                Queue(r, last, r.ActualDepart[last] ?? untimed!.Value.Report.Time.Seconds, fixedDeparture: true);
             }
+        }
+
+        /// <summary>The last point before <paramref name="k"/> with a time, if any.</summary>
+        private static int? PreviousTimed(IReadOnlyList<PlannedPoint> points, int k)
+        {
+            for (var p = k - 1; p >= 0; p--)
+            {
+                if (points[p].IsTimed)
+                {
+                    return p;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>The next point after <paramref name="k"/> with a time, if any.</summary>

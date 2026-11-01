@@ -10,7 +10,7 @@ internal static class RunShares
 {
     /// <summary>
     /// 0 at <paramref name="c"/>, 1 at <paramref name="n"/>, a plan point's share of the minimums (else of the planned
-    /// times), or an unbooked timing location's share (<see cref="Unbooked"/>). Null if it is not on the way.
+    /// times, else of a corridor's), or an unbooked timing location's share (<see cref="Unbooked"/>). Null if it is not on the way.
     /// </summary>
     public static double? Of(IReadOnlyList<PlannedPoint> points, MinRunTable mins, ForecastNetwork network, int c, int n, Tiploc location)
     {
@@ -36,9 +36,10 @@ internal static class RunShares
                 return (double)part / whole;
             }
 
+            // A point with no booked time (as Carlisle's 6C34 at Dalston) is placed by the corridor, if one has it.
             return points[j].FirstTime is { } t && points[c].LastTime is { } d && points[n].FirstTime is { } a && a > d
                 ? Math.Clamp((double)(t - d) / (a - d), 0, 1)
-                : null;
+                : network.ShareAt(points[c].Location, location, points[n].Location);
         }
 
         return Unbooked(points, mins, network, c, n, location);
