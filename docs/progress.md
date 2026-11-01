@@ -2646,6 +2646,22 @@ From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the
 ### Questions for Fred
 - 55. **Lines and paths on Moss Vale.** No Moss Vale timetable books a line or path, so those drop-downs fill only from what you type. Does SimSig's own editor list lines and paths at Moss Vale locations (from the sim data)? If so, typing them once per location is the only way in, as the sim files cannot be read.
 
+## 2026-11-01 — A log for each sim
+
+### Done
+- Users asked for sim-specific log names, to make bug reports easier. The app log now goes to each sim's own rolling files, `stringline-{area}-yyyyMMdd.log` (for example `stringline-waterloo-20261101.log`). Lines from before a sim is known stay in `stringline-yyyyMMdd.log`.
+- The sim is the gateway's area ID when it is known (live or replay), else the loaded timetable's. The log stays with the last sim named until another one is named. The general file logs which file the log moved to, and the sim's file starts with the run's version and system details (`MainViewModel.UseSimLog`).
+- `AppLogging` routes every line through a small sink that opens the current sim's file sink when the sim changes (`UseSim`, `FileKey`, `FilePatternFor`). Area IDs are made safe for file names: lower case, letters, digits and `_` kept, anything else a hyphen, at most 40 characters.
+- The crash dialog names the sim's log file. The guide's troubleshooting page and `05-…md` (Logging) describe the new names.
+- Tests: `AppLoggingTests` (+12: file-name keys ×9, routing between files, loading a timetable moves the log). All 251 App tests pass.
+
+### Decisions
+- **No new package.** Serilog.Sinks.Map would do the routing, but a 60-line sink avoids a dependency.
+- **Retention is per sim:** each sim keeps the configured number of files (Serilog's roller only deletes files that match its own name pattern), so a sim played rarely keeps its last files rather than losing them to busier sims.
+
+### Known issues
+- `tests/Stringline.Planning.Tests/ForecastAnchorTests.cs` had uncommitted changes from elsewhere that do not build (CS9035, `TimingPoint.Index`). They were left out of this commit.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

@@ -20,6 +20,7 @@ namespace Stringline.App;
 public partial class App : Application
 {
     private IHost? _host;
+    private AppLogging? _logging;
 
     /// <summary>The app's own log lines, under its name; read each time, as <see cref="Log.Logger"/> is set at start-up.</summary>
     private static Serilog.ILogger AppLog => Log.ForContext<App>();
@@ -38,7 +39,7 @@ public partial class App : Application
 
         // Read before the host is built, for the log level and how many log files to keep.
         var settings = new AppSettingsStore(paths, new DpapiSecretProtector(), NullLogger<AppSettingsStore>.Instance).Load();
-        var logging = new AppLogging(paths.Logs, settings.DetailedLogging);
+        var logging = _logging = new AppLogging(paths.Logs, settings.DetailedLogging);
         Log.Logger = logging.CreateLogger(settings.LogRetentionDays);
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
@@ -158,7 +159,8 @@ public partial class App : Application
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         AppLog.Error(e.Exception, "Unhandled exception on the UI thread");
-        var message = $"Something went wrong: {e.Exception.Message}\n\nDetails are in the log in {AppPaths.Default.Logs}.";
+        var file = _logging?.Sim is { } sim ? $"the {sim} log ({AppLogging.FilePatternFor(sim)}, dated)" : "the log";
+        var message = $"Something went wrong: {e.Exception.Message}\n\nDetails are in {file} in {AppPaths.Default.Logs}.";
         e.Handled = true;
         if (MainWindow is { IsLoaded: true } owner)
         {

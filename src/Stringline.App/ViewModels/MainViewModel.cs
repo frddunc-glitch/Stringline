@@ -731,6 +731,11 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         var area = loaded.Timetable.AreaId;
         if (area.Length > 0)
         {
+            if (Snapshot.AreaId is not { Length: > 0 })
+            {
+                UseSimLog(area); // the gateway's sim, once known, decides
+            }
+
             _settings = _settings.WithTimetable(area, path);
             _settingsStore.Save(_settings);
             _suggestedFor = area;
@@ -905,6 +910,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         TrainsText = snapshot.Trains.Count == 0 ? string.Empty : StatusText.Trains(snapshot.Matches);
         if (snapshot.AreaId is { Length: > 0 } area)
         {
+            UseSimLog(area);
             if (_timetable is null && !string.Equals(_suggestedFor, area, StringComparison.OrdinalIgnoreCase))
             {
                 _ = SuggestTimetablesAsync(area);

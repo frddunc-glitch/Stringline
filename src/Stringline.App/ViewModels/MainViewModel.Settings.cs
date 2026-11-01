@@ -81,6 +81,24 @@ internal sealed partial class MainViewModel
         Open(_defaultPaths.Logs);
     }
 
+    /// <summary>
+    /// Log to <paramref name="area"/>'s own files from now on, so a bug report can attach just that sim's log. The old
+    /// file says where the log went, and the new one starts with what is running, as each run's first file does.
+    /// </summary>
+    private void UseSimLog(string? area)
+    {
+        if (_logging is not { } logging || AppLogging.FileKey(area) is not { } key || key == logging.Sim)
+        {
+            return;
+        }
+
+        var pattern = AppLogging.FilePatternFor(key);
+        var environment = AppLogging.Environment();
+        LogSimLogMoving(key, pattern);
+        logging.UseSim(key);
+        LogSimLogStarted(key, environment);
+    }
+
     private void Open(string target)
     {
         if (_dialogs.OpenInShell(target) is { } why)
@@ -176,6 +194,12 @@ internal sealed partial class MainViewModel
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Logging at {Level} from now on")]
     private partial void LogLoggingChanged(string level);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "The sim is {Area}; logging to {Pattern} (dated) from now on")]
+    private partial void LogSimLogMoving(string area, string pattern);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Logging for the sim {Area}: {Environment}")]
+    private partial void LogSimLogStarted(string area, string environment);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Deleted {Count} saved sessions older than {Days} days from {Folder}")]
     private partial void LogSessionsDeleted(int count, int days, string folder);

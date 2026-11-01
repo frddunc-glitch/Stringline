@@ -61,7 +61,7 @@ The guide is written to `%LOCALAPPDATA%\Stringline\help` and opened in your web 
 
 ## Logs
 
-Stringline writes a log file a day to `%LOCALAPPDATA%\Stringline\logs` (**Help ▸ Open log folder**), and keeps 14 days of them. Each run starts with the version and system details. The logs never hold your SimSig password.
+Stringline writes a log file a day to `%LOCALAPPDATA%\Stringline\logs` (**Help ▸ Open log folder**). Each sim has its own files, named after it: `stringline-waterloo-20261101.log` is Waterloo's log for 1 November. Lines from before Stringline knows the sim (it learns it from SimSig, or from the timetable you load) go to `stringline-20261101.log`, which then says which file the log moved to. Stringline keeps 14 files for each sim. Each file starts with the version and system details. The logs never hold your SimSig password.
 
 To get more detail, tick **Detailed logging (Debug)** in [Tools ▸ Options ▸ Logging and housekeeping](settings.md#logging-and-housekeeping), make the problem happen again, then untick it.
 
@@ -69,6 +69,6 @@ To get more detail, tick **Detailed logging (Debug)** in [Tools ▸ Options ▸ 
 
 1. **Help ▸ About Stringline ▸ Copy version** copies the version and system details.
 2. Open an issue on the [issue tracker](https://github.com/frddunc-glitch/Stringline/issues), paste the details, and say what you did and what happened.
-3. Attach the log for that day, and if you can, a [recording](sessions-and-review.md#recording) or the saved session that shows the problem.
+3. Attach the log for that sim and day (`stringline-<sim>-<date>.log`), and if you can, a [recording](sessions-and-review.md#recording) or the saved session that shows the problem.
 
 Recordings and sessions of payware sims contain data from the sim: share them only as SimSig's terms allow.
