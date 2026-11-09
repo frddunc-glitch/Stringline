@@ -31,6 +31,15 @@ public sealed partial class LiveState
     /// <summary>A train first seen within this many sim seconds of the session start counts as present at the start.</summary>
     public const int PresentAtStartSeconds = 120;
 
+    /// <summary>
+    /// A TD cancel is put to a train as its leaving the area only if the train was seen within this many sim seconds
+    /// before (#34). Three Bridges' exits come 0–4 min after the last report.
+    /// </summary>
+    public const int LeftAreaWindowSeconds = 1800;
+
+    /// <summary>A description interposed again within this many sim seconds of its cancel undoes it: the train is still here.</summary>
+    public const int ReinterposeSeconds = 120;
+
     private readonly TrainMatcher _matcher;
     private readonly ILogger _logger;
     private readonly Dictionary<string, LiveTrain> _trains = new(StringComparer.Ordinal);
@@ -248,10 +257,13 @@ public sealed partial class LiveState
                 Set(step.To, step.Description);
                 break;
             case TdStepKind.Cancel:
+                var cancelled = step.From.Length > 0 && _berths.TryGetValue(step.From, out var held) ? held : step.Description;
                 _berths.Remove(step.From);
+                MarkCancelled(cancelled, step.Time);
                 break;
             case TdStepKind.Interpose:
                 Set(step.To, step.Description);
+                MarkInterposed(step.Description, step.Time);
                 break;
             default:
                 return false;
@@ -275,6 +287,67 @@ public sealed partial class LiveState
                 _berths[berth] = description;
             }
         }
+    }
+
+    /// <summary>
+    /// A TD cancel of a train's description after its last report at a timing location (#34): it has stepped out of
+    /// the area. Put to the live train with that headcode seen last, if it was seen within
+    /// <see cref="LeftAreaWindowSeconds"/>.
+    /// </summary>
+    private void MarkCancelled(string description, SimTime? time)
+    {
+        if (StepTime(time) is not { } at || TrainDescribed(description) is not { } live || live.HasLeftArea ||
+            at - live.LastSeen > LeftAreaWindowSeconds || at < LastTimingReport(live))
+        {
+            return;
+        }
+
+        Replace(live with { DescriptionCancelled = at });
+    }
+
+    /// <summary>A description put back soon after it was cancelled (the signaller re-describing a train) undoes the cancel.</summary>
+    private void MarkInterposed(string description, SimTime? time)
+    {
+        if (StepTime(time) is { } at && TrainDescribed(description) is { DescriptionCancelled: { } cancelled } live &&
+            at - cancelled <= ReinterposeSeconds)
+        {
+            Replace(live with { DescriptionCancelled = null });
+        }
+    }
+
+    private SimTime? StepTime(SimTime? time) => time ?? (Clock.HasTime ? Clock.LastReported : null);
+
+    /// <summary>The live train running under this TD description now, the one seen last if several are; null if none.</summary>
+    private LiveTrain? TrainDescribed(string description)
+    {
+        if (!Headcode.TryCreate(description.Trim(), out var headcode))
+        {
+            return null;
+        }
+
+        LiveTrain? found = null;
+        foreach (var live in _trains.Values)
+        {
+            if (live.Headcode == headcode && (found is null || live.LastSeen > found.LastSeen))
+            {
+                found = live;
+            }
+        }
+
+        return found;
+    }
+
+    private static SimTime LastTimingReport(LiveTrain live)
+    {
+        for (var i = live.Actuals.Count - 1; i >= 0; i--)
+        {
+            if (live.Actuals[i].AtTimingPoint)
+            {
+                return live.Actuals[i].Time;
+            }
+        }
+
+        return live.FirstSeen;
     }
 
     private bool ApplySummary(TimetableSummaryEvent summary)
@@ -315,12 +388,19 @@ public sealed partial class LiveState
             {
                 Workings = live.Workings.Add(new LiveWorking(e.Headcode, live.Actuals.Count)),
                 Actuals = live.Actuals.Add(actual),
+                DescriptionCancelled = null,
             });
             StartWorking(live, index);
             return true;
         }
 
-        live = Replace(live with { Actuals = live.Actuals.Add(new ActualEvent(e.Location, e.Action, e.Time, e.Platform, atTimingPoint, live.CurrentIndex, e.AspectPassed, e.AspectApproach)) });
+        live = Replace(live with
+        {
+            Actuals = live.Actuals.Add(new ActualEvent(e.Location, e.Action, e.Time, e.Platform, atTimingPoint, live.CurrentIndex, e.AspectPassed, e.AspectApproach)),
+
+            // Reported at a timing location: still in the area. A signal passed just after the cancel is the way out.
+            DescriptionCancelled = atTimingPoint ? null : live.DescriptionCancelled,
+        });
         if (live.Current.Status == MatchStatus.Pending
             || (live.Current.Status == MatchStatus.Unmatched && atTimingPoint && !_manualLinks.ContainsKey((live.SimUid, live.Headcode))))
         {

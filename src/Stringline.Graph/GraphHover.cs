@@ -223,6 +223,11 @@ public static class GraphHover
         {
             lines.Add(new HoverLine(Note, "Possibly stopped: overdue at its next timing point"));
         }
+
+        if (forecast.LeftArea is { } left)
+        {
+            lines.Add(new HoverLine(Note, $"Left the area at {left:T}: times beyond are forecast"));
+        }
     }
 
     private static (LiveTrain? Live, int? Working) FindLive(GraphPath path, PlanSnapshot snapshot)

@@ -101,6 +101,17 @@ public sealed record LiveTrain(
 
     public ActualEvent Last => Actuals[^1];
 
+    /// <summary>
+    /// When the TD last cancelled the train's description (a <c>CB</c> step, #34), if that came after its last report at
+    /// a timing location. SimSig cancels it as the train steps out of the area, and reports nothing at the timing
+    /// points it books beyond (Three Bridges' STRENJN, Carlisle's CRNFNJN), so this is how a train is known to have
+    /// left. A later report at a timing location, or the description put back soon after, clears it.
+    /// </summary>
+    public SimTime? DescriptionCancelled { get; init; }
+
+    /// <summary>True if the train has left the area as far as the TD says (<see cref="DescriptionCancelled"/>).</summary>
+    public bool HasLeftArea => DescriptionCancelled is not null;
+
     /// <summary>The actuals of one working, timing points and signals.</summary>
     public IEnumerable<ActualEvent> ActualsOf(int working) => Actuals.Skip(Workings[working].FirstActual).TakeWhile(a => a.Working == working);
 

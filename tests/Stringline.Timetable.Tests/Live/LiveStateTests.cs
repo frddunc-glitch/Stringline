@@ -377,6 +377,66 @@ public sealed class LiveStateTests
     }
 
     [Fact]
+    public void A_train_whose_description_is_cancelled_after_its_last_report_has_left_the_area()
+    {
+        // #34: Three Bridges' 1A19 passes SELHRST, its description is cancelled from VC674, and it passes one more signal
+        // on its way out; SimSig reports nothing at STRENJN beyond.
+        var state = State(
+            Clock("06:00"),
+            Location("1", "1A01", "WLOO", "06:00", TrainLocationAction.Depart),
+            new TdStepEvent(T0, TdStepKind.Interpose, "test", "", "0101", "1A01", SimTime.Parse("06:00")),
+            Location("1", "1A01", "S3", "06:01"),
+            new TdStepEvent(T0, TdStepKind.Cancel, "test", "0101", "", "1A01", SimTime.Parse("06:01:30")),
+            Location("1", "1A01", "S5", "06:01:45"));
+
+        state.Find("1")!.DescriptionCancelled.Should().Be(SimTime.Parse("06:01:30"));
+        state.Find("1")!.HasLeftArea.Should().BeTrue("a signal passed after the cancel is the way out");
+
+        state.Apply(Location("1", "1A01", "VAUX", "06:04"));
+        state.Find("1")!.HasLeftArea.Should().BeFalse("reported at a timing location: it is still in the area");
+    }
+
+    [Fact]
+    public void A_cancel_with_no_description_is_put_to_the_train_in_the_berth()
+    {
+        var state = State(
+            Location("1", "1A01", "WLOO", "06:00", TrainLocationAction.Depart),
+            new TdStepEvent(T0, TdStepKind.Interpose, "test", "", "0101", "1A01", null),
+            new TdStepEvent(T0, TdStepKind.Cancel, "test", "0101", "", "", SimTime.Parse("06:02")));
+
+        state.Find("1")!.DescriptionCancelled.Should().Be(SimTime.Parse("06:02"));
+    }
+
+    [Fact]
+    public void A_description_put_back_soon_after_its_cancel_undoes_it()
+    {
+        var state = State(
+            Location("1", "1A01", "WLOO", "06:00", TrainLocationAction.Depart),
+            new TdStepEvent(T0, TdStepKind.Cancel, "test", "0101", "", "1A01", SimTime.Parse("06:01")),
+            new TdStepEvent(T0, TdStepKind.Interpose, "test", "", "0101", "1A01", SimTime.Parse("06:02")));
+
+        state.Find("1")!.HasLeftArea.Should().BeFalse("the signaller re-described it");
+
+        state.Apply(new TdStepEvent(T0, TdStepKind.Cancel, "test", "0101", "", "1A01", SimTime.Parse("06:03")));
+        state.Apply(new TdStepEvent(T0, TdStepKind.Interpose, "test", "", "0105", "1A01", SimTime.Parse("06:40")));
+        state.Find("1")!.DescriptionCancelled.Should().Be(SimTime.Parse("06:03"), "a train coming back much later under the headcode is another");
+    }
+
+    [Fact]
+    public void A_cancel_goes_only_to_a_train_seen_lately_under_that_headcode()
+    {
+        var state = State(
+            Location("1", "1A01", "WLOO", "06:00", TrainLocationAction.Depart),
+            Location("2", "2X01", "WLOO", "07:00", TrainLocationAction.Depart),
+            new TdStepEvent(T0, TdStepKind.Cancel, "test", "0200", "", "2X01", SimTime.Parse("06:59")),
+            new TdStepEvent(T0, TdStepKind.Cancel, "test", "0101", "", "1A01", SimTime.Parse("07:00")),
+            new TdStepEvent(T0, TdStepKind.Cancel, "test", "0300", "", "9Z99", SimTime.Parse("07:00")));
+
+        state.Find("2")!.HasLeftArea.Should().BeFalse("cancelled before its last report");
+        state.Find("1")!.HasLeftArea.Should().BeFalse($"not seen for more than {LiveState.LeftAreaWindowSeconds} s");
+    }
+
+    [Fact]
     public void An_interpose_without_a_description_clears_the_berth()
     {
         var state = State(

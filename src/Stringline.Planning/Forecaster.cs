@@ -320,6 +320,12 @@ public static class Forecaster
 
             r.Status = TrainForecastStatus.Running;
             r.LastSeen = live.LastSeen.Seconds;
+            if (working == live.CurrentIndex)
+            {
+                // Its description stepped out of the area (#34): SimSig reports nothing at the points beyond, so the run
+                // on is not held at now.
+                r.LeftArea = live.DescriptionCancelled;
+            }
             for (var k = 0; k <= last && k < points.Count; k++)
             {
                 if (r.ActualArrive[k] is not null || r.ActualDepart[k] is not null)
@@ -401,7 +407,7 @@ public static class Forecaster
                 }
 
                 var arrived = r.ActualArrive[last]!.Value;
-                var depart = Floor(DepartAfterArriving(r, last, arrived));
+                var depart = r.LeftArea is null ? Floor(DepartAfterArriving(r, last, arrived)) : DepartAfterArriving(r, last, arrived);
                 r.Set(last, arrived, depart, false, ForecastBasis.Arrived);
                 Queue(r, last, depart, fixedDeparture: false);
             }
@@ -567,7 +573,7 @@ public static class Forecaster
         /// </summary>
         private void Standing(Runner r, int c, int n, ActualEvent from, double fromShare, ProgressAnchor? at)
         {
-            if (_now is not { } now)
+            if (_now is not { } now || r.LeftArea is not null)
             {
                 return;
             }
@@ -894,7 +900,7 @@ public static class Forecaster
             }
 
             var arrive = d + run;
-            if (_now is { } now && arrive < now)
+            if (_now is { } now && arrive < now && r.LeftArea is null)
             {
                 if (r.Status == TrainForecastStatus.Running && now - Math.Max(arrive, r.LastSeen) > _options.PossiblyStoppedSeconds)
                 {
@@ -956,7 +962,7 @@ public static class Forecaster
                 {
                     // Not before now: a train that has not reported passing the signal has not passed it.
                     reaches = (int)Math.Round(from + ((arrive - from) * (hold.Share - share) / (1 - share)));
-                    reaches = _now is { } now && anchored ? Math.Max(reaches, now) : reaches;
+                    reaches = _now is { } now && anchored && r.LeftArea is null ? Math.Max(reaches, now) : reaches;
                 }
 
                 var until = hold.Until.Seconds;
@@ -1416,6 +1422,9 @@ public static class Forecaster
 
         public bool PossiblyStopped { get; set; }
 
+        /// <summary>When the TD said the train stepped out of the area (#34); null while it is in it.</summary>
+        public SimTime? LeftArea { get; set; }
+
         /// <summary>The unbooked timing location the run on from its last booked report is forecast from (S36).</summary>
         public ProgressAnchor? Anchor { get; set; }
 
@@ -1515,14 +1524,18 @@ public static class Forecaster
                 points[k] = Result[k] ?? new ForecastPoint(k, p.Location, null, null, p.IsPass, ForecastBasis.None, null);
             }
 
-            return new TrainForecast(Train.Id, Train.Headcode, Status, points, LiveUid, PossiblyStopped)
+            // A train that has left the area is finished: its points beyond are forecast as it would have run them.
+            var left = Status == TrainForecastStatus.Running && LeftArea is not null;
+            var status = left ? TrainForecastStatus.Finished : Status;
+            return new TrainForecast(Train.Id, Train.Headcode, status, points, LiveUid, PossiblyStopped && !left)
             {
+                LeftArea = left ? LeftArea : null,
                 BlockHolds = BlockHolds.Count == 0 ? [] : [.. BlockHolds],
                 RuleHolds = RuleHolds.Count == 0 ? [] : [.. RuleHolds],
                 SignalHolds = SignalHolds.Count == 0 ? [] : [.. SignalHolds],
                 NotSeen = NotSeen && Status == TrainForecastStatus.NotStarted,
-                Anchor = Status == TrainForecastStatus.Running ? Anchor : null,
-                Standing = Status == TrainForecastStatus.Running ? Standing : null,
+                Anchor = status == TrainForecastStatus.Running ? Anchor : null,
+                Standing = status == TrainForecastStatus.Running ? Standing : null,
             };
         }
 

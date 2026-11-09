@@ -2677,6 +2677,27 @@ From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the
 ### Next
 - 👤 Ask the reporter to try the next build on Carlisle GH day and confirm 6C34 and its arrivals draw. If other trains still lose arrivals, ask for the session file (`Documents\Stringline\sessions\carlisle-20261101-1233.stringline`) and which trains.
 
+## 2026-11-09 — #34: trains held at an exit they had already left
+
+### Done
+- **The report** (#34, Three Bridges and Carlisle): arrivals were "no longer read". On the graph, trains on their way out converged at the area's last timing point (Carlisle's CRNFNJN) at now, flagged "possibly stopped: overdue at its next timing point". 1R20 left OXENHLM at 06:21 and was still held at CRNFNJN at 08:00.
+- **Cause:** SimSig reports nothing at the timing points a train books beyond the area. In a Three Bridges session (custom timetable, 10:48–11:05) STRENJN, SYDENHM and SHALFDJ were never reported for any train, and 33 of the 102 trains seen had one as their last point. The forecaster held each one at now on its run there, so its line ran flat to the exit, and it kept that section reserved against the trains behind it. The 6C34 fix (7ba233c) made more of these trains forecast at all, which made it more visible.
+- **The sign that a train has left** is its TD description being cancelled (`CB`) as it steps out of the last berth. Sometimes this comes just before it passes the last signal: 1A19 passed SELHRST at 10:50:54, VC674 was cancelled at 10:52:23 and it passed SVC670 at 10:52:38. In that session, every cancel after a train's last report was a train leaving: towards Streatham, Sydenham, Sutton, Horsham, Oxted, Shalford, Crystal Palace or Selhurst depot. Waiting for "in no berth" would not work: CC interposes into fringe berths (UVFL, UVSL, LSDH) that are never cleared.
+- **`LiveState`** puts a cancel to the live train seen last with that headcode, if it was seen within 30 min and the cancel comes after its last report at a timing location. It is kept as `LiveTrain.DescriptionCancelled` (`HasLeftArea`). Each of these clears it: a later report at a timing location (a signal passed after it does not), a new working, or the description interposed again within 2 min (the signaller re-describing it). A cancel with no description is put to the description that was in the berth.
+- **`Forecaster`:** a running train that has left the area is `Finished`, with `TrainForecast.LeftArea`. Its points beyond are forecast from its last report as it would have run them, not held at now. It is not possibly stopped, and it is not stood at a signal. The hover adds "Left the area at 10:52:23: times beyond are forecast". On the Three Bridges session, 1A19 now reaches STRENJN at 10:53:54 (it was held at 11:05:00) and 1C21 at 10:59:09. 0Y73, in a stretch with no TD berths, is unchanged.
+- Docs: `06-…md` §2 (Start); guide *Reading the graph* (hover).
+- Tests: `LiveStateTests` +4 (left, with a signal after the cancel and a timing location clearing it; a cancel with no description; re-described soon and long after; cancel before the last report or after a long silence); `ForecastLeftAreaTests` 3 (finished and not held, the contrast held and possibly stopped, left after arriving). Portable 1,908 and App 251 pass; `-warnaserror` clean.
+
+### Decisions
+- **The TD cancel is the only sign used.** Without the TD topic (it is on by default) nothing changes. Learning which locations SimSig reports from earlier sessions would also work without TD, but it needs a session's history first and is not needed for this report.
+- **A train that has left is Finished**, so regulation, suggestions, the optimiser and the head leave it alone. Its forecast points beyond the area stay, so the line still runs on to the exit point.
+
+### Next
+- 👤 Send Matt the next build. Ask him to check that Carlisle's trains run on to CRNFNJN at their forecast times and are no longer held there at now, and that Three Bridges' trains do the same at STRENJN. If one is still held, the session file and the train's headcode will say why. Close #34 once he confirms.
+
+### Questions for Fred
+- 56. **Trains taken off mid-area.** A train the signaller removes, or whose description is cancelled and not put back within 2 min, is now taken as having left: its forecast stops being held, and it shows as finished until its next timing location report. Is that the right reading, or should it wait until the train is overdue at its next point?
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".

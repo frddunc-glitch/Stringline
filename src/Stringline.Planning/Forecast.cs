@@ -99,6 +99,13 @@ public sealed record TrainForecast(
     /// </summary>
     public IReadOnlyList<SignalHoldForecast> SignalHolds { get; init; } = [];
 
+    /// <summary>
+    /// When the train stepped out of the area, as the TD's cancel of its description says (#34); null if it has not.
+    /// Such a train is <see cref="TrainForecastStatus.Finished"/>: SimSig reports nothing at the points it books beyond
+    /// the area, so they are forecast as it would have run them, not held at now.
+    /// </summary>
+    public SimTime? LeftArea { get; init; }
+
     /// <summary>Why the train is <see cref="TrainForecastStatus.NotRunning"/>; null otherwise.</summary>
     public NotRunningReason? NotRunning { get; init; }
 
