@@ -22,12 +22,43 @@ internal static class FileFilters
     public const string Profile = "Stringline profiles (*.json)|*.json|All files (*.*)|*.*";
 }
 
-/// <summary>The Connect dialog (CON-1, CON-5): where SimSig is, the optional login, and an optional timetable.</summary>
+/// <summary>
+/// The Connect dialog (CON-1, CON-5): where SimSig is, the optional login, and an optional timetable. It opens at
+/// localhost:51515; other gateways used before are in the Host list, and picking one fills in its port (#35).
+/// </summary>
 internal sealed partial class ConnectViewModel(IDialogService dialogs) : ObservableObject
 {
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Error))]
-    public partial string Host { get; set; } = "localhost";
+    public partial string Host { get; set; } = GatewayAddress.Default.Host;
+
+    /// <summary>Gateways connected to before, newest first, not counting the default.</summary>
+    public IReadOnlyList<GatewayAddress> RecentGateways
+    {
+        get;
+        init
+        {
+            field = value;
+            HostChoices = [GatewayAddress.Default.Host, .. value.Select(a => a.Host).Where(h => !h.Equals(GatewayAddress.Default.Host, StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase)];
+        }
+    } = [];
+
+    /// <summary>The Host list: localhost first, then the recent gateways' hosts.</summary>
+    public IReadOnlyList<string> HostChoices { get; private set; } = [GatewayAddress.Default.Host];
+
+    /// <summary>A host from the list brings its port: the one last used with it, or SimSig's default for localhost.</summary>
+    partial void OnHostChanged(string value)
+    {
+        var typed = new GatewayAddress(value ?? string.Empty, 0);
+        if (RecentGateways.FirstOrDefault(typed.SameHost) is { } recent)
+        {
+            Port = recent.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        else if (typed.SameHost(GatewayAddress.Default))
+        {
+            Port = GatewayAddress.Default.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Error))]

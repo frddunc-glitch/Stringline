@@ -12,9 +12,36 @@ namespace Stringline.App.Services;
 /// <summary>What the app remembers between runs. The SimSig password is only ever stored encrypted.</summary>
 internal sealed record AppSettings
 {
-    public string Host { get; init; } = "localhost";
+    /// <summary>The host of the last connection. The Connect dialog opens at the default, not here (#35).</summary>
+    public string Host { get; init; } = GatewayAddress.Default.Host;
 
+    /// <summary>The port of the last connection.</summary>
     public int Port { get; init; } = Gateway.GatewayTopics.DefaultPort;
+
+    /// <summary>
+    /// Gateways other than localhost:51515 connected to before, newest first (#35), offered in the Connect dialog's
+    /// Host list. At most <see cref="MaxRecentGateways"/>.
+    /// </summary>
+    public IReadOnlyList<GatewayAddress> RecentGateways { get; init; } = [];
+
+    public const int MaxRecentGateways = 8;
+
+    /// <summary>
+    /// The gateways to offer, newest first: <see cref="RecentGateways"/>, or for settings saved before #35 the last
+    /// connection if it was not the default.
+    /// </summary>
+    public IReadOnlyList<GatewayAddress> RecentGatewaysToOffer =>
+        RecentGateways.Count > 0 || new GatewayAddress(Host, Port).IsDefault ? RecentGateways : [new GatewayAddress(Host, Port)];
+
+    /// <summary>Remembers a connection: the last host and port, and, unless it is the default, the recent list.</summary>
+    public AppSettings WithGateway(string host, int port)
+    {
+        var address = new GatewayAddress(host.Trim(), port);
+        var recent = address.IsDefault
+            ? RecentGatewaysToOffer
+            : [address, .. RecentGatewaysToOffer.Where(a => !a.SameHost(address)).Take(MaxRecentGateways - 1)];
+        return this with { Host = address.Host, Port = address.Port, RecentGateways = recent };
+    }
 
     /// <summary>SimSig forum username for payware sims, if any.</summary>
     public string? UserName { get; init; }
@@ -126,6 +153,20 @@ internal sealed record AppSettings
         var map = new Dictionary<string, string>(TimetableByArea, StringComparer.Ordinal) { [areaId.Trim().ToLowerInvariant()] = path };
         return this with { TimetableByArea = map, LastTimetablePath = path };
     }
+}
+
+/// <summary>Where a SimSig Interface Gateway is: a host name or IP address and a port.</summary>
+internal sealed record GatewayAddress(string Host, int Port)
+{
+    /// <summary>SimSig on this PC at its default port, where the Connect dialog always opens (#35).</summary>
+    public static GatewayAddress Default { get; } = new("localhost", Gateway.GatewayTopics.DefaultPort);
+
+    [JsonIgnore]
+    public bool IsDefault => SameHost(Default) && Port == Default.Port;
+
+    public bool SameHost(GatewayAddress other) => string.Equals(Host.Trim(), other.Host.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    public override string ToString() => $"{Host}:{Port}";
 }
 
 /// <summary>

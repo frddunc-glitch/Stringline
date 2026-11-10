@@ -1,3 +1,4 @@
+using Stringline.App.Services;
 using Stringline.App.ViewModels;
 using Stringline.Core;
 using Stringline.Gateway;
@@ -235,10 +236,33 @@ public sealed class MainViewModelTests
         await app.Ui.RunAsync(() => vm.DisconnectCommand.ExecuteAsync(null));
         var saved = app.Settings.Load();
         saved.Host.Should().Be("127.0.0.1");
+        saved.RecentGateways.Should().Equal(new GatewayAddress("127.0.0.1", server.Port));
         saved.UserName.Should().Be("fred");
         saved.ProtectedPassword.Should().NotBeNullOrEmpty().And.NotContain("secret");
         app.Settings.PasswordOf(saved).Should().Be("secret");
         (await File.ReadAllTextAsync(app.Paths.Settings)).Should().NotContain("secret");
+    }
+
+    [Fact]
+    public async Task After_connecting_to_another_pc_the_dialog_opens_at_localhost_again()
+    {
+        // #35: after a multiplayer game on another PC, the next Connect is back at localhost:51515.
+        await using var app = new TestApp(s => s with { Host = "host-pc", Port = 51600, RecentGateways = [new("host-pc", 51600)] });
+        var vm = app.ViewModel;
+        ConnectViewModel? shown = null;
+        app.Dialogs.Connect = d =>
+        {
+            shown = d;
+            return false;
+        };
+
+        await app.Ui.RunAsync(() => vm.ConnectCommand.ExecuteAsync(null));
+
+        shown!.Host.Should().Be("localhost");
+        shown.Port.Should().Be("51515");
+        shown.HostChoices.Should().Equal("localhost", "host-pc");
+        shown.Host = "host-pc";
+        shown.Port.Should().Be("51600", "the multiplayer host is one pick away");
     }
 
     [Fact]

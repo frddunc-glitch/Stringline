@@ -37,6 +37,34 @@ public sealed class AppSettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void Remembers_other_gateways_newest_first_but_not_the_default()
+    {
+        var store = Store();
+        var settings = new AppSettings()
+            .WithGateway("pc2", 51516)
+            .WithGateway(" host-pc ", 51515)
+            .WithGateway("localhost", 51515)
+            .WithGateway("PC2", 51517);
+
+        store.Save(settings);
+        var loaded = store.Load();
+
+        loaded.Host.Should().Be("PC2", "the last connection is still recorded");
+        loaded.RecentGateways.Should().Equal(new GatewayAddress("PC2", 51517), new GatewayAddress("host-pc", 51515));
+
+        var many = Enumerable.Range(0, 20).Aggregate(new AppSettings(), (s, i) => s.WithGateway($"pc{i}", 51515));
+        many.RecentGateways.Should().HaveCount(AppSettings.MaxRecentGateways).And.StartWith(new GatewayAddress("pc19", 51515));
+    }
+
+    [Fact]
+    public void Settings_from_before_35_offer_their_last_connection()
+    {
+        new AppSettings { Host = "pc2", Port = 51516 }.RecentGatewaysToOffer.Should().Equal(new GatewayAddress("pc2", 51516));
+        new AppSettings().RecentGatewaysToOffer.Should().BeEmpty();
+        new AppSettings { Host = "pc2" }.WithGateway("pc3", 51515).RecentGateways.Should().Equal(new GatewayAddress("pc3", 51515), new GatewayAddress("pc2", 51515));
+    }
+
+    [Fact]
     public void Round_trips_with_the_password_encrypted()
     {
         var store = Store();
@@ -279,6 +307,24 @@ public sealed class DialogViewModelTests
         vm.Password = string.Empty;
         vm.ToOptions().Login.Should().BeNull();
         vm.ToOptions().Passcode.Should().BeNull();
+    }
+
+    [Fact]
+    public void Connect_opens_at_localhost_and_a_recent_host_brings_its_port()
+    {
+        var vm = new ConnectViewModel(Dialogs) { RecentGateways = [new("pc2", 51600), new("LOCALHOST", 51515), new("pc3", 51515)] };
+
+        vm.Host.Should().Be("localhost");
+        vm.Port.Should().Be("51515");
+        vm.HostChoices.Should().Equal("localhost", "pc2", "pc3");
+
+        vm.Host = "pc2";
+        vm.Port.Should().Be("51600");
+        vm.Host = "localhost";
+        vm.Port.Should().Be("51515", "localhost goes back to SimSig's default port");
+        vm.Port = "51700";
+        vm.Host = "somewhere-new";
+        vm.Port.Should().Be("51700", "a host not in the list keeps the port typed");
     }
 
     [Fact]

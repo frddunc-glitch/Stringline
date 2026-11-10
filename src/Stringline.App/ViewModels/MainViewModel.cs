@@ -441,10 +441,10 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             carryOn = choice == 0;
         }
 
+        // It opens at localhost:51515, not at the last connection, so a multiplayer game's host is not kept (#35).
         var dialog = new ConnectViewModel(_dialogs)
         {
-            Host = _settings.Host,
-            Port = _settings.Port.ToString(CultureInfo.InvariantCulture),
+            RecentGateways = _settings.RecentGatewaysToOffer,
             UserName = _settings.UserName ?? string.Empty,
             Password = _settingsStore.PasswordOf(_settings) ?? string.Empty,
             RememberPassword = _settings.RememberPassword,
@@ -460,7 +460,7 @@ internal sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
         var options = dialog.ToOptions();
         _settings = _settingsStore.WithPassword(
-            _settings with { Host = options.Host, Port = options.Port, UserName = options.Login, SubscribeTd = dialog.SubscribeTd },
+            _settings.WithGateway(options.Host, options.Port) with { UserName = options.Login, SubscribeTd = dialog.SubscribeTd },
             dialog.Password,
             dialog.RememberPassword);
         _settingsStore.Save(_settings);

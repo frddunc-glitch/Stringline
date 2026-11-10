@@ -38,7 +38,9 @@
                Text="Enable the Interface Gateway in SimSig before connecting. Payware sims need your SimSig forum login." />
 
     <Label Grid.Row="1" Content="_Host" Target="{Binding ElementName=HostBox}" />
-    <TextBox Grid.Row="1" Grid.Column="1" x:Name="HostBox" Text="{Binding Host, UpdateSourceTrigger=PropertyChanged}" />
+    <ComboBox Grid.Row="1" Grid.Column="1" x:Name="HostBox" IsEditable="True" Margin="0,3" ItemsSource="{Binding HostChoices}"
+              Text="{Binding Host, UpdateSourceTrigger=PropertyChanged}"
+              ToolTip="localhost when SimSig runs on this PC. The list has the other computers you have connected to; picking one fills in its port." />
 
     <Label Grid.Row="2" Content="_Port" Target="{Binding ElementName=PortBox}" />
     <TextBox Grid.Row="2" Grid.Column="1" x:Name="PortBox" Width="90" HorizontalAlignment="Left" Text="{Binding Port, UpdateSourceTrigger=PropertyChanged}" />

@@ -7,12 +7,12 @@
 1. Start the sim with the [Interface Gateway turned on](gateway.md).
 2. In Stringline, choose **Session ▸ Connect to SimSig…** (F5), or **Connect…** on the toolbar.
 3. Check the details:
-   - **Host:** `localhost` when SimSig runs on the same computer; otherwise the name or IP address of the computer running it.
-   - **Port:** 51515, unless you changed it in SimSig.
+   - **Host:** `localhost` when SimSig runs on the same computer; otherwise the name or IP address of the computer running it. The dialog always opens at `localhost`; the list under **Host** has the other computers you have connected to, and picking one fills in the port you used with it.
+   - **Port:** 51515, unless you changed it in SimSig. Picking `localhost` from the list puts it back to 51515.
    - **Timetable:** optional. Pick the sim's `.wtt` here, or leave it blank and pick it when the sim's name arrives ([Timetables and profiles](timetables-and-profiles.md#loading-the-timetable)).
 4. Press **Connect**.
 
-The light at the left of the status bar turns green, and the status bar shows the sim's name, the sim time and speed, and how many trains have been seen. Stringline remembers the details for next time.
+The light at the left of the status bar turns green, and the status bar shows the sim's name, the sim time and speed, and how many trains have been seen. Stringline remembers the details for next time, except the host and port: the next connection starts at `localhost` and 51515 again.
 
 ## Payware sims
 
@@ -43,7 +43,7 @@ If the sim is closed or crashes, or the network drops, the status bar shows **Di
 What is known so far:
 
 - Stringline connects to **one** gateway: the host name (or IP address) and port of a computer whose SimSig is running the sim with the Interface Gateway turned on. In a multiplayer game that is most likely the **host's** computer; whether a client's SimSig runs a gateway of its own is not yet known.
-- To connect from another computer, enter the host computer's name or IP address in **Host**, and make sure its firewall lets port 51515 through ([Firewalls](gateway.md#firewalls)).
+- To connect from another computer, enter the host computer's name or IP address in **Host**, and make sure its firewall lets port 51515 through ([Firewalls](gateway.md#firewalls)). Next time, the dialog is back at `localhost`; pick the host computer from the **Host** list to connect to it again.
 - It is not yet known whether a player sees the whole sim's trains through the gateway, or only those on their own panel. Trains running on another player's area may not report to you.
 - Stringline only reads, so it cannot interfere with the other players' game, unless you turn on [assist](assist.md). Its route requests and interposes act on the shared sim.
 

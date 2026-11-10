@@ -2698,6 +2698,20 @@ From Fred's three issues on the Moss Vale sim (Moss Vale 2017-11-01). Out of the
 ### Questions for Fred
 - 56. **Trains taken off mid-area.** A train the signaller removes, or whose description is cancelled and not put back within 2 min, is now taken as having left: its forecast stops being held, and it shows as finished until its next timing location report. Is that the right reading, or should it wait until the train is overdue at its next point?
 
+## 2026-11-10 — #35: Connect kept a multiplayer host
+
+### Done
+- **The report** (#35): after connecting to another PC for a multiplayer game, the Connect dialog kept that host and port instead of going back to the defaults.
+- The Connect dialog now always opens at `localhost` and 51515 (`MainViewModel.ConnectAsync`). Host is an editable list. It has `localhost` first, then the other gateways connected to before, newest first, up to 8 (`AppSettings.RecentGateways`, `WithGateway`). Picking a host fills in the port last used with it, and picking `localhost` puts the port back to 51515 (`ConnectViewModel.OnHostChanged`).
+- `AppSettings.Host`/`Port` still record the last connection. If settings saved before this change had a host that was not the default, the list offers it (`RecentGatewaysToOffer`).
+- Tests: `Remembers_other_gateways_newest_first_but_not_the_default`, `Settings_from_before_35_offer_their_last_connection`, `Connect_opens_at_localhost_and_a_recent_host_brings_its_port`, `After_connecting_to_another_pc_the_dialog_opens_at_localhost_again`. The user guide's Connecting page says so.
+
+### Decisions
+- Whoever plays multiplayer can still reach the host in one pick: it stays in the Host list instead of becoming the default.
+
+### Next
+- 👤 Close #35 once the next build is tried.
+
 ## Questions for Fred
 See `00-brainstorm-and-decisions.md` §5. New from S1:
 1. ~~Copyright holder?~~ Resolved: "Frederick Duncan and Stringline contributors".
